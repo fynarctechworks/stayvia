@@ -1067,7 +1067,7 @@ function HotelTab() {
           <Field label="Password">
             <input
               className="input"
-              placeholder="sldt2026"
+              placeholder="access-code"
               value={form.wifiPassword ?? ""}
               onChange={(e) => set("wifiPassword", e.target.value)}
             />

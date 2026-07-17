@@ -1,7 +1,7 @@
 # Shortcuts for the Docker dev stack on Windows PowerShell.
-# Usage: ./hoteldesk.ps1 <command>
+# Usage: ./stayvia.ps1 <command>
 #
-# Run ./hoteldesk.ps1 help to list commands.
+# Run ./stayvia.ps1 help to list commands.
 
 param(
   [Parameter(Position = 0)]
@@ -19,7 +19,7 @@ function Invoke-Compose {
 switch ($Command.ToLower()) {
   "help" {
     @"
-Hoteldesk dev shortcuts
+Stayvia dev shortcuts
 
   build       Build all images
   up          Start the stack in the background
@@ -46,16 +46,16 @@ Hoteldesk dev shortcuts
   "ps"        { Invoke-Compose @("ps") }
   "api-shell" { Invoke-Compose @("exec", "api", "sh") }
   "web-shell" { Invoke-Compose @("exec", "web", "sh") }
-  "psql"      { Invoke-Compose @("exec", "postgres", "psql", "-U", "hoteldesk", "-d", "hoteldesk") }
+  "psql"      { Invoke-Compose @("exec", "postgres", "psql", "-U", "stayvia", "-d", "stayvia") }
   "redis-cli" { Invoke-Compose @("exec", "redis", "redis-cli") }
   "migrate"   { Invoke-Compose @("exec", "api", "node", "apps/api/scripts/migrate.mjs") }
   "seed"      { Invoke-Compose @("exec", "api", "npx", "tsx", "apps/api/src/db/seed.ts") }
-  "test"      { Invoke-Compose @("exec", "api", "npm", "test", "--workspace=@hoteldesk/api") }
+  "test"      { Invoke-Compose @("exec", "api", "npm", "test", "--workspace=@stayvia/api") }
   "clean"     { Invoke-Compose @("down", "--remove-orphans") }
   "nuke"      { Invoke-Compose @("down", "-v", "--remove-orphans") }
   default {
     Write-Host "Unknown command: $Command" -ForegroundColor Red
-    Write-Host "Run ./hoteldesk.ps1 help for the list."
+    Write-Host "Run ./stayvia.ps1 help for the list."
     exit 1
   }
 }
