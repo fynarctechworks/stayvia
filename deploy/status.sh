@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
 # Quick health + sanity check for the deployed API.
-# Run on the VPS: bash ~/hoteldesk/deploy/status.sh
+# Run on the VPS: bash ~/stayvia/deploy/status.sh
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_DIR="${REPO_DIR:-$(cd "$SCRIPT_DIR/.." && pwd)}"
-CONTAINER_NAME="hoteldesk-api"
-HEALTH_URL="http://127.0.0.1:${HOTELDESK_HOST_PORT:-3010}/health"
+CONTAINER_NAME="stayvia-api"
+HEALTH_URL="http://127.0.0.1:${STAYVIA_HOST_PORT:-3010}/health"
 
 cd "$REPO_DIR"
 echo "Repo: $REPO_DIR"

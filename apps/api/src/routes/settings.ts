@@ -5,7 +5,7 @@ import {
   staffCreateSchema,
   staffUpdateSchema,
   unlockSettingsCodeSchema,
-} from "@hoteldesk/shared";
+} from "@stayvia/shared";
 import { and, asc, count as sqlCount, eq, sql } from "drizzle-orm";
 import { Router } from "express";
 import { db } from "../db/client.js";

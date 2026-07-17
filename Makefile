@@ -1,5 +1,5 @@
 # Shortcuts for the Docker dev stack. Works on macOS/Linux/WSL/Git Bash.
-# Windows users without `make` can use ./hoteldesk.ps1 instead.
+# Windows users without `make` can use ./stayvia.ps1 instead.
 
 COMPOSE := docker compose
 
@@ -33,7 +33,7 @@ web-shell:  ## Open a shell inside the web container
 	$(COMPOSE) exec web sh
 
 psql:  ## Open psql against the dev Postgres
-	$(COMPOSE) exec postgres psql -U hoteldesk -d hoteldesk
+	$(COMPOSE) exec postgres psql -U stayvia -d stayvia
 
 redis-cli:  ## Open redis-cli against the dev Redis
 	$(COMPOSE) exec redis redis-cli
@@ -45,7 +45,7 @@ seed:  ## Seed dev data (uses apps/api/src/db/seed.ts)
 	$(COMPOSE) exec api npx tsx apps/api/src/db/seed.ts
 
 test:  ## Run API tests inside the container
-	$(COMPOSE) exec api npm test --workspace=@hoteldesk/api
+	$(COMPOSE) exec api npm test --workspace=@stayvia/api
 
 clean:  ## Stop and remove containers but keep volumes
 	$(COMPOSE) down --remove-orphans

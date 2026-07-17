@@ -7,7 +7,7 @@ import {
   guestNoteCreateSchema,
   guestTagsSchema,
   guestUpdateSchema,
-} from "@hoteldesk/shared";
+} from "@stayvia/shared";
 import { and, asc, desc, eq, ilike, inArray, isNull, or, sql } from "drizzle-orm";
 import { Router } from "express";
 import multer from "multer";
@@ -198,7 +198,7 @@ router.get(
     const { phone, email, id_type, id_number } = req.query as {
       phone?: string;
       email?: string;
-      id_type?: import("@hoteldesk/shared").IdProofType;
+      id_type?: import("@stayvia/shared").IdProofType;
       id_number?: string;
     };
     if (!phone && !email && !id_number) {
@@ -902,7 +902,7 @@ router.put(
           : undefined;
     const nextIdType =
       typeof input.idProofType === "string"
-        ? (input.idProofType as import("@hoteldesk/shared").IdProofType)
+        ? (input.idProofType as import("@stayvia/shared").IdProofType)
         : undefined;
     const nextIdLast4 =
       typeof input.idProofNumber === "string"

@@ -28,7 +28,7 @@ import { EmailInput } from "@/components/EmailInput";
 import { getList, api } from "@/lib/api";
 import { citiesForState } from "@/lib/indianCities";
 import { INDIAN_STATES, INDIAN_UNION_TERRITORIES } from "@/lib/indianStates";
-import { GUEST_TAGS, ID_PROOF_TYPES, type IdProofType } from "@hoteldesk/shared";
+import { GUEST_TAGS, ID_PROOF_TYPES, type IdProofType } from "@stayvia/shared";
 
 // Tag style registry. Each tag gets its own icon + color so the row of
 // filters reads at a glance instead of looking like a row of identical pills.

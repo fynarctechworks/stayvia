@@ -9,7 +9,7 @@ async function main() {
   const { assertLocalDbTarget } = await import("../../scripts/guard-db-target.mjs");
   assertLocalDbTarget(process.env.DATABASE_URL);
 
-  console.log("Seeding HotelDesk (bare minimum: settings row + admin user)...");
+  console.log("Seeding Stayvia (bare minimum: settings row + admin user)...");
 
   const existingSettings = await db.select().from(settings).limit(1);
   if (existingSettings.length === 0) {

@@ -15,7 +15,7 @@ import {
   EXPENSE_PAYMENT_METHODS,
   type ExpenseCategory,
   type ExpensePaymentMethod,
-} from "@hoteldesk/shared";
+} from "@stayvia/shared";
 import { format } from "date-fns";
 import {
   ChevronLeft,

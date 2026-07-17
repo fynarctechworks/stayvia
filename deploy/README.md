@@ -1,4 +1,4 @@
-# HotelDesk Deployment
+# Stayvia Deployment
 
 ## Architecture
 
@@ -35,22 +35,22 @@ Create a **private** bucket named `kyc-docs` (Supabase dashboard → Storage →
 
 ```bash
 # as deploy user
-sudo mkdir -p /srv/hoteldesk && sudo chown $USER:$USER /srv/hoteldesk
-cd /srv/hoteldesk
+sudo mkdir -p /srv/stayvia && sudo chown $USER:$USER /srv/stayvia
+cd /srv/stayvia
 git clone <repo>.git .
 
 # install & build
 npm install
-npm -w @hoteldesk/shared run build
-npm -w @hoteldesk/api run build
+npm -w @stayvia/shared run build
+npm -w @stayvia/api run build
 
 # env
 cp .env.example apps/api/.env
 $EDITOR apps/api/.env   # fill in all secrets. See root .env.example
 
 # schema + seed (first deploy only)
-npm -w @hoteldesk/api run db:push
-npm -w @hoteldesk/api run db:seed
+npm -w @stayvia/api run db:push
+npm -w @stayvia/api run db:seed
 
 # start under PM2
 pm2 start deploy/ecosystem.config.cjs
@@ -61,10 +61,10 @@ pm2 startup systemd      # follow printed command
 ## Nginx + TLS
 
 ```bash
-sudo cp deploy/nginx.conf.sample /etc/nginx/sites-available/hoteldesk-api
-sudo ln -sf /etc/nginx/sites-available/hoteldesk-api /etc/nginx/sites-enabled/
+sudo cp deploy/nginx.conf.sample /etc/nginx/sites-available/stayvia-api
+sudo ln -sf /etc/nginx/sites-available/stayvia-api /etc/nginx/sites-enabled/
 sudo nginx -t && sudo systemctl reload nginx
-sudo certbot --nginx -d api.hoteldesk.example.com
+sudo certbot --nginx -d api.stayvia.example.com
 ```
 
 ## Frontend (Vercel)
@@ -72,26 +72,26 @@ sudo certbot --nginx -d api.hoteldesk.example.com
 ```bash
 # from apps/web
 npx vercel link
-npx vercel env add VITE_API_URL production       # https://api.hoteldesk.example.com/api/v1
+npx vercel env add VITE_API_URL production       # https://api.stayvia.example.com/api/v1
 npx vercel env add VITE_SUPABASE_URL production
 npx vercel env add VITE_SUPABASE_ANON_KEY production
 npx vercel --prod
 ```
 
-Build command: `npm -w @hoteldesk/shared run build && npm -w @hoteldesk/web run build`
+Build command: `npm -w @stayvia/shared run build && npm -w @stayvia/web run build`
 Output: `apps/web/dist`
 
 ## Updating
 
 ```bash
-cd /srv/hoteldesk
+cd /srv/stayvia
 git pull
 npm install
-npm -w @hoteldesk/shared run build
-npm -w @hoteldesk/api run build
+npm -w @stayvia/shared run build
+npm -w @stayvia/api run build
 # schema migrations (if any)
-npm -w @hoteldesk/api run db:push
-pm2 reload hoteldesk-api
+npm -w @stayvia/api run db:push
+pm2 reload stayvia-api
 ```
 
 ## Log rotation
@@ -104,7 +104,7 @@ pm2 set pm2-logrotate:retain 14
 
 ## Healthchecks
 
-- `GET https://api.hoteldesk.example.com/health` → `{ status: "ok" }`
+- `GET https://api.stayvia.example.com/health` → `{ status: "ok" }`
 - Uptime should poll `/health` every 60s; alert on 2 failures.
 
 ## Backups
@@ -112,7 +112,7 @@ pm2 set pm2-logrotate:retain 14
 Supabase handles Postgres PITR. For a belt-and-braces nightly dump:
 
 ```bash
-0 2 * * * pg_dump "$DATABASE_URL" | gzip > /var/backups/hoteldesk-$(date +\%F).sql.gz
+0 2 * * * pg_dump "$DATABASE_URL" | gzip > /var/backups/stayvia-$(date +\%F).sql.gz
 ```
 
 ## Security checklist

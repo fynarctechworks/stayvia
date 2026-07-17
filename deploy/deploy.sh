@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
-# Production deploy for the Hoteldesk API on the Hostinger VPS.
+# Production deploy for the Stayvia API on the Hostinger VPS.
 #
 # Run on the VPS from any directory:
-#   bash ~/hoteldesk/deploy/deploy.sh
+#   bash ~/stayvia/deploy/deploy.sh
 #
 # What it does, in order:
 #   1. Pulls the latest main from git
@@ -26,8 +26,8 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_DIR="${REPO_DIR:-$(cd "$SCRIPT_DIR/.." && pwd)}"
 COMPOSE_FILE="$REPO_DIR/deploy/docker-compose.prod.yml"
-CONTAINER_NAME="hoteldesk-api"
-HEALTH_URL="http://127.0.0.1:${HOTELDESK_HOST_PORT:-3010}/health"
+CONTAINER_NAME="stayvia-api"
+HEALTH_URL="http://127.0.0.1:${STAYVIA_HOST_PORT:-3010}/health"
 
 cd "$REPO_DIR"
 echo "Repo: $REPO_DIR"

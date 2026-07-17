@@ -1,5 +1,5 @@
 import { cn } from "@/lib/utils";
-import type { RoomStatus } from "@hoteldesk/shared";
+import type { RoomStatus } from "@stayvia/shared";
 
 const STYLES: Record<RoomStatus, string> = {
   available: "bg-success/15 text-success",

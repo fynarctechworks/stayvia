@@ -42,7 +42,7 @@ function findApiRoot(): string {
         const pkg = JSON.parse(
           readFileSync(resolve(dir, "package.json"), "utf8"),
         ) as { name?: string };
-        if (pkg.name === "@hoteldesk/api") return dir;
+        if (pkg.name === "@stayvia/api") return dir;
       } catch {
         // ignore unreadable package.json, keep walking
       }
@@ -113,12 +113,12 @@ const envSchema = z.object({
 
   FRONTEND_URL: z.string().url().default("http://localhost:5173"),
 
-  SEED_ADMIN_EMAIL: z.string().email().default("admin@hoteldesk.local"),
+  SEED_ADMIN_EMAIL: z.string().email().default("admin@stayvia.local"),
   SEED_ADMIN_PASSWORD: z.string().min(8).default("ChangeMe123!"),
   SEED_ADMIN_NAME: z.string().default("Hotel Owner"),
 
   NOTIFICATIONS_PROVIDER: z.enum(["stub", "live"]).default("stub"),
-  HOTEL_DISPLAY_NAME: z.string().default("SLDT Stay Inn"),
+  HOTEL_DISPLAY_NAME: z.string().default("Stayvia"),
 
   TWILIO_ACCOUNT_SID: z.string().optional().transform((v) => (v === "" ? undefined : v)),
   TWILIO_AUTH_TOKEN: z.string().optional().transform((v) => (v === "" ? undefined : v)),

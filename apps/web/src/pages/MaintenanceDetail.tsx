@@ -5,7 +5,7 @@ import {
   type MaintenanceCategory,
   type MaintenanceSeverity,
   type MaintenanceStatus,
-} from "@hoteldesk/shared";
+} from "@stayvia/shared";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { format } from "date-fns";
 import { ChevronLeft, Send } from "lucide-react";

@@ -30,7 +30,7 @@ import {
   MAINTENANCE_SEVERITY_LABELS,
   type MaintenanceCategory,
   type MaintenanceSeverity,
-} from "@hoteldesk/shared";
+} from "@stayvia/shared";
 import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { CheckInReceiptModal, type CheckInReceiptData } from "@/components/CheckInReceiptModal";

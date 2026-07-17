@@ -1,4 +1,4 @@
-import { editPaymentSchema, paymentSchema, voidPaymentSchema } from "@hoteldesk/shared";
+import { editPaymentSchema, paymentSchema, voidPaymentSchema } from "@stayvia/shared";
 import { and, desc, eq, gte, lte, sql } from "drizzle-orm";
 import { Router } from "express";
 import { db } from "../db/client.js";
@@ -34,7 +34,7 @@ router.post(
   idempotent("payments.record"),
   validate(paymentSchema),
   async (req, res) => {
-    const input = req.body as import("@hoteldesk/shared").PaymentInput;
+    const input = req.body as import("@stayvia/shared").PaymentInput;
     const inv = await db.select().from(invoices).where(eq(invoices.id, input.invoiceId)).limit(1);
     if (!inv.length) return fail(res, 404, "NOT_FOUND", "Invoice not found");
     if (inv[0]!.status === "voided") return fail(res, 409, "VOIDED", "Invoice is voided");

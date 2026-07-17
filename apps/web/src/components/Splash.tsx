@@ -24,12 +24,12 @@ export function Splash({ onDone, duration = 3500 }: { onDone: () => void; durati
       <div className="relative flex flex-col items-center gap-5 animate-[splashIn_700ms_ease-out]">
         <img
           src="/logo.jpg"
-          alt="SLDT Stay Inn"
+          alt="Stayvia"
           className="w-56 h-56 sm:w-64 sm:h-64 rounded-2xl object-contain bg-cream shadow-2xl ring-1 ring-brass/30"
         />
         <div className="text-center leading-tight">
-          <div className="text-cream text-2xl font-semibold">SLDT Stay Inn</div>
-          <div className="text-brass text-[11px] tracking-[0.25em] uppercase mt-1">Sabbavaram</div>
+          <div className="text-cream text-2xl font-semibold">Stayvia</div>
+          <div className="text-brass text-[11px] tracking-[0.25em] uppercase mt-1">Hotel OS</div>
         </div>
       </div>
       <style>{`

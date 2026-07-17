@@ -281,7 +281,7 @@ export default function Messages() {
               <span className="grid place-items-center w-20 h-20 rounded-full bg-[#f0f2f5] mx-auto mb-4">
                 <MessageSquare className="w-9 h-9 opacity-50" />
               </span>
-              <div className="text-xl font-light text-[#41525d]">HotelDesk Chat</div>
+              <div className="text-xl font-light text-[#41525d]">Stayvia Chat</div>
               <div className="text-sm mt-2">
                 Pick a conversation or a teammate to start chatting.
               </div>

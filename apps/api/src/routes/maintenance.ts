@@ -4,7 +4,7 @@ import {
   maintenanceCreateSchema,
   maintenanceListQuerySchema,
   maintenanceUpdateSchema,
-} from "@hoteldesk/shared";
+} from "@stayvia/shared";
 import { and, asc, count, desc, eq, inArray, sql } from "drizzle-orm";
 import { Router } from "express";
 import { db } from "../db/client.js";
@@ -187,7 +187,7 @@ router.post(
   requirePermission("manage_maintenance"),
   validate(maintenanceCreateSchema),
   async (req, res) => {
-    const input = req.body as import("@hoteldesk/shared").MaintenanceCreateInput;
+    const input = req.body as import("@stayvia/shared").MaintenanceCreateInput;
     const propertyId = await resolveCurrentPropertyId(req);
 
     const [created] = await db
@@ -225,7 +225,7 @@ router.patch(
   validate(maintenanceUpdateSchema),
   async (req, res) => {
     const id = req.params.id!;
-    const input = req.body as import("@hoteldesk/shared").MaintenanceUpdateInput;
+    const input = req.body as import("@stayvia/shared").MaintenanceUpdateInput;
 
     const [before] = await db
       .select()

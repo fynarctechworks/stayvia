@@ -19,7 +19,7 @@ import {
   reservationListQuerySchema,
   swapRoomSchema,
   swapRoomSegmentSchema,
-} from "@hoteldesk/shared";
+} from "@stayvia/shared";
 import { randomUUID } from "node:crypto";
 import { differenceInCalendarDays, format } from "date-fns";
 import { and, asc, desc, eq, gte, inArray, isNotNull, isNull, lte, ne, or, sql } from "drizzle-orm";
@@ -554,7 +554,7 @@ router.post(
   idempotent("reservations.create"),
   validate(reservationCreateSchema),
   async (req, res) => {
-    const input = req.body as import("@hoteldesk/shared").ReservationCreateInput;
+    const input = req.body as import("@stayvia/shared").ReservationCreateInput;
 
     // Verify the OTP up-front. We intentionally do this BEFORE any
     // availability / pricing / lock work so a bad/missing OTP wastes no
@@ -1325,7 +1325,7 @@ router.post(
   validate(checkInSchema),
   async (req, res) => {
     const id = req.params.id!;
-    const input = req.body as import("@hoteldesk/shared").CheckInInput;
+    const input = req.body as import("@stayvia/shared").CheckInInput;
 
     const r = await db.select().from(reservations).where(eq(reservations.id, id)).limit(1);
     if (!r.length) return fail(res, 404, "NOT_FOUND", "Reservation not found");
@@ -1673,7 +1673,7 @@ async function handlePerRoomCheckout(args: {
   charges: Array<typeof additionalCharges.$inferSelect>;
   labelMap: RoomTypeLabelMap;
   settings: Awaited<ReturnType<typeof getSettings>>;
-  input: import("@hoteldesk/shared").CheckOutInput;
+  input: import("@stayvia/shared").CheckOutInput;
 }) {
   const { req, res, reservation: r, guest, resRooms, charges, labelMap, settings, input } = args;
   const id = r.id;
@@ -2098,7 +2098,7 @@ router.post(
   validate(checkOutSchema),
   async (req, res) => {
     const id = req.params.id!;
-    const input = req.body as import("@hoteldesk/shared").CheckOutInput;
+    const input = req.body as import("@stayvia/shared").CheckOutInput;
 
     const r = await db.select().from(reservations).where(eq(reservations.id, id)).limit(1);
     if (!r.length) return fail(res, 404, "NOT_FOUND", "Reservation not found");
@@ -3552,7 +3552,7 @@ router.post(
   validate(additionalChargeSchema),
   async (req, res) => {
     const id = req.params.id!;
-    const input = req.body as import("@hoteldesk/shared").AdditionalChargeInput;
+    const input = req.body as import("@stayvia/shared").AdditionalChargeInput;
     const amount = +(input.quantity * input.rate).toFixed(2);
     const [created] = await db
       .insert(additionalCharges)

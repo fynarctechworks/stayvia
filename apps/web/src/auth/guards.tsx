@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 import { Lock } from "lucide-react";
 import { Navigate, useLocation, useNavigate } from "react-router-dom";
-import type { Role } from "@hoteldesk/shared";
+import type { Role } from "@stayvia/shared";
 import { Loader } from "@/components/Loader";
 import { useAuth } from "./AuthContext";
 

@@ -16,15 +16,15 @@ services:
     image: postgres:16-alpine
     restart: unless-stopped
     environment:
-      POSTGRES_USER: hoteldesk
-      POSTGRES_PASSWORD: hoteldesk
-      POSTGRES_DB: hoteldesk
+      POSTGRES_USER: stayvia
+      POSTGRES_PASSWORD: stayvia
+      POSTGRES_DB: stayvia
     ports:
       - "5432:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U hoteldesk -d hoteldesk"]
+      test: ["CMD-SHELL", "pg_isready -U stayvia -d stayvia"]
       interval: 5s
       timeout: 3s
       retries: 10
@@ -55,7 +55,7 @@ services:
     environment:
       NODE_ENV: development
       PORT: 3000
-      DATABASE_URL: postgresql://hoteldesk:hoteldesk@postgres:5432/hoteldesk
+      DATABASE_URL: postgresql://stayvia:stayvia@postgres:5432/stayvia
       REDIS_URL: redis://redis:6379
       FRONTEND_URL: http://localhost:5173
       # Supabase values — keep in apps/api/.env (compose loads them below).

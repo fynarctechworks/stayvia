@@ -108,12 +108,12 @@ export default function ResetPassword() {
         <div className="flex items-center gap-3 mb-6">
           <img
             src="/logo.jpg"
-            alt="SLDT Stay Inn"
+            alt="Stayvia"
             className="w-12 h-12 rounded-lg object-contain bg-cream ring-1 ring-brass/30"
           />
           <div className="leading-tight">
-            <div className="font-semibold text-brand-dark">SLDT Stay Inn</div>
-            <div className="text-[11px] text-[#157f5f] tracking-wide">SABBAVARAM</div>
+            <div className="font-semibold text-brand-dark">Stayvia</div>
+            <div className="text-[11px] text-[#157f5f] tracking-wide">HOTEL OS</div>
           </div>
         </div>
 

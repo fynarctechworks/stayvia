@@ -7,7 +7,7 @@
 #   - redis-rest       : serverless-redis-http — exposes the Upstash REST
 #                        API in front of the local Redis, so the
 #                        @upstash/redis client works locally too
-#   - api             : the Hoteldesk API, NODE_ENV=local
+#   - api             : the Stayvia API, NODE_ENV=local
 #   - web             : the Vite SPA, built against the local API
 #
 # Postgres + Auth are NOT here — they are provided by the Supabase CLI

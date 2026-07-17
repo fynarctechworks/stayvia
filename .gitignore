@@ -18,6 +18,7 @@ coverage
 .mcp.json
 dist-desktop/
 apps/web/src-tauri/resources/
+apps/web/src-tauri/target/
 
 # Playwright E2E
 /test-results/

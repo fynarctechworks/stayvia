@@ -152,13 +152,13 @@ export function Sidebar({
       >
         <img
           src="/logo.jpg"
-          alt="SLDT Stay Inn"
+          alt="Stayvia"
           className="w-10 h-10 rounded-md bg-cream object-contain p-0.5 shrink-0 ring-1 ring-brass/30"
         />
         {!collapsed && (
           <div className="min-w-0">
-            <div className="text-base font-semibold tracking-tight leading-tight truncate text-cream">SLDT Stay Inn</div>
-            <div className="text-[10px] text-brass tracking-[0.15em] mt-0.5">SABBAVARAM</div>
+            <div className="text-base font-semibold tracking-tight leading-tight truncate text-cream">Stayvia</div>
+            <div className="text-[10px] text-brass tracking-[0.15em] mt-0.5">HOTEL OS</div>
           </div>
         )}
       </div>

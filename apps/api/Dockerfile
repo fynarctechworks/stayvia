@@ -4,7 +4,7 @@
 # Stage 1 — builder
 # ----------------------------------------------------------------------------
 # Compiles TypeScript to dist/. Uses the full workspace because the API
-# imports from @hoteldesk/shared, which lives in packages/shared.
+# imports from @stayvia/shared, which lives in packages/shared.
 # ----------------------------------------------------------------------------
 FROM node:20-bookworm-slim AS builder
 
@@ -27,8 +27,8 @@ COPY tsconfig.base.json* ./
 COPY packages/shared packages/shared
 COPY apps/api apps/api
 
-RUN npm run build --workspace=@hoteldesk/shared --if-present \
- && npm run build --workspace=@hoteldesk/api
+RUN npm run build --workspace=@stayvia/shared --if-present \
+ && npm run build --workspace=@stayvia/api
 
 # Prune dev deps so the runtime image only carries production node_modules.
 RUN npm prune --workspaces --omit=dev

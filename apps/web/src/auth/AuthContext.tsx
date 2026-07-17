@@ -9,7 +9,7 @@ import {
   setLocalSession,
 } from "@/lib/offlineMode";
 import { supabase } from "@/lib/supabase";
-import type { Role } from "@hoteldesk/shared";
+import type { Role } from "@stayvia/shared";
 
 interface Profile {
   id: string;
@@ -55,7 +55,7 @@ const Ctx = createContext<AuthCtx | null>(null);
 const FAKE_SESSION = { access_token: "ui-preview", user: { id: "preview" } } as unknown as Session;
 const FAKE_PROFILE: Profile = {
   id: "preview",
-  email: "admin@hoteldesk.local",
+  email: "admin@stayvia.local",
   fullName: "Preview Admin",
   role: "admin",
   rbacRoleKey: "admin",

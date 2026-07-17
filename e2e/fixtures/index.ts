@@ -3,7 +3,7 @@ import { test as base, expect, type Page } from "@playwright/test";
 // Desk credentials seeded by the API's first-run bootstrap on the throwaway
 // E2E database (same as a fresh install).
 export const DESK_ADMIN = {
-  email: "admin@hoteldesk.local",
+  email: "admin@stayvia.local",
   pin: "424242",
 } as const;
 

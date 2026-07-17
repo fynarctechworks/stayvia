@@ -1,3 +1,8 @@
+> **NOTE (Stayvia conversion):** This document describes the original single-property
+> PMS ("SLDT Stay Inn" / HotelDesk) this codebase started from. Product is now
+> **Stayvia**, a multi-tenant hotel SaaS — package names, branding, and desktop/offline
+> sections below are historical. Code wins on conflict. See CLAUDE.md for current state.
+
 # SLDT Stay Inn — Hotel Management System
 
 A single-tenant property management system (PMS) built for **SLDT Stay Inn**, a small hotel in Sabbavaram, Visakhapatnam (Andhra Pradesh, India). The system was originally scaffolded as a generic "HotelDesk" template and then specialized for this one property — package names and a few historical references still say `hoteldesk`, the user-facing brand is **SLDT Stay Inn**.

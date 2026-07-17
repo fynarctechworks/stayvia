@@ -1,15 +1,15 @@
 server {
     listen 80;
-    server_name api.hoteldesk.example.com;
+    server_name api.stayvia.example.com;
     return 301 https://$host$request_uri;
 }
 
 server {
     listen 443 ssl http2;
-    server_name api.hoteldesk.example.com;
+    server_name api.stayvia.example.com;
 
-    ssl_certificate     /etc/letsencrypt/live/api.hoteldesk.example.com/fullchain.pem;
-    ssl_certificate_key /etc/letsencrypt/live/api.hoteldesk.example.com/privkey.pem;
+    ssl_certificate     /etc/letsencrypt/live/api.stayvia.example.com/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/api.stayvia.example.com/privkey.pem;
 
     ssl_protocols TLSv1.2 TLSv1.3;
     ssl_prefer_server_ciphers on;

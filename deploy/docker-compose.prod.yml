@@ -3,19 +3,19 @@
 # Postgres and Redis are NOT here: production uses managed Supabase
 # (Postgres + Auth) and Upstash (Redis). The web front-end is on Vercel.
 # So the only thing this VPS runs is the API container, fronted by
-# nginx (see deploy/nginx/) which terminates HTTPS for api.sldt.infynarc.com.
+# nginx (see deploy/nginx/) which terminates HTTPS for api.stayvia.example.com.
 #
 # COEXISTENCE: this VPS (187.127.129.90) already hosts other apps' APIs
 # (api.infynarc.com, bmsapi.infynarc.com). nginx routes them by hostname.
-# To avoid a port collision, the Hoteldesk container's HOST-side port is
-# configurable via the HOTELDESK_HOST_PORT env var and defaults to 3010
+# To avoid a port collision, the Stayvia container's HOST-side port is
+# configurable via the STAYVIA_HOST_PORT env var and defaults to 3010
 # (NOT 3000, which another app may already use). The port INSIDE the
 # container is always 3000 — only the host mapping changes.
 #
 # Pick a free host port on the VPS first:
 #   sudo ss -tlnp | grep LISTEN          # list everything already listening
 # then set it (e.g. in a shell or a .env next to this file):
-#   export HOTELDESK_HOST_PORT=3010
+#   export STAYVIA_HOST_PORT=3010
 #
 # Usage on the VPS (run from the repo root):
 #   docker compose -f deploy/docker-compose.prod.yml up -d --build
@@ -34,15 +34,15 @@ services:
     build:
       context: ..
       dockerfile: apps/api/Dockerfile
-    image: hoteldesk-api:latest
-    container_name: hoteldesk-api
+    image: stayvia-api:latest
+    container_name: stayvia-api
     restart: unless-stopped
     # host:container — bind to 127.0.0.1 only so nothing hits the API
     # directly from the internet; nginx on the host is the public door.
     # Host port is configurable (default 3010) to avoid clashing with the
     # other apps already on this VPS. Container port is always 3000.
     ports:
-      - "127.0.0.1:${HOTELDESK_HOST_PORT:-3010}:3000"
+      - "127.0.0.1:${STAYVIA_HOST_PORT:-3010}:3000"
     env_file:
       # Real production secrets. This file is git-ignored — create it on
       # the VPS from apps/api/.env.production.example.

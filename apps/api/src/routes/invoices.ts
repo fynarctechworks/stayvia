@@ -1,4 +1,4 @@
-import { editInvoiceSchema } from "@hoteldesk/shared";
+import { editInvoiceSchema } from "@stayvia/shared";
 import { and, desc, eq, gte, inArray, lte, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import { Router } from "express";

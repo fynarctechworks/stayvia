@@ -262,7 +262,7 @@ async function offlineFirstRun(): Promise<void> {
 }
 
 const server = app.listen(env.PORT, () => {
-  logger.info(`HotelDesk API listening on http://localhost:${env.PORT}`);
+  logger.info(`Stayvia API listening on http://localhost:${env.PORT}`);
 });
 // Run the first-run bootstrap right after binding the port so /health responds
 // immediately (the shell health-gates on it); the schema build completes in

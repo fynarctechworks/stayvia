@@ -2,7 +2,7 @@ import {
   expenseCreateSchema,
   expenseListQuerySchema,
   expenseUpdateSchema,
-} from "@hoteldesk/shared";
+} from "@stayvia/shared";
 import { and, desc, eq, gte, ilike, lte, ne, or, sql } from "drizzle-orm";
 import { Router } from "express";
 import multer from "multer";

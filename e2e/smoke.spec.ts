@@ -34,7 +34,7 @@ test.describe("desk smoke", () => {
 
   test("wrong PIN is rejected with a generic error", async ({ page }) => {
     await page.goto("/login");
-    await page.getByLabel(/email/i).fill("admin@hoteldesk.local");
+    await page.getByLabel(/email/i).fill("admin@stayvia.local");
     await page.getByLabel(/desk pin or password/i).fill("000000");
     await page.getByRole("button", { name: /sign in/i }).click();
     // The API's actual rejection message must render — asserting only "still

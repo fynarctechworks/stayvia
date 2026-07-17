@@ -142,7 +142,7 @@ export default function Login() {
       title: "Reset your password",
       message:
         "Enter the email for your account. We'll send a link to set a new password.",
-      placeholder: "you@sldtstayinn.com",
+      placeholder: "you@yourhotel.com",
       defaultValue: emailValid ? email : "",
       okLabel: "Send reset link",
       cancelLabel: "Cancel",
@@ -226,10 +226,10 @@ export default function Login() {
 
         {/* Logo + name, top-left. */}
         <div className="absolute top-10 left-10 xl:left-14 flex items-center gap-3 pointer-events-none">
-          <img src="/logo.jpg" alt="SLDT Stay Inn" className="w-14 h-14 rounded-2xl object-contain bg-cream shadow-md ring-1 ring-brass/30" />
+          <img src="/logo.jpg" alt="Stayvia" className="w-14 h-14 rounded-2xl object-contain bg-cream shadow-md ring-1 ring-brass/30" />
           <div className="leading-tight">
-            <div className="text-cream font-semibold text-lg">SLDT Stay Inn</div>
-            <div className="text-[11px] font-normal text-brass tracking-[0.18em] uppercase">Sabbavaram</div>
+            <div className="text-cream font-semibold text-lg">Stayvia</div>
+            <div className="text-[11px] font-normal text-brass tracking-[0.18em] uppercase">Hotel OS</div>
           </div>
         </div>
 
@@ -246,7 +246,7 @@ export default function Login() {
 
           <p className="text-cream/85 text-base leading-relaxed mt-5 max-w-md">
             Reservations, housekeeping, guest profiles and reports, all in one
-            calm workspace, made for SLDT Stay Inn.
+            calm workspace, made for modern hotels.
           </p>
 
           <ul className="mt-8 space-y-4">
@@ -273,7 +273,7 @@ export default function Login() {
             className="h-6 w-auto opacity-80"
           />
           <span className="text-xs text-cream/60 tracking-wide leading-tight">
-            <span className="block">© {new Date().getFullYear()} SLDT Stay Inn · Sabbavaram</span>
+            <span className="block">© {new Date().getFullYear()} Stayvia</span>
             <span className="block">Powered by FYN ARC Techworks</span>
           </span>
         </div>
@@ -305,11 +305,11 @@ export default function Login() {
           <div className="lg:hidden flex flex-col items-center text-center mb-5">
             <img
               src="/logo.jpg"
-              alt="SLDT Stay Inn"
+              alt="Stayvia"
               className="w-16 h-16 rounded-2xl object-contain bg-cream shadow-lg ring-1 ring-brass/30"
             />
-            <div className="mt-3 text-cream font-semibold text-lg leading-tight">SLDT Stay Inn</div>
-            <div className="text-[11px] tracking-[0.18em] uppercase text-brass">Sabbavaram</div>
+            <div className="mt-3 text-cream font-semibold text-lg leading-tight">Stayvia</div>
+            <div className="text-[11px] tracking-[0.18em] uppercase text-brass">Hotel OS</div>
           </div>
         <form
           onSubmit={onSubmit}
@@ -366,7 +366,7 @@ export default function Login() {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 onBlur={() => setTouched((t) => ({ ...t, email: true }))}
-                placeholder="you@sldtstayinn.com"
+                placeholder="you@yourhotel.com"
                 required
                 autoComplete="username"
                 autoFocus
@@ -478,8 +478,8 @@ export default function Login() {
                 // configured, which silently breaks mailto: links).
                 href={`https://mail.google.com/mail/?view=cm&fs=1&to=${encodeURIComponent(
                   import.meta.env.VITE_ADMIN_CONTACT_EMAIL,
-                )}&su=${encodeURIComponent("Hoteldesk login help")}&body=${encodeURIComponent(
-                  `Hi,\n\nI can't sign in to the Hoteldesk workspace.\n\nMy email: ${email || "(fill in)"}\nIssue: (please describe)\n\nThanks.`,
+                )}&su=${encodeURIComponent("Stayvia login help")}&body=${encodeURIComponent(
+                  `Hi,\n\nI can't sign in to the Stayvia workspace.\n\nMy email: ${email || "(fill in)"}\nIssue: (please describe)\n\nThanks.`,
                 )}`}
                 target="_blank"
                 rel="noopener noreferrer"
@@ -565,7 +565,7 @@ export default function Login() {
               className="h-5 w-auto opacity-80"
             />
             <span className="text-[11px] text-cream/60 tracking-wide leading-tight">
-              <span className="block">© {new Date().getFullYear()} SLDT Stay Inn · Sabbavaram</span>
+              <span className="block">© {new Date().getFullYear()} Stayvia</span>
               <span className="block">Powered by FYN ARC Techworks</span>
             </span>
           </div>

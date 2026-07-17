@@ -7,7 +7,7 @@ import { E2E_API_PORT, E2E_PG_PORT, E2E_WEB_PORT } from "../playwright.config";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
-// Boots a fully ISOLATED HotelDesk stack for the E2E suite:
+// Boots a fully ISOLATED Stayvia stack for the E2E suite:
 //
 //   e2e/.runtime/pgdata    — throwaway embedded-Postgres cluster (port 5434)
 //   e2e/.runtime/storage   — throwaway file storage (KYC/PDFs)
@@ -17,7 +17,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 // tests are deterministic and can never read or write the live desk data
 // (D:\SLDT / %LOCALAPPDATA%\SLDT). The API bootstraps its own schema
 // (SLDT_SCHEMA_BOOTSTRAP=1) and seeds the first-run admin
-// (admin@hoteldesk.local / PIN 424242) exactly like a fresh desk install.
+// (admin@stayvia.local / PIN 424242) exactly like a fresh desk install.
 
 const REPO = resolve(__dirname, "..");
 const RUNTIME = join(REPO, "e2e", ".runtime");
@@ -27,8 +27,8 @@ const PG_BIN = join(REPO, "apps", "web", "src-tauri", "resources", "pgsql", "bin
 const API_DIST = join(REPO, "apps", "api", "dist", "index.js");
 const PIDS = join(RUNTIME, "pids.json");
 
-const PG_USER = "hoteldesk";
-const DATABASE_URL = `postgresql://${PG_USER}@127.0.0.1:${E2E_PG_PORT}/hoteldesk`;
+const PG_USER = "stayvia";
+const DATABASE_URL = `postgresql://${PG_USER}@127.0.0.1:${E2E_PG_PORT}/stayvia`;
 
 function pgTool(name: string): string {
   const exe = join(PG_BIN, process.platform === "win32" ? `${name}.exe` : name);
@@ -98,7 +98,7 @@ export default async function globalSetup(): Promise<void> {
     try {
       execFileSync(
         pgTool("createdb"),
-        ["-h", "127.0.0.1", "-p", String(E2E_PG_PORT), "-U", PG_USER, "hoteldesk"],
+        ["-h", "127.0.0.1", "-p", String(E2E_PG_PORT), "-U", PG_USER, "stayvia"],
         { stdio: "pipe" },
       );
       break;
@@ -165,7 +165,7 @@ export default async function globalSetup(): Promise<void> {
       const out = execFileSync(
         pgTool("psql"),
         [
-          "-h", "127.0.0.1", "-p", String(E2E_PG_PORT), "-U", PG_USER, "-d", "hoteldesk",
+          "-h", "127.0.0.1", "-p", String(E2E_PG_PORT), "-U", PG_USER, "-d", "stayvia",
           "-tAc", "SELECT count(*) FROM local_credentials",
         ],
         { stdio: "pipe" },

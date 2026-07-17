@@ -4,7 +4,7 @@ import {
   roomListQuerySchema,
   roomStatusUpdateSchema,
   roomUpdateSchema,
-} from "@hoteldesk/shared";
+} from "@stayvia/shared";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { Router } from "express";
 import { db } from "../db/client.js";
