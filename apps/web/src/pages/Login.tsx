@@ -1,5 +1,5 @@
 import { Suspense, lazy, useEffect, useId, useMemo, useState } from "react";
-import { Navigate, useLocation } from "react-router-dom";
+import { Link, Navigate, useLocation } from "react-router-dom";
 import {
   AlertCircle,
   Eye,
@@ -461,6 +461,13 @@ export default function Login() {
             ) : (
               "Contact your hotel administrator."
             )}
+          </p>
+
+          <p className="text-center text-xs text-textSecondary">
+            New hotel?{" "}
+            <Link to="/signup" className="text-brand-dark font-semibold hover:underline">
+              Start your free 14-day trial
+            </Link>
           </p>
           </>
           )}

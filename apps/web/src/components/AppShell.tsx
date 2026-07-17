@@ -1,10 +1,10 @@
 import { useQuery } from "@tanstack/react-query";
 import { Maximize2, Menu, Minimize2 } from "lucide-react";
 import type { ReactNode } from "react";
-import { useEffect, useMemo, useState } from "react";
-import { useLocation } from "react-router-dom";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "@/auth/AuthContext";
-import { api } from "@/lib/api";
+import { SUBSCRIPTION_REQUIRED_EVENT, api } from "@/lib/api";
 import { ArrivalAlerts } from "./ArrivalAlerts";
 import { BottomNav } from "./BottomNav";
 import { CheckoutAlerts } from "./CheckoutAlerts";
@@ -32,7 +32,23 @@ export function AppShell({ children }: { children: ReactNode }) {
     () => localStorage.getItem("hd:focusMode") === "1",
   );
   const location = useLocation();
+  const navigate = useNavigate();
   const { property } = useAuth();
+
+  // 402 SUBSCRIPTION_REQUIRED (fired by lib/api.ts): steer the user to
+  // /billing. Several in-flight queries can 402 at once, so navigations
+  // are throttled — one redirect per 5s window is plenty.
+  const lastBillingRedirect = useRef(0);
+  useEffect(() => {
+    function onSubscriptionRequired() {
+      const now = Date.now();
+      if (now - lastBillingRedirect.current < 5_000) return;
+      lastBillingRedirect.current = now;
+      if (window.location.pathname !== "/billing") navigate("/billing");
+    }
+    window.addEventListener(SUBSCRIPTION_REQUIRED_EVENT, onSubscriptionRequired);
+    return () => window.removeEventListener(SUBSCRIPTION_REQUIRED_EVENT, onSubscriptionRequired);
+  }, [navigate]);
 
   function toggleCollapsed() {
     setCollapsed((c) => {

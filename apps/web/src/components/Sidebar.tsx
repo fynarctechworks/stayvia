@@ -8,6 +8,7 @@ import {
   CalendarDays,
   ChevronLeft,
   ChevronRight,
+  CreditCard,
   DoorOpen,
   LayoutDashboard,
   LogOut,
@@ -29,7 +30,10 @@ interface NavItem {
   to: string;
   label: string;
   icon: typeof LayoutDashboard;
-  permission: string; // permission key required to see this item
+  permission?: string; // permission key required to see this item
+  // Strictly role-gated items (no permission key exists) — e.g. Billing,
+  // which the API guards with requireRole('admin').
+  adminOnly?: boolean;
 }
 
 // Each item declares the permission key required. Admin (god mode) sees everything.
@@ -48,6 +52,7 @@ const NAV: NavItem[] = [
   { to: "/notifications", label: "Notifications", icon: Bell, permission: "view_notifications" },
   { to: "/activity", label: "Activity", icon: Activity, permission: "view_activity" },
   { to: "/reports", label: "Reports", icon: BarChart3, permission: "view_reports" },
+  { to: "/billing", label: "Billing", icon: CreditCard, adminOnly: true },
   { to: "/settings", label: "Settings", icon: Settings, permission: "manage_settings" },
 ];
 
@@ -113,7 +118,9 @@ export function Sidebar({
 
   if (!profile) return null;
 
-  const visible = NAV.filter((i) => can(i.permission));
+  const visible = NAV.filter((i) =>
+    i.adminOnly ? profile.role === "admin" : i.permission ? can(i.permission) : true,
+  );
 
   return (
     <aside

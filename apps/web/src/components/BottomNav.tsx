@@ -13,6 +13,9 @@ import { cn } from "@/lib/utils";
 // the primary nav). Shows the 4 core destinations + a "More" button
 // that opens the existing full-nav drawer. Each tab is permission-gated
 // so a frontdesk/housekeeping user only sees what they can reach.
+// Admin-only destinations that don't earn a core tab (Billing, Settings…)
+// live in the "More" drawer — it renders the full Sidebar nav, which
+// already role-filters them.
 interface Tab {
   to: string;
   label: string;

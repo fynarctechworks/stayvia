@@ -10,8 +10,10 @@ import {
   Receipt,
   UserPlus,
   Wallet,
+  X,
 } from "lucide-react";
-import { useNavigate } from "react-router-dom";
+import { useState } from "react";
+import { Link, useNavigate } from "react-router-dom";
 import { Can } from "@/auth/Can";
 import { Loader } from "@/components/Loader";
 import { RoomActionPopover } from "@/components/RoomActionPopover";
@@ -132,6 +134,11 @@ export default function Dashboard() {
           staff to every page instead of only the Dashboard. The
           duplicate card that used to live here was removed to keep a
           single source of truth. */}
+
+      {/* Fresh signup (no rooms yet): one-time setup pointers. Uses the
+          room count the dashboard payload already carries — no extra
+          fetch. Dismissible; stays gone via localStorage. */}
+      {data.occupancy.total === 0 && <GetStartedCard />}
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <StatCard
@@ -491,6 +498,57 @@ function TodayRowItem({
         {actionLabel}
       </button>
     </li>
+  );
+}
+
+const ONBOARD_DISMISSED_KEY = "stayvia:onboard-dismissed";
+
+function GetStartedCard() {
+  const [dismissed, setDismissed] = useState(
+    () => localStorage.getItem(ONBOARD_DISMISSED_KEY) === "1",
+  );
+  if (dismissed) return null;
+
+  const steps = [
+    { to: "/rooms", label: "Add rooms", icon: <BedDouble className="w-4 h-4" /> },
+    { to: "/settings", label: "GST & hotel details", icon: <Receipt className="w-4 h-4" /> },
+    { to: "/settings", label: "Invite staff", icon: <UserPlus className="w-4 h-4" /> },
+  ];
+
+  return (
+    <div className="card">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <h2 className="font-semibold text-brand-dark">Welcome to Stayvia — set up your hotel</h2>
+          <p className="text-xs text-textSecondary mt-0.5">
+            Three quick steps and your front desk is ready.
+          </p>
+          <div className="flex flex-wrap gap-2 mt-3">
+            {steps.map((s) => (
+              <Link
+                key={s.label}
+                to={s.to}
+                className="inline-flex items-center gap-1.5 border border-borderc rounded-sm px-3 py-1.5 text-sm font-medium text-brand-dark bg-surface hover:bg-brand-soft transition-colors"
+              >
+                {s.icon}
+                {s.label}
+                <ArrowRight className="w-3.5 h-3.5 text-textSecondary" />
+              </Link>
+            ))}
+          </div>
+        </div>
+        <button
+          onClick={() => {
+            localStorage.setItem(ONBOARD_DISMISSED_KEY, "1");
+            setDismissed(true);
+          }}
+          className="p-1.5 -m-1 rounded text-textSecondary hover:text-navy hover:bg-bg shrink-0"
+          aria-label="Dismiss setup guide"
+        >
+          <X className="w-4 h-4" />
+        </button>
+      </div>
+    </div>
   );
 }
 

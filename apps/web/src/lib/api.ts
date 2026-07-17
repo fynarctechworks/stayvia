@@ -53,6 +53,18 @@ async function handle401(): Promise<void> {
   }
 }
 
+// Fired when the API answers 402 SUBSCRIPTION_REQUIRED (trial over /
+// subscription lapsed). AppShell listens and steers the user to /billing.
+// The request itself still rejects with a normal ApiError so queries and
+// mutations fail as usual.
+export const SUBSCRIPTION_REQUIRED_EVENT = "stayvia:subscription-required";
+
+function maybeSignalSubscriptionRequired(status: number, code: string | undefined): void {
+  if (status === 402 && code === "SUBSCRIPTION_REQUIRED" && typeof window !== "undefined") {
+    window.dispatchEvent(new CustomEvent(SUBSCRIPTION_REQUIRED_EVENT));
+  }
+}
+
 async function handle<T>(res: Response): Promise<T> {
   if (res.status === 304) {
     throw new ApiError(304, "NOT_MODIFIED", "Unexpected 304. Disable ETag on server");
@@ -71,6 +83,7 @@ async function handle<T>(res: Response): Promise<T> {
   const text = await res.text();
   const json = text ? (JSON.parse(text) as { success?: boolean; data?: T; error?: { code?: string; message?: string; details?: unknown } }) : {};
   if (!res.ok || json?.success === false) {
+    maybeSignalSubscriptionRequired(res.status, json?.error?.code);
     throw new ApiError(
       res.status,
       json?.error?.code ?? "UNKNOWN",
@@ -174,6 +187,7 @@ export async function getList<T>(
   }
   const json = await res.json().catch(() => ({}));
   if (!res.ok || json?.success === false) {
+    maybeSignalSubscriptionRequired(res.status, json?.error?.code);
     throw new ApiError(res.status, json?.error?.code ?? "UNKNOWN", json?.error?.message ?? `HTTP ${res.status}`);
   }
   return { data: json.data, meta: json.meta };

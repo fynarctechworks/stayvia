@@ -2,9 +2,10 @@ import { lazy, Suspense } from "react";
 import { Route, Routes } from "react-router-dom";
 import { AppShell } from "@/components/AppShell";
 import { Loader } from "@/components/Loader";
-import { PermissionGuard, ProtectedRoute } from "@/auth/guards";
+import { PermissionGuard, ProtectedRoute, RoleGuard } from "@/auth/guards";
 
 const Login = lazy(() => import("@/pages/Login"));
+const Signup = lazy(() => import("@/pages/Signup"));
 const ResetPassword = lazy(() => import("@/pages/ResetPassword"));
 const Dashboard = lazy(() => import("@/pages/Dashboard"));
 const Rooms = lazy(() => import("@/pages/Rooms"));
@@ -27,12 +28,16 @@ const Invoices = lazy(() => import("@/pages/Invoices"));
 const Expenses = lazy(() => import("@/pages/Expenses"));
 const ExpenseDetail = lazy(() => import("@/pages/ExpenseDetail"));
 const MaintenanceDetail = lazy(() => import("@/pages/MaintenanceDetail"));
+const Billing = lazy(() => import("@/pages/Billing"));
 
 export default function App() {
   return (
     <Suspense fallback={<Loader size="lg" fullscreen />}>
       <Routes>
         <Route path="/login" element={<Login />} />
+        {/* Public hotel signup — creates the tenant, then signs the owner
+            straight in. No AppShell. */}
+        <Route path="/signup" element={<Signup />} />
         {/* Password-reset confirmation. Public (no auth) — the user
             arrives from the recovery email link with a token in the URL
             hash. No AppShell. */}
@@ -211,6 +216,22 @@ export default function App() {
                 <PermissionGuard any={["manage_settings", "manage_staff", "manage_roles", "manage_templates"]}>
                   <Settings />
                 </PermissionGuard>
+              </AppShell>
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/billing"
+          element={
+            <ProtectedRoute>
+              <AppShell>
+                {/* Billing is strictly role-gated (no permission key exists
+                    for it) — the API guards it with requireRole('admin'),
+                    so the UI mirrors that with RoleGuard. */}
+                <RoleGuard allow={["admin"]}>
+                  <Billing />
+                </RoleGuard>
               </AppShell>
             </ProtectedRoute>
           }
