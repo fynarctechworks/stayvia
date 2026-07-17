@@ -14,7 +14,6 @@ import { Router } from "express";
 import { z } from "zod";
 import { db } from "../db/client.js";
 import { properties } from "../db/schema/properties.js";
-import { resolveCurrentPropertyId } from "../lib/currentProperty.js";
 import { fail, ok } from "../lib/response.js";
 import { requireAuth, requirePermission } from "../middleware/auth.js";
 import { validate } from "../middleware/validate.js";
@@ -22,8 +21,11 @@ import { validate } from "../middleware/validate.js";
 const router = Router();
 
 router.get("/me", requireAuth, async (req, res) => {
-  const id = await resolveCurrentPropertyId(req);
-  const [row] = await db.select().from(properties).where(eq(properties.id, id)).limit(1);
+  const [row] = await db
+    .select()
+    .from(properties)
+    .where(eq(properties.id, req.propertyId))
+    .limit(1);
   if (!row) return fail(res, 404, "NOT_FOUND", "Current property not found");
   return ok(res, row);
 });

@@ -15,7 +15,6 @@ import {
 import { profiles } from "../db/schema/profiles.js";
 import { rooms } from "../db/schema/rooms.js";
 import { logActivity } from "../lib/activity.js";
-import { resolveCurrentPropertyId } from "../lib/currentProperty.js";
 import { fail, list, ok } from "../lib/response.js";
 import { requireAuth, requirePermission } from "../middleware/auth.js";
 import { validate } from "../middleware/validate.js";
@@ -188,7 +187,7 @@ router.post(
   validate(maintenanceCreateSchema),
   async (req, res) => {
     const input = req.body as import("@stayvia/shared").MaintenanceCreateInput;
-    const propertyId = await resolveCurrentPropertyId(req);
+    const propertyId = req.propertyId;
 
     const [created] = await db
       .insert(maintenanceIssues)

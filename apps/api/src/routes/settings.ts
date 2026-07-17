@@ -15,7 +15,6 @@ import { reservationRooms } from "../db/schema/reservations.js";
 import { rooms } from "../db/schema/rooms.js";
 import { roomTypes, settings } from "../db/schema/settings.js";
 import { logActivity } from "../lib/activity.js";
-import { resolveCurrentPropertyId } from "../lib/currentProperty.js";
 import { publishSettingsInvalidation } from "../lib/redis.js";
 import { fail, ok } from "../lib/response.js";
 import { invalidateSettings } from "../lib/settings.js";
@@ -183,7 +182,7 @@ router.post(
     const [row] = await db
       .insert(roomTypes)
       .values({
-        propertyId: await resolveCurrentPropertyId(req),
+        propertyId: req.propertyId,
         slug: input.slug,
         label: input.label,
         defaultRate: String(input.defaultRate),
@@ -365,7 +364,7 @@ router.put("/templates/:key", requireAuth, requirePermission("manage_templates")
   if (input.body !== undefined && input.body.trim() === "") {
     return fail(res, 400, "EMPTY_BODY", "Body cannot be empty");
   }
-  await upsertTemplate(key as keyof typeof TEMPLATE_DEFAULTS, input, await resolveCurrentPropertyId(req));
+  await upsertTemplate(key as keyof typeof TEMPLATE_DEFAULTS, input, req.propertyId);
   await logActivity({
     action: "template_updated",
     entityType: "template",
@@ -390,7 +389,7 @@ router.post("/templates/:key/reset", requireAuth, requirePermission("manage_temp
       body: def.body,
       enabled: true,
     },
-    await resolveCurrentPropertyId(req),
+    req.propertyId,
   );
   return ok(res, { ok: true });
 });
@@ -399,8 +398,12 @@ router.post("/templates/:key/reset", requireAuth, requirePermission("manage_temp
 
 const staffRouter = Router();
 
-staffRouter.get("/", requireAuth, requirePermission("manage_staff"), async (_req, res) => {
-  const rows = await db.select().from(profiles).orderBy(profiles.fullName);
+staffRouter.get("/", requireAuth, requirePermission("manage_staff"), async (req, res) => {
+  const rows = await db
+    .select()
+    .from(profiles)
+    .where(eq(profiles.propertyId, req.propertyId))
+    .orderBy(profiles.fullName);
   return ok(res, rows);
 });
 
@@ -413,12 +416,32 @@ staffRouter.post("/", requireAuth, requirePermission("manage_staff"), validate(s
     phone?: string;
   };
 
+  // Emails are platform-global (one Supabase identity per email, one hotel
+  // per account in v1). A collision — whether the profile row belongs to
+  // this hotel or another — returns the same generic 409 so an admin can't
+  // probe where an email already works.
+  const [emailTaken] = await db
+    .select({ id: profiles.id })
+    .from(profiles)
+    .where(sql`lower(${profiles.email}) = lower(${input.email})`)
+    .limit(1);
+  if (emailTaken) {
+    return fail(res, 409, "EMAIL_IN_USE", "This email is already in use");
+  }
+
   const { data, error } = await supabaseAdmin.auth.admin.createUser({
     email: input.email,
     password: input.password,
     email_confirm: true,
   });
-  if (error || !data.user) return fail(res, 400, "AUTH_ERROR", error?.message ?? "Create failed");
+  if (error || !data.user) {
+    // Supabase user exists without a profile row (e.g. staff at another
+    // hotel mid-provision, or an orphaned auth user) — same generic 409.
+    if (error && (error.code === "email_exists" || /already.*(registered|exists)/i.test(error.message))) {
+      return fail(res, 409, "EMAIL_IN_USE", "This email is already in use");
+    }
+    return fail(res, 400, "AUTH_ERROR", error?.message ?? "Create failed");
+  }
   const userId = data.user.id;
 
   const [profile] = await db
@@ -430,6 +453,7 @@ staffRouter.post("/", requireAuth, requirePermission("manage_staff"), validate(s
       role: input.role,
       phone: input.phone ?? null,
       isActive: true,
+      propertyId: req.propertyId,
     })
     .returning();
 
@@ -477,6 +501,15 @@ staffRouter.put(
       return fail(res, 400, "SELF_DEACTIVATE", "You cannot deactivate yourself");
     }
 
+    // Tenant guard BEFORE the Supabase credential update — otherwise a
+    // cross-hotel id would flip the auth email/password and only then 404.
+    const [target] = await db
+      .select({ id: profiles.id })
+      .from(profiles)
+      .where(and(eq(profiles.id, id), eq(profiles.propertyId, req.propertyId)))
+      .limit(1);
+    if (!target) return fail(res, 404, "NOT_FOUND", "Staff not found");
+
     if (input.email || input.password) {
       const authUpdate: { email?: string; password?: string } = {};
       if (input.email) authUpdate.email = input.email;
@@ -495,7 +528,7 @@ staffRouter.put(
     const [updated] = await db
       .update(profiles)
       .set(profilePatch)
-      .where(eq(profiles.id, id))
+      .where(and(eq(profiles.id, id), eq(profiles.propertyId, req.propertyId)))
       .returning();
     if (!updated) return fail(res, 404, "NOT_FOUND", "Staff not found");
 
@@ -525,7 +558,7 @@ staffRouter.delete("/:id", requireAuth, requirePermission("manage_staff"), async
   const [updated] = await db
     .update(profiles)
     .set({ isActive: false, updatedAt: new Date() })
-    .where(eq(profiles.id, id))
+    .where(and(eq(profiles.id, id), eq(profiles.propertyId, req.propertyId)))
     .returning();
   if (!updated) return fail(res, 404, "NOT_FOUND", "Staff not found");
 
@@ -544,13 +577,23 @@ staffRouter.delete("/:id/hard", requireAuth, requirePermission("manage_staff"), 
   const id = req.params.id!;
   if (id === req.user!.id) return fail(res, 400, "SELF_DELETE", "You cannot delete yourself");
 
-  const [target] = await db.select().from(profiles).where(eq(profiles.id, id)).limit(1);
+  const [target] = await db
+    .select()
+    .from(profiles)
+    .where(and(eq(profiles.id, id), eq(profiles.propertyId, req.propertyId)))
+    .limit(1);
   if (!target) return fail(res, 404, "NOT_FOUND", "Staff not found");
 
   const adminCount = await db
     .select({ n: sqlCount() })
     .from(profiles)
-    .where(and(eq(profiles.role, "admin"), eq(profiles.isActive, true)));
+    .where(
+      and(
+        eq(profiles.role, "admin"),
+        eq(profiles.isActive, true),
+        eq(profiles.propertyId, req.propertyId),
+      ),
+    );
   if (target.role === "admin" && Number(adminCount[0]?.n ?? 0) <= 1) {
     return fail(res, 400, "LAST_ADMIN", "Cannot delete the last active admin");
   }
@@ -575,7 +618,9 @@ staffRouter.delete("/:id/hard", requireAuth, requirePermission("manage_staff"), 
     );
   }
 
-  await db.delete(profiles).where(eq(profiles.id, id));
+  await db
+    .delete(profiles)
+    .where(and(eq(profiles.id, id), eq(profiles.propertyId, req.propertyId)));
   const { error } = await supabaseAdmin.auth.admin.deleteUser(id);
   if (error) {
     return fail(res, 500, "AUTH_DELETE_FAILED", `Profile deleted but auth user removal failed: ${error.message}`);

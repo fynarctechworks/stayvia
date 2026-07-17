@@ -3,6 +3,7 @@ import { Maximize2, Menu, Minimize2 } from "lucide-react";
 import type { ReactNode } from "react";
 import { useEffect, useMemo, useState } from "react";
 import { useLocation } from "react-router-dom";
+import { useAuth } from "@/auth/AuthContext";
 import { api } from "@/lib/api";
 import { ArrivalAlerts } from "./ArrivalAlerts";
 import { BottomNav } from "./BottomNav";
@@ -31,6 +32,7 @@ export function AppShell({ children }: { children: ReactNode }) {
     () => localStorage.getItem("hd:focusMode") === "1",
   );
   const location = useLocation();
+  const { property } = useAuth();
 
   function toggleCollapsed() {
     setCollapsed((c) => {
@@ -188,7 +190,7 @@ export function AppShell({ children }: { children: ReactNode }) {
               className="w-7 h-7 rounded-sm bg-cream object-contain p-0.5 ring-1 ring-brass/30 shrink-0"
             />
             <div className="min-w-0">
-              <div className="text-sm font-semibold leading-tight truncate">Stayvia</div>
+              <div className="text-sm font-semibold leading-tight truncate">{property?.name ?? "Stayvia"}</div>
               <div className="text-[9px] text-brass tracking-[0.15em] leading-none">HOTEL OS</div>
             </div>
           </div>

@@ -10,7 +10,6 @@ import { db } from "../db/client.js";
 import { expenses } from "../db/schema/expenses.js";
 import { profiles } from "../db/schema/profiles.js";
 import { logActivity } from "../lib/activity.js";
-import { resolveCurrentPropertyId } from "../lib/currentProperty.js";
 import { logger } from "../lib/logger.js";
 import { fail, list, ok } from "../lib/response.js";
 import {
@@ -282,7 +281,7 @@ router.post(
       if (v) return fail(res, 400, "BAD_FILE", v);
     }
 
-    const propertyId = await resolveCurrentPropertyId(req);
+    const propertyId = req.propertyId;
     // If staff didn't pick a paidAt but marked the payment as
     // anything other than pending, stamp the current time.
     const paidAt =

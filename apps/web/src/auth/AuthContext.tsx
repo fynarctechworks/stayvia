@@ -14,6 +14,8 @@ interface Profile {
   rbacRoleKey: string | null;
   isGodMode: boolean;
   permissions: string[];
+  // The hotel this account belongs to (one hotel per account in v1).
+  property: { id: string; name: string } | null;
 }
 
 interface AuthCtx {
@@ -22,6 +24,8 @@ interface AuthCtx {
   loading: boolean;
   permissions: Set<string>;
   isGodMode: boolean;
+  // Convenience mirror of profile.property for shell branding.
+  property: { id: string; name: string } | null;
   can: (key: string) => boolean;
   // signIn returns whether a second factor is still required. When true,
   // the caller (Login) must collect a TOTP code and call verifyMfa
@@ -49,6 +53,7 @@ const FAKE_PROFILE: Profile = {
   rbacRoleKey: "admin",
   isGodMode: true,
   permissions: [],
+  property: { id: "preview-property", name: "Preview Hotel" },
 };
 
 export function AuthProvider({ children }: { children: ReactNode }) {
@@ -231,6 +236,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         loading,
         permissions,
         isGodMode,
+        property: profile?.property ?? null,
         can,
         signIn,
         verifyMfa,

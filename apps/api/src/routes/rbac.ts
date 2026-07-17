@@ -1,4 +1,4 @@
-import { asc, eq } from "drizzle-orm";
+import { and, asc, eq, inArray, isNull, or } from "drizzle-orm";
 import { Router } from "express";
 import { z } from "zod";
 import { db } from "../db/client.js";
@@ -27,11 +27,25 @@ router.get("/permissions", requireAuth, async (_req, res) => {
   return ok(res, PERMISSION_CATALOG);
 });
 
+// A role is visible to a hotel if it's a shared system role (propertyId
+// NULL) or one of the hotel's own custom roles. Other hotels' roles read
+// as 404 everywhere below.
+function visibleRoles(propertyId: string) {
+  return or(isNull(roles.propertyId), eq(roles.propertyId, propertyId));
+}
+
 // --- Roles ---
-router.get("/roles", requireAuth, async (_req, res) => {
-  const rows = await db.select().from(roles).orderBy(asc(roles.label));
-  // Attach permission keys per role.
-  const allPerms = await db.select().from(rolePermissions);
+router.get("/roles", requireAuth, async (req, res) => {
+  const rows = await db
+    .select()
+    .from(roles)
+    .where(visibleRoles(req.propertyId))
+    .orderBy(asc(roles.label));
+  // Attach permission keys per role (only the visible ones).
+  const roleIds = rows.map((r) => r.id);
+  const allPerms = roleIds.length
+    ? await db.select().from(rolePermissions).where(inArray(rolePermissions.roleId, roleIds))
+    : [];
   const byRole = new Map<string, string[]>();
   for (const rp of allPerms) {
     if (!byRole.has(rp.roleId)) byRole.set(rp.roleId, []);
@@ -46,7 +60,11 @@ router.get("/roles", requireAuth, async (_req, res) => {
 
 router.get("/roles/:id", requireAuth, async (req, res) => {
   const id = req.params.id!;
-  const role = await db.select().from(roles).where(eq(roles.id, id)).limit(1);
+  const role = await db
+    .select()
+    .from(roles)
+    .where(and(eq(roles.id, id), visibleRoles(req.propertyId)))
+    .limit(1);
   if (!role.length) return fail(res, 404, "NOT_FOUND", "Role not found");
   const perms = await db
     .select({ key: rolePermissions.permissionKey })
@@ -78,7 +96,14 @@ router.post(
       return fail(res, 400, "RESERVED", "Role key 'admin' is reserved");
     }
 
-    const existing = await db.select().from(roles).where(eq(roles.key, input.key)).limit(1);
+    // Key collision within THIS hotel's namespace: its own custom roles
+    // plus the shared system roles (a custom role shadowing 'frontdesk'
+    // would be ambiguous in the UI). Other hotels' keys don't collide.
+    const existing = await db
+      .select()
+      .from(roles)
+      .where(and(eq(roles.key, input.key), visibleRoles(req.propertyId)))
+      .limit(1);
     if (existing.length) {
       return fail(res, 409, "DUPLICATE", "A role with that key already exists");
     }
@@ -94,6 +119,8 @@ router.post(
         label: input.label,
         description: input.description ?? null,
         isSystem: false,
+        // Custom roles belong to the hotel that created them.
+        propertyId: req.propertyId,
       })
       .returning();
 
@@ -131,12 +158,18 @@ router.patch(
     const id = req.params.id!;
     const input = req.body as z.infer<typeof roleUpdateSchema>;
 
-    const role = await db.select().from(roles).where(eq(roles.id, id)).limit(1);
+    // Another hotel's role reads as 404 — its existence is not confirmed.
+    const role = await db
+      .select()
+      .from(roles)
+      .where(and(eq(roles.id, id), visibleRoles(req.propertyId)))
+      .limit(1);
     if (!role.length) return fail(res, 404, "NOT_FOUND", "Role not found");
 
-    // Admin role is locked end-to-end.
-    if (role[0]!.key === "admin") {
-      return fail(res, 403, "LOCKED", "The admin role cannot be edited");
+    // System roles (admin/frontdesk/housekeeping) are shared across every
+    // hotel — editing one would change another tenant's permissions.
+    if (role[0]!.isSystem || role[0]!.propertyId === null) {
+      return fail(res, 403, "LOCKED", "System roles cannot be edited");
     }
 
     const patch: Record<string, unknown> = { updatedAt: new Date() };
@@ -175,9 +208,14 @@ router.delete(
   requirePermission("manage_roles"),
   async (req, res) => {
     const id = req.params.id!;
-    const role = await db.select().from(roles).where(eq(roles.id, id)).limit(1);
+    // Another hotel's role reads as 404 — its existence is not confirmed.
+    const role = await db
+      .select()
+      .from(roles)
+      .where(and(eq(roles.id, id), visibleRoles(req.propertyId)))
+      .limit(1);
     if (!role.length) return fail(res, 404, "NOT_FOUND", "Role not found");
-    if (role[0]!.isSystem) {
+    if (role[0]!.isSystem || role[0]!.propertyId === null) {
       return fail(res, 403, "LOCKED", "System roles cannot be deleted");
     }
 
@@ -225,10 +263,20 @@ router.put(
     const userId = req.params.userId!;
     const { roleId } = req.body as { roleId: string };
 
-    const u = await db.select().from(profiles).where(eq(profiles.id, userId)).limit(1);
+    // Target must be staff of the caller's hotel; another hotel's user
+    // (and role) reads as 404.
+    const u = await db
+      .select()
+      .from(profiles)
+      .where(and(eq(profiles.id, userId), eq(profiles.propertyId, req.propertyId)))
+      .limit(1);
     if (!u.length) return fail(res, 404, "NOT_FOUND", "User not found");
 
-    const r = await db.select().from(roles).where(eq(roles.id, roleId)).limit(1);
+    const r = await db
+      .select()
+      .from(roles)
+      .where(and(eq(roles.id, roleId), visibleRoles(req.propertyId)))
+      .limit(1);
     if (!r.length) return fail(res, 404, "NOT_FOUND", "Role not found");
 
     // Prevent self-demotion from admin to avoid lockout.
@@ -280,6 +328,12 @@ router.get(
   requirePermission("manage_staff", "manage_roles"),
   async (req, res) => {
     const userId = req.params.userId!;
+    const u = await db
+      .select({ id: profiles.id })
+      .from(profiles)
+      .where(and(eq(profiles.id, userId), eq(profiles.propertyId, req.propertyId)))
+      .limit(1);
+    if (!u.length) return fail(res, 404, "NOT_FOUND", "User not found");
     const rows = await db
       .select()
       .from(userPermissionOverrides)
@@ -306,7 +360,11 @@ router.put(
     const userId = req.params.userId!;
     const { overrides } = req.body as z.infer<typeof overridesSchema>;
 
-    const u = await db.select().from(profiles).where(eq(profiles.id, userId)).limit(1);
+    const u = await db
+      .select()
+      .from(profiles)
+      .where(and(eq(profiles.id, userId), eq(profiles.propertyId, req.propertyId)))
+      .limit(1);
     if (!u.length) return fail(res, 404, "NOT_FOUND", "User not found");
 
     const validKeys = new Set(PERMISSION_CATALOG.map((p) => p.key));
@@ -344,7 +402,14 @@ router.get(
   requireAuth,
   requirePermission("manage_staff", "manage_roles"),
   async (req, res) => {
-    const r = await getUserPermissions(req.params.userId!);
+    const userId = req.params.userId!;
+    const u = await db
+      .select({ id: profiles.id })
+      .from(profiles)
+      .where(and(eq(profiles.id, userId), eq(profiles.propertyId, req.propertyId)))
+      .limit(1);
+    if (!u.length) return fail(res, 404, "NOT_FOUND", "User not found");
+    const r = await getUserPermissions(userId);
     return ok(res, {
       roleKey: r.roleKey,
       isGodMode: r.isGodMode,

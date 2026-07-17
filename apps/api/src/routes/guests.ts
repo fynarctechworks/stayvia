@@ -33,7 +33,6 @@ import {
   sanitizeTagsForWrite,
 } from "../lib/guestTags.js";
 import { normalisePhone } from "../lib/phone.js";
-import { resolveCurrentPropertyId } from "../lib/currentProperty.js";
 import { fail, list, ok } from "../lib/response.js";
 import {
   deleteKycFile,
@@ -769,7 +768,7 @@ router.post(
       );
     }
 
-    const propertyId = await resolveCurrentPropertyId(req);
+    const propertyId = req.propertyId;
     // Insert the guest + their first phone-history row atomically so
     // we can never have a guest without an open history row. (The
     // 0022 backfill seeds existing guests; this keeps new ones

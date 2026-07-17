@@ -65,7 +65,7 @@ export function Sidebar({
   //   - always expanded
   mobile?: boolean;
 }) {
-  const { profile, signOut, can } = useAuth();
+  const { profile, property, signOut, can } = useAuth();
   const dialog = useDialog();
 
   async function handleSignOut() {
@@ -157,7 +157,7 @@ export function Sidebar({
         />
         {!collapsed && (
           <div className="min-w-0">
-            <div className="text-base font-semibold tracking-tight leading-tight truncate text-cream">Stayvia</div>
+            <div className="text-base font-semibold tracking-tight leading-tight truncate text-cream">{property?.name ?? "Stayvia"}</div>
             <div className="text-[10px] text-brass tracking-[0.15em] mt-0.5">HOTEL OS</div>
           </div>
         )}

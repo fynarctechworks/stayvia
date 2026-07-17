@@ -5,6 +5,7 @@ import { env } from "../config/env.js";
 import { db } from "../db/client.js";
 import { otps } from "../db/schema/otps.js";
 import { profiles } from "../db/schema/profiles.js";
+import { properties } from "../db/schema/properties.js";
 import { logActivity } from "../lib/activity.js";
 import { logger } from "../lib/logger.js";
 import {
@@ -27,19 +28,14 @@ const loginSchema = z.object({
   password: z.string().min(1),
 });
 
-// Pre-flight check for the forgot-password flow. The front-end calls
-// this BEFORE asking Supabase to send a reset email, so it can show a
-// clear "this email isn't a registered staff account — contact your
-// admin" message instead of silently doing nothing.
-//
-// SECURITY NOTE: this endpoint *does* reveal whether an email is a
-// registered active staff account (mild enumeration). That's an
-// intentional product trade-off requested for this single-property
-// deployment — staff who mistype their email should get a clear error.
-// We mitigate abuse two ways:
-//   1. loginLimiter (5 requests / 15 min / IP) is applied at the route.
-//   2. We only confirm ACTIVE staff. Deactivated accounts read as
-//      "not registered" so a former employee's email can't be probed.
+// Pre-flight for the forgot-password flow. The front-end calls this
+// BEFORE asking Supabase to send a reset email — it exists purely as a
+// rate-limit gate (loginLimiter: 5 requests / 15 min / IP) and a
+// reachability check. The response is a CONSTANT shape regardless of
+// whether the email is a registered account: on a multi-tenant SaaS,
+// confirming registration would be a cross-tenant staff-email
+// enumeration oracle. The client always shows "if registered, you'll
+// receive a link".
 const forgotCheckSchema = z.object({
   email: z.string().email(),
 });
@@ -48,17 +44,8 @@ router.post(
   "/forgot-password/check",
   loginLimiter,
   validate(forgotCheckSchema),
-  async (req, res) => {
-    const { email } = req.body as z.infer<typeof forgotCheckSchema>;
-    // Case-insensitive match — emails are stored as entered but staff
-    // may type a different case.
-    const [row] = await db
-      .select({ id: profiles.id, isActive: profiles.isActive })
-      .from(profiles)
-      .where(sql`lower(${profiles.email}) = lower(${email})`)
-      .limit(1);
-    const registered = !!row && row.isActive;
-    return ok(res, { registered });
+  async (_req, res) => {
+    return ok(res, { ok: true });
   },
 );
 
@@ -148,8 +135,9 @@ router.post("/logout", requireAuth, async (req, res) => {
 router.get("/me", requireAuth, async (req, res) => {
   const u = req.user!;
   const [row] = await db
-    .select({ phone: profiles.phone })
+    .select({ phone: profiles.phone, propertyName: properties.name })
     .from(profiles)
+    .leftJoin(properties, eq(properties.id, profiles.propertyId))
     .where(eq(profiles.id, u.id))
     .limit(1);
   return ok(res, {
@@ -162,6 +150,8 @@ router.get("/me", requireAuth, async (req, res) => {
       rbacRoleKey: u.rbacRoleKey,
       isGodMode: u.isGodMode,
       permissions: Array.from(u.permissions),
+      // Tenant context for the shell — which hotel this account belongs to.
+      property: { id: req.propertyId, name: row?.propertyName ?? "" },
     },
   });
 });

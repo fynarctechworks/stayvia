@@ -150,16 +150,14 @@ export default function Login() {
       return;
     }
 
-    // First confirm the email belongs to a registered, active staff
-    // account. If not, tell the user clearly to contact their admin
-    // rather than silently sending nothing.
-    let registered = false;
+    // Pre-flight against the API — a rate-limit gate and reachability
+    // check only. The server intentionally never reveals whether the
+    // email is registered (enumeration protection on a multi-tenant
+    // SaaS), so any 2xx just means "proceed".
     try {
-      const r = await api.post<{ registered: boolean }>(
-        "/auth/forgot-password/check",
-        { email: target },
-      );
-      registered = r.registered;
+      await api.post<{ ok: boolean }>("/auth/forgot-password/check", {
+        email: target,
+      });
     } catch (err) {
       // If the check itself fails (rate-limited or server down), surface
       // a soft error rather than pretending it worked.
@@ -174,16 +172,9 @@ export default function Login() {
       return;
     }
 
-    if (!registered) {
-      await dialog.alert({
-        title: "Email not registered",
-        message: `${target} isn't registered as a staff account. Please check the spelling, or contact your hotel administrator to set up access.`,
-        okLabel: "OK",
-      });
-      return;
-    }
-
-    // Registered → ask Supabase to send the recovery email.
+    // Ask Supabase to send the recovery email. Supabase is silent for
+    // unknown addresses, so the confirmation below is deliberately
+    // "if registered" — we never confirm whether the account exists.
     try {
       await supabase.auth.resetPasswordForEmail(target, {
         // The recovery link redirects here; the reset page reads the
@@ -191,12 +182,12 @@ export default function Login() {
         redirectTo: `${window.location.origin}/reset-password`,
       });
     } catch {
-      // Swallow the underlying send error — the account exists (we just
-      // confirmed it), so a generic "check your email" is correct UX.
+      // Swallow the underlying send error — the generic "if registered"
+      // message below stays correct either way.
     }
     await dialog.alert({
       title: "Check your email",
-      message: `A password-reset link has been sent to ${target}. The link expires in 1 hour.`,
+      message: `If ${target} is registered as a staff account, a password-reset link has been sent. The link expires in 1 hour. Didn't get it? Check the spelling or contact your hotel administrator.`,
       okLabel: "Got it",
     });
   }

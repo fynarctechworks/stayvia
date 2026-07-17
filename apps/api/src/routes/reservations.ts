@@ -49,7 +49,6 @@ import {
   recomputeInvoiceTotals,
   recomputeReservationBalance,
 } from "../lib/reservationBalance.js";
-import { resolveCurrentPropertyId } from "../lib/currentProperty.js";
 import { calcGstBreakdown, getGstRate } from "../lib/gst.js";
 import { loadGuestExtra } from "../lib/guestExtra.js";
 import { buildInvoice, selectChargesForScope } from "../lib/invoiceBuilder.js";
@@ -631,8 +630,8 @@ router.post(
     const roomIds = input.rooms.map((r) => r.roomId);
 
     // Phase 2: every new reservation + its payments are scoped to the
-    // current property. Resolved once and threaded through the tx.
-    const propertyId = await resolveCurrentPropertyId(req);
+    // caller's property. Read once and threaded through the tx.
+    const propertyId = req.propertyId;
 
     const settings = await getSettings();
     const stayType = input.stayType ?? "overnight";

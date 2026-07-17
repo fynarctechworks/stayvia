@@ -19,6 +19,11 @@ declare module "express-serve-static-core" {
       isGodMode: boolean;
       rbacRoleKey: string | null;
     };
+    // Tenant of the authenticated profile. Set by requireAuth (which 403s
+    // when the profile has no hotel), so any handler behind requireAuth can
+    // read it unconditionally. The tenant comes ONLY from the profile —
+    // never from a client-supplied header.
+    propertyId: string;
   }
 }
 
@@ -59,6 +64,16 @@ export async function requireAuth(req: Request, res: Response, next: NextFunctio
     );
     return fail(res, 403, "INACTIVE_USER", "Account is deactivated");
   }
+  // A profile without a hotel is unusable in the SaaS — every query is
+  // property-scoped. Shouldn't happen (provisioning stamps it), but if a
+  // row slips through, refuse cleanly instead of leaking cross-tenant.
+  if (!profile[0]!.propertyId) {
+    logger.warn(
+      { userId: profile[0]!.id, ip: req.ip ?? "unknown", path: req.path },
+      "auth failed: profile has no property",
+    );
+    return fail(res, 403, "NO_PROPERTY", "Account is not linked to a hotel");
+  }
 
   // Resolve effective RBAC permissions. Falls back gracefully if user_roles row is missing
   // (legacy users) — they'll get the empty set and only legacy requireRole checks pass.
@@ -73,6 +88,7 @@ export async function requireAuth(req: Request, res: Response, next: NextFunctio
     isGodMode: perms.isGodMode,
     rbacRoleKey: perms.roleKey,
   };
+  req.propertyId = profile[0]!.propertyId;
   next();
 }
 

@@ -12,7 +12,6 @@ import { reservationRooms, reservations } from "../db/schema/reservations.js";
 import { rooms } from "../db/schema/rooms.js";
 import { logActivity } from "../lib/activity.js";
 import { findAvailableRooms } from "../lib/availability.js";
-import { resolveCurrentPropertyId } from "../lib/currentProperty.js";
 import { invalidateDashboard } from "../lib/redis.js";
 import { fail, ok } from "../lib/response.js";
 import { requireAuth, requirePermission } from "../middleware/auth.js";
@@ -68,7 +67,7 @@ router.get("/:id", requireAuth, async (req, res) => {
 router.post("/", requireAuth, requirePermission("edit_rooms"), validate(roomCreateSchema), async (req, res) => {
   const input = req.body;
   try {
-    const propertyId = await resolveCurrentPropertyId(req);
+    const propertyId = req.propertyId;
     const [created] = await db
       .insert(rooms)
       .values({
