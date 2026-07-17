@@ -4,7 +4,6 @@ import type { ReactNode } from "react";
 import { useEffect, useMemo, useState } from "react";
 import { useLocation } from "react-router-dom";
 import { api } from "@/lib/api";
-import { isOfflineMode } from "@/lib/offlineMode";
 import { ArrivalAlerts } from "./ArrivalAlerts";
 import { BottomNav } from "./BottomNav";
 import { CheckoutAlerts } from "./CheckoutAlerts";
@@ -15,13 +14,6 @@ import { useNotificationToasts } from "./Toast";
 interface NotifResp {
   items: Array<{ id: string; readAt: string | null }>;
   unreadCount: number;
-}
-
-interface SystemStatus {
-  offline: boolean;
-  messages: { pending: number; failed: number };
-  sync: { pending: number; configured: boolean };
-  delivery: { whatsapp: boolean; email: boolean };
 }
 
 export function AppShell({ children }: { children: ReactNode }) {
@@ -112,28 +104,6 @@ export function AppShell({ children }: { children: ReactNode }) {
     queryFn: () => api.get<NotifResp>("/notifications"),
     refetchInterval: 15000,
   });
-
-  // Desk status: message-queue depth + delivery config, polled every 30s on
-  // the desktop app only. Drives the offline status strip below.
-  const status = useQuery({
-    queryKey: ["system-status"],
-    queryFn: () => api.get<SystemStatus>("/system/status"),
-    refetchInterval: 30000,
-    enabled: isOfflineMode(),
-  });
-  // Track raw internet reachability so the strip can distinguish "queued,
-  // sending soon" from "queued, no internet".
-  const [online, setOnline] = useState(() => navigator.onLine);
-  useEffect(() => {
-    const up = () => setOnline(true);
-    const down = () => setOnline(false);
-    window.addEventListener("online", up);
-    window.addEventListener("offline", down);
-    return () => {
-      window.removeEventListener("online", up);
-      window.removeEventListener("offline", down);
-    };
-  }, []);
 
   // Pre-fetch hotel branding once per session — used by receipt overlays
   useQuery({
@@ -231,34 +201,6 @@ export function AppShell({ children }: { children: ReactNode }) {
             push the rest of the page out of sight — internal scroll
             handles overflow. */}
         <div className="sticky top-0 z-40 max-h-[40vh] overflow-y-auto">
-          {/* Desk connectivity strip (desktop app only). Shown when internet
-              is down, delivery credentials are missing, or messages are
-              waiting/failed — the desk works fully offline, so this is
-              informational, not an error state. */}
-          {isOfflineMode() &&
-            (() => {
-              const s = status.data;
-              const pending = s?.messages.pending ?? 0;
-              const failed = s?.messages.failed ?? 0;
-              const deliveryReady = !!(s?.delivery.whatsapp || s?.delivery.email);
-              if (online && pending === 0 && failed === 0) return null;
-              const text = !online
-                ? `No internet — everything keeps working; ${pending > 0 ? `${pending} message${pending === 1 ? "" : "s"} will send when back online` : "messages will send when back online"}`
-                : !deliveryReady && pending > 0
-                  ? `${pending} message${pending === 1 ? "" : "s"} queued — add WhatsApp credentials (messaging.env) to enable sending`
-                  : pending > 0
-                    ? `${pending} message${pending === 1 ? "" : "s"} sending…`
-                    : `${failed} message${failed === 1 ? "" : "s"} failed to send — check Messages`;
-              return (
-                <div
-                  className={`px-3 py-1.5 text-xs font-medium text-center ${
-                    !online ? "bg-amber-100 text-amber-900" : failed > 0 && pending === 0 ? "bg-red-100 text-red-900" : "bg-brand-soft text-brand-dark"
-                  }`}
-                >
-                  {text}
-                </div>
-              );
-            })()}
           <CheckoutAlerts />
           <ArrivalAlerts />
         </div>

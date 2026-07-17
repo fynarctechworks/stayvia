@@ -1,11 +1,9 @@
 import { eq } from "drizzle-orm";
 import type { NextFunction, Request, Response } from "express";
 import { db } from "../db/client.js";
-import { env } from "../config/env.js";
 import type { Role } from "../db/schema/enums.js";
 import { profiles } from "../db/schema/profiles.js";
 import { logger } from "../lib/logger.js";
-import { verifyToken } from "../lib/localAuth.js";
 import { getUserPermissions, hasPermission } from "../lib/permission-resolver.js";
 import { supabaseAdmin } from "../lib/supabase.js";
 import { fail } from "../lib/response.js";
@@ -31,32 +29,15 @@ export async function requireAuth(req: Request, res: Response, next: NextFunctio
   }
   const token = header.slice("Bearer ".length).trim();
 
-  // Resolve the authenticated user id. Offline desk verifies the token locally
-  // against LOCAL_JWT_SECRET (no cloud round-trip); online delegates to
-  // Supabase Auth exactly as before. Everything after this (profile load,
-  // isActive check, permission resolution) is already fully local and shared.
-  let userId: string;
-  if (env.OFFLINE_MODE) {
-    const claims = verifyToken(token, "access");
-    if (!claims) {
-      logger.warn(
-        { ip: req.ip ?? "unknown", path: req.path },
-        "auth failed: invalid local token",
-      );
-      return fail(res, 401, "INVALID_TOKEN", "Token is invalid or expired");
-    }
-    userId = claims.sub;
-  } else {
-    const { data, error } = await supabaseAdmin.auth.getUser(token);
-    if (error || !data.user) {
-      logger.warn(
-        { ip: req.ip ?? "unknown", path: req.path, reason: error?.message ?? "no_user" },
-        "auth failed: invalid token",
-      );
-      return fail(res, 401, "INVALID_TOKEN", "Token is invalid or expired");
-    }
-    userId = data.user.id;
+  const { data, error } = await supabaseAdmin.auth.getUser(token);
+  if (error || !data.user) {
+    logger.warn(
+      { ip: req.ip ?? "unknown", path: req.path, reason: error?.message ?? "no_user" },
+      "auth failed: invalid token",
+    );
+    return fail(res, 401, "INVALID_TOKEN", "Token is invalid or expired");
   }
+  const userId = data.user.id;
 
   const profile = await db
     .select()

@@ -16,19 +16,13 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { CheckCircle2, Eye, EyeOff, Loader2, Lock, ShieldAlert } from "lucide-react";
-import { isOfflineMode } from "@/lib/offlineMode";
 import { supabase } from "@/lib/supabase";
 
 type Phase = "verifying" | "ready" | "invalid" | "done";
 
 export default function ResetPassword() {
   const navigate = useNavigate();
-  const [phase, setPhase] = useState<Phase>(
-    // Desktop app: this page is Supabase-recovery-driven and only reachable
-    // via a cloud email link — there's no recovery session to wait for, so
-    // skip straight to the guidance state instead of a 4s fake "verifying".
-    isOfflineMode() ? "invalid" : "verifying",
-  );
+  const [phase, setPhase] = useState<Phase>("verifying");
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
   const [showPw, setShowPw] = useState(false);
@@ -129,13 +123,10 @@ export default function ResetPassword() {
             <div className="mx-auto w-14 h-14 rounded-full bg-danger/10 grid place-items-center mb-3">
               <ShieldAlert className="w-7 h-7 text-danger" />
             </div>
-            <h1 className="text-lg font-bold text-brand-dark">
-              {isOfflineMode() ? "Not available on the desk app" : "Link expired or invalid"}
-            </h1>
+            <h1 className="text-lg font-bold text-brand-dark">Link expired or invalid</h1>
             <p className="text-sm text-textSecondary mt-2">
-              {isOfflineMode()
-                ? "Email password-reset links apply to the online version. On this desk, any administrator can set a new PIN or password for you from Settings → Staff."
-                : "This password-reset link is no longer valid. Reset links expire after 1 hour and can only be used once. Please request a new one from the login page."}
+              This password-reset link is no longer valid. Reset links expire after 1 hour and
+              can only be used once. Please request a new one from the login page.
             </p>
             <Link to="/login" className="btn-primary inline-flex mt-5">
               Back to login

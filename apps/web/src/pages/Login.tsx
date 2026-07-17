@@ -19,7 +19,7 @@ import { supabase } from "@/lib/supabase";
 const Silk = lazy(() => import("@/components/Silk"));
 
 export default function Login() {
-  const { signIn, signInOffline, offline, verifyMfa, session, mfaPending } = useAuth();
+  const { signIn, verifyMfa, session, mfaPending } = useAuth();
   const dialog = useDialog();
   const location = useLocation();
   const emailId = useId();
@@ -71,9 +71,7 @@ export default function Login() {
   }
 
   const emailValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
-  // Offline unlock accepts a PIN (min 4) or the password; online requires the
-  // full password (min 6).
-  const pwValid = offline ? password.length >= 4 : password.length >= 6;
+  const pwValid = password.length >= 6;
   const formValid = emailValid && pwValid;
 
   async function onSubmit(e: React.FormEvent) {
@@ -85,13 +83,6 @@ export default function Login() {
     try {
       if (remember) localStorage.setItem("hd:lastEmail", email);
       else localStorage.removeItem("hd:lastEmail");
-      if (offline) {
-        // Desktop: verify against the local sidecar with the PIN/password. No
-        // MFA — the desk is physically secured; the `session` redirect fires
-        // once the profile loads.
-        await signInOffline(email, password);
-        return;
-      }
       const { mfaRequired } = await signIn(email, password);
       // If a second factor is owed, show the code step. Otherwise the
       // `session && !mfaPending` redirect above takes over on re-render.
@@ -381,26 +372,15 @@ export default function Login() {
           <div>
             <div className="flex items-center justify-between mb-1">
               <label htmlFor={pwId} className="label">
-                {offline ? "Desk PIN or password" : "Password"}
+                Password
               </label>
-              {/* No email reset offline — an admin resets it from
-                  Settings → Staff on the desk instead. */}
-              {offline ? (
-                <span
-                  className="text-xs text-textSecondary"
-                  title="Forgot your PIN or password? Any administrator can set a new one from Settings → Staff on this desk."
-                >
-                  Forgot? Ask an admin
-                </span>
-              ) : (
-                <button
-                  type="button"
-                  className="text-xs text-accentBlue hover:underline"
-                  onClick={onForgotPassword}
-                >
-                  Forgot password?
-                </button>
-              )}
+              <button
+                type="button"
+                className="text-xs text-accentBlue hover:underline"
+                onClick={onForgotPassword}
+              >
+                Forgot password?
+              </button>
             </div>
             <div className="relative">
               <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-textSecondary pointer-events-none" />
@@ -410,7 +390,7 @@ export default function Login() {
                   touched.pw && !pwValid ? "border-danger focus:border-danger focus:ring-danger/30" : ""
                 }`}
                 type={showPw ? "text" : "password"}
-                placeholder={offline ? "Enter your desk PIN" : "Enter your password"}
+                placeholder="Enter your password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 onBlur={() => setTouched((t) => ({ ...t, pw: true }))}

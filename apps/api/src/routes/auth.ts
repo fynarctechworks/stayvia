@@ -12,8 +12,6 @@ import {
   recordFailure,
   recordSuccess,
 } from "../lib/loginLockout.js";
-import { hashSecret, verifySecret } from "../lib/localAuth.js";
-import { localCredentials } from "../db/schema/localCredentials.js";
 import { messaging } from "../lib/messaging.js";
 import { expiresAt, generateOtp, hashOtp, maskTarget } from "../lib/otp.js";
 import { supabaseAdmin } from "../lib/supabase.js";
@@ -135,9 +133,6 @@ router.post("/login", validate(loginSchema), async (req, res) => {
 });
 
 router.post("/logout", requireAuth, async (req, res) => {
-  // Offline: local JWTs are stateless (no server-side session store) and the
-  // desk is single-machine — dropping the client token IS the logout.
-  if (env.OFFLINE_MODE) return ok(res, { success: true });
   // Revoke every active session for this user across all devices.
   // Supabase admin signOut takes the user's JWT (not the user id).
   const header = req.header("authorization") ?? req.header("Authorization") ?? "";
@@ -183,9 +178,7 @@ router.put("/me", requireAuth, validate(meUpdateSchema), async (req, res) => {
   const id = req.user!.id;
   const input = req.body as z.infer<typeof meUpdateSchema>;
 
-  // Offline: the login identity IS profiles.email (patched below) — there's
-  // no separate auth record to keep in sync.
-  if (input.email && !env.OFFLINE_MODE) {
+  if (input.email) {
     const { error } = await supabaseAdmin.auth.admin.updateUserById(id, {
       email: input.email,
     });
@@ -266,7 +259,7 @@ router.post(
     if (lockedMs > 0) {
       return fail(res, 401, "INVALID_CREDENTIALS", "Current password is incorrect");
     }
-    if (!(await verifyCurrentSecret(userId, userEmail, oldPassword))) {
+    if (!(await verifyCurrentSecret(userEmail, oldPassword))) {
       recordFailure(userEmail, clientIp);
       logger.warn({ userId, ip: clientIp }, "password-change: bad old password");
       return fail(res, 401, "INVALID_CREDENTIALS", "Current password is incorrect");
@@ -275,25 +268,20 @@ router.post(
 
     // 2. The OTP gets WhatsApp'd to the user's profile.phone. If missing,
     //    require an admin to add the phone first — we don't fall back to
-    //    email since deployment is WhatsApp-only. Offline the code is shown
-    //    on-screen instead (see devCode below), so no phone is needed; the
-    //    OTP row still needs a target, so fall back to the login email.
+    //    email since deployment is WhatsApp-only.
     const [row] = await db
       .select({ phone: profiles.phone })
       .from(profiles)
       .where(eq(profiles.id, userId))
       .limit(1);
-    let phone = row?.phone?.trim() ?? "";
+    const phone = row?.phone?.trim() ?? "";
     if (!phone) {
-      if (!env.OFFLINE_MODE) {
-        return fail(
-          res,
-          400,
-          "NO_PHONE",
-          "Add a phone number to your profile before changing your password. Ask an administrator if you cannot edit your phone.",
-        );
-      }
-      phone = userEmail;
+      return fail(
+        res,
+        400,
+        "NO_PHONE",
+        "Add a phone number to your profile before changing your password. Ask an administrator if you cannot edit your phone.",
+      );
     }
 
     // Same throttling shape as the guest OTP path (one per minute, 10/day
@@ -362,34 +350,13 @@ router.post(
       expiresInSeconds: env.OTP_TTL_SECONDS,
       // Mirrors the guest-OTP devCode behaviour: in stub mode the code
       // comes back in the response so local testing works without Twilio.
-      // Offline desk: WhatsApp can't deliver synchronously, so the code is
-      // shown on-screen to the (already password-verified) user — same
-      // pattern as the check-in OTP's offlineCode.
-      devCode:
-        env.NOTIFICATIONS_PROVIDER === "stub" || env.OFFLINE_MODE ? code : undefined,
+      devCode: env.NOTIFICATIONS_PROVIDER === "stub" ? code : undefined,
     });
   },
 );
 
-// Verify the caller's current password: against Supabase online, against the
-// local_credentials scrypt hashes (password or PIN) on the offline desk.
-async function verifyCurrentSecret(
-  userId: string,
-  userEmail: string,
-  secret: string,
-): Promise<boolean> {
-  if (env.OFFLINE_MODE) {
-    const [cred] = await db
-      .select()
-      .from(localCredentials)
-      .where(eq(localCredentials.profileId, userId))
-      .limit(1);
-    if (!cred) return false;
-    return (
-      (!!cred.passwordHash && verifySecret(secret, cred.passwordHash)) ||
-      (!!cred.pinHash && verifySecret(secret, cred.pinHash))
-    );
-  }
+// Verify the caller's current password via a Supabase sign-in attempt.
+async function verifyCurrentSecret(userEmail: string, secret: string): Promise<boolean> {
   const verify = await supabaseAdmin.auth.signInWithPassword({
     email: userEmail,
     password: secret,
@@ -419,24 +386,19 @@ router.post(
 
     // Re-verify old password (defence-in-depth in case the page sat open
     // between send-otp and change).
-    if (!(await verifyCurrentSecret(userId, userEmail, oldPassword))) {
+    if (!(await verifyCurrentSecret(userEmail, oldPassword))) {
       recordFailure(userEmail, clientIp);
       return fail(res, 401, "INVALID_CREDENTIALS", "Current password is incorrect");
     }
 
     // Resolve the user's phone — must match the target the OTP was sent to.
-    // Offline the send step falls back to the login email as the target when
-    // no phone is on file; mirror that here.
     const [row] = await db
       .select({ phone: profiles.phone })
       .from(profiles)
       .where(eq(profiles.id, userId))
       .limit(1);
-    let phone = row?.phone?.trim() ?? "";
-    if (!phone) {
-      if (!env.OFFLINE_MODE) return fail(res, 400, "NO_PHONE", "Profile phone missing");
-      phone = userEmail;
-    }
+    const phone = row?.phone?.trim() ?? "";
+    if (!phone) return fail(res, 400, "NO_PHONE", "Profile phone missing");
 
     // Newest non-consumed OTP for this phone + purpose.
     const [otpRow] = await db
@@ -467,27 +429,10 @@ router.post(
     // All checks passed — flip the password and mark the OTP consumed in
     // the same logical step. If the credential write fails we leave the OTP
     // un-consumed so the user can retry without requesting a new code.
-    if (env.OFFLINE_MODE) {
-      // The offline password lives in local_credentials; flipping it also
-      // clears any lockout so the user isn't locked out by their own change.
-      await db
-        .insert(localCredentials)
-        .values({ profileId: userId, passwordHash: hashSecret(newPassword) })
-        .onConflictDoUpdate({
-          target: localCredentials.profileId,
-          set: {
-            passwordHash: hashSecret(newPassword),
-            failedAttempts: 0,
-            lockedUntil: null,
-            updatedAt: new Date(),
-          },
-        });
-    } else {
-      const { error } = await supabaseAdmin.auth.admin.updateUserById(userId, {
-        password: newPassword,
-      });
-      if (error) return fail(res, 400, "AUTH_ERROR", error.message);
-    }
+    const { error } = await supabaseAdmin.auth.admin.updateUserById(userId, {
+      password: newPassword,
+    });
+    if (error) return fail(res, 400, "AUTH_ERROR", error.message);
 
     await db.update(otps).set({ consumedAt: new Date() }).where(eq(otps.id, otpRow.id));
 

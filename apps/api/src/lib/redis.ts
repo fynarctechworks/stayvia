@@ -12,11 +12,9 @@ import { logger } from "./logger.js";
 // runtime ESM import()).
 import { invalidateSettings } from "./settings.js";
 
-// Offline desktop mode runs single-instance with no Upstash. There's no second
-// API process to coordinate with, so pub/sub is unnecessary and the REST cache
-// is replaced by an in-process Map. When UPSTASH_* is absent we build null
-// clients; every call site here already tolerates failure, so the app degrades
-// to per-instance TTL caching — which is exactly right for a single desk.
+// Upstash is optional by design. When UPSTASH_* is absent we build null
+// clients: pub/sub is skipped and the REST cache is replaced by an in-process
+// Map, so the app degrades to per-instance TTL caching.
 const REDIS_ENABLED = !!(
   env.UPSTASH_REDIS_REST_URL &&
   env.UPSTASH_REDIS_REST_TOKEN &&
@@ -24,7 +22,7 @@ const REDIS_ENABLED = !!(
 );
 
 // In-process fallback for the REST cache (dashboard payload). One process, so a
-// plain Map with manual TTL is sufficient and correct offline.
+// plain Map with manual TTL is sufficient.
 const localCache = new Map<string, { value: unknown; expiresAt: number }>();
 
 type RestCache = Pick<Redis, "get" | "set" | "del" | "setex">;
@@ -80,8 +78,8 @@ export async function invalidateDashboard() {
 }
 
 // Broadcasts a settings-cache bust to every API instance. The local cache is
-// cleared via the subscriber on each instance (including this one). Offline
-// (single instance) there are no other instances, and we clear directly.
+// cleared via the subscriber on each instance (including this one). Without
+// Redis (single instance) there are no other instances, and we clear directly.
 export async function publishSettingsInvalidation() {
   if (!REDIS_ENABLED) {
     // No fan-out needed for a single process; clear our own settings cache now.
@@ -105,8 +103,8 @@ const ioOpts = {
   enableOfflineQueue: false,
 } as const;
 
-// Null when offline — there's no Redis to pub/sub against. Call sites use
-// optional chaining (pubClient?.publish).
+// Null when Upstash isn't configured — there's no Redis to pub/sub against.
+// Call sites use optional chaining (pubClient?.publish).
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export const pubClient: any = REDIS_ENABLED
   ? new IORedis(env.UPSTASH_REDIS_URL as string, ioOpts)
@@ -130,7 +128,7 @@ if (subClient) {
 
 export async function startDashboardSubscriber() {
   if (!REDIS_ENABLED) {
-    logger.info("Redis disabled (offline mode) — using in-process cache, no pub/sub");
+    logger.info("Redis disabled — using in-process cache, no pub/sub");
     return;
   }
   try {

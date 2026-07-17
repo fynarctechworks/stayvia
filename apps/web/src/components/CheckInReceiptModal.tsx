@@ -148,9 +148,8 @@ export function CheckInReceiptModal({ data, onClose, variant = "checkin" }: Prop
       return;
     }
     try {
-      // Offline-aware token (local JWT on the desktop, Supabase online). A
-      // direct supabase.auth.getSession() has no session offline, which made
-      // this always fall back to window.print() in the desktop app.
+      // Shared auth-header helper so this raw fetch uses the same Supabase
+      // session token as the JSON API helpers.
       const headers = await authHeader();
       if (!("Authorization" in headers)) throw new Error("Not signed in");
       const base = (import.meta.env.VITE_API_URL as string).replace(/\/+$/, "");

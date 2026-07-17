@@ -28,7 +28,7 @@ export default defineConfig({
   },
   projects: [{ name: "chromium", use: { ...devices["Desktop Chrome"] } }],
   webServer: {
-    command: `npm run dev --workspace @hoteldesk/web -- --port ${E2E_WEB_PORT} --strictPort`,
+    command: `npm run dev --workspace @stayvia/web -- --port ${E2E_WEB_PORT} --strictPort`,
     url: `http://127.0.0.1:${E2E_WEB_PORT}`,
     reuseExistingServer: !process.env.CI,
     // Point the frontend at the throwaway test API, not the desk sidecar.

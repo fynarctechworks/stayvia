@@ -20,7 +20,6 @@ import { Loader } from "@/components/Loader";
 import { useToast } from "@/components/Toast";
 import { api } from "@/lib/api";
 import { invalidateRoomData } from "@/lib/invalidate";
-import { isOfflineMode } from "@/lib/offlineMode";
 import { supabase } from "@/lib/supabase";
 import { inr } from "@/lib/utils";
 
@@ -267,19 +266,14 @@ function ChangePasswordCard({ phone }: { phone: string | null }) {
     onError: (e: Error) => setErr(e.message),
   });
 
-  // Offline desk: the verification code is shown ON SCREEN (the server
-  // returns it as devCode — WhatsApp can't deliver synchronously without
-  // internet), so no phone number is required.
-  const hasPhone = isOfflineMode() || !!phone?.trim();
+  const hasPhone = !!phone?.trim();
 
   return (
     <div className="card space-y-4">
       <div>
         <h3 className="font-semibold text-brand-dark text-lg">Change Password</h3>
         <p className="text-xs text-textSecondary mt-1">
-          {isOfflineMode()
-            ? "Verify your current password, then enter the code shown on screen."
-            : "Verify your current password, then enter the OTP we send to your WhatsApp number."}
+          Verify your current password, then enter the OTP we send to your WhatsApp number.
         </p>
       </div>
 
@@ -324,11 +318,7 @@ function ChangePasswordCard({ phone }: { phone: string | null }) {
               onClick={() => sendOtp.mutate()}
               disabled={sendOtp.isPending || !hasPhone || !oldPw}
             >
-              {sendOtp.isPending
-                ? "Verifying…"
-                : isOfflineMode()
-                  ? "Verify & show code"
-                  : "Send OTP on WhatsApp"}
+              {sendOtp.isPending ? "Verifying…" : "Send OTP on WhatsApp"}
             </button>
           </div>
         </>
@@ -337,13 +327,9 @@ function ChangePasswordCard({ phone }: { phone: string | null }) {
       {step === 2 && (
         <>
           <div className="rounded-sm bg-brand-soft/40 border border-borderc px-3 py-2 text-sm">
-            {isOfflineMode() ? (
-              <>Enter the code below to confirm the change.</>
-            ) : (
-              <>
-                OTP sent to <span className="font-mono">{maskedTarget}</span> via WhatsApp.
-              </>
-            )}
+            <>
+              OTP sent to <span className="font-mono">{maskedTarget}</span> via WhatsApp.
+            </>
             {secondsLeft > 0 && (
               <span className="text-textSecondary ml-2">
                 Expires in {Math.floor(secondsLeft / 60)}m {String(secondsLeft % 60).padStart(2, "0")}s
@@ -453,25 +439,7 @@ function ChangePasswordCard({ phone }: { phone: string | null }) {
 // A factor only becomes "verified" after the user enters one correct
 // code. Unverified factors are cleaned up on cancel so they don't pile up.
 // ============================================================
-// Desktop app: TOTP is a cloud-account feature (Supabase). The desk uses
-// local PIN auth on a physically-secured machine, so instead of rendering a
-// card whose every action fails, explain and bail. Split into a wrapper so
-// the online component's hooks never run conditionally.
 function TwoFactorCard() {
-  if (!isOfflineMode()) return <TwoFactorCardOnline />;
-  return (
-    <div className="card p-5">
-      <div className="font-semibold mb-1">Two-Factor Authentication</div>
-      <p className="text-sm text-textSecondary">
-        Two-factor sign-in applies to the online (cloud) version. The desk app
-        uses PIN sign-in on this machine — protect it with a Windows password
-        and keep the desk physically secure.
-      </p>
-    </div>
-  );
-}
-
-function TwoFactorCardOnline() {
   const { toast } = useToast();
   const dialog = useDialog();
   const qc = useQueryClient();

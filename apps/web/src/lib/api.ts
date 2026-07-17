@@ -1,11 +1,4 @@
 import { UI_PREVIEW, mockGet, mockMutation } from "./mock-data";
-import {
-  clearLocalSession,
-  getLocalRefreshToken,
-  getLocalToken,
-  isOfflineMode,
-  setLocalSession,
-} from "./offlineMode";
 import { supabase } from "./supabase";
 
 const RAW_BASE = (import.meta.env.VITE_API_URL as string) ?? "";
@@ -13,16 +6,8 @@ const BASE = RAW_BASE.replace(/\/+$/, "");
 
 // Exported for the few call sites that fetch binary responses (PDF receipts /
 // previews) with a raw fetch() instead of the JSON helpers below — they must
-// use the same offline-aware token selection, not supabase.auth.getSession()
-// directly (offline has no Supabase session, so that always fails and the
-// caller falls back to its degraded path).
+// use the same Supabase session token selection.
 export async function authHeader(): Promise<HeadersInit> {
-  // Desktop/offline: use the local JWT minted by the sidecar's /auth/login.
-  // Online: use the Supabase session token.
-  if (isOfflineMode()) {
-    const token = getLocalToken();
-    return token ? { Authorization: `Bearer ${token}` } : {};
-  }
   const { data } = await supabase.auth.getSession();
   const token = data.session?.access_token;
   return token ? { Authorization: `Bearer ${token}` } : {};
@@ -53,60 +38,9 @@ export function newIdempotencyKey(): string {
 // signOut() / page reload.
 let signingOutFor401 = false;
 
-// Single-flight local-token refresh (desktop only). The sidecar's
-// /auth/refresh re-issues both tokens; on success the session continues
-// silently instead of bouncing the desk to the PIN screen mid-shift.
-let refreshInFlight: Promise<boolean> | null = null;
-
-async function refreshLocalSession(): Promise<boolean> {
-  if (refreshInFlight) return refreshInFlight;
-  refreshInFlight = (async () => {
-    const refresh = getLocalRefreshToken();
-    if (!refresh) return false;
-    try {
-      const res = await fetch(`${BASE}/auth/refresh`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ refresh_token: refresh }),
-      });
-      if (!res.ok) return false;
-      const json = (await res.json()) as {
-        data?: { token?: string; refresh_token?: string };
-      };
-      if (!json.data?.token || !json.data?.refresh_token) return false;
-      setLocalSession(json.data.token, json.data.refresh_token);
-      return true;
-    } catch {
-      return false;
-    } finally {
-      // Allow a future refresh cycle once this one settles.
-      setTimeout(() => {
-        refreshInFlight = null;
-      }, 0);
-    }
-  })();
-  return refreshInFlight;
-}
-
 async function handle401(): Promise<void> {
   if (signingOutFor401) return;
   signingOutFor401 = true;
-  if (isOfflineMode()) {
-    // Desktop: the access token expired. Try a silent refresh first — only
-    // bounce to the PIN login when the refresh token is dead too. In-flight
-    // queries fail once, but react-query's retries/polling recover on the
-    // fresh token without the user noticing.
-    if (await refreshLocalSession()) {
-      signingOutFor401 = false;
-      return;
-    }
-    clearLocalSession();
-    if (typeof window !== "undefined" && !window.location.pathname.startsWith("/login")) {
-      const from = window.location.pathname + window.location.search;
-      window.location.replace(`/login?expired=1&from=${encodeURIComponent(from)}`);
-    }
-    return;
-  }
   try {
     await supabase.auth.signOut();
   } catch {
@@ -123,11 +57,11 @@ async function handle<T>(res: Response): Promise<T> {
   if (res.status === 304) {
     throw new ApiError(304, "NOT_MODIFIED", "Unexpected 304. Disable ETag on server");
   }
-  // A 401 from the login/refresh endpoints is a CREDENTIALS failure ("wrong
-  // PIN"), not an expired session — let it fall through to the generic parse
-  // below so the server's real message ("Email or credentials are incorrect")
-  // reaches the form, and don't fire the sign-out/redirect cascade mid-login.
-  const isAuthAttempt = /\/auth\/(login|refresh)(\?|$)/.test(res.url);
+  // A 401 from the login endpoint is a CREDENTIALS failure, not an expired
+  // session — let it fall through to the generic parse below so the server's
+  // real message ("Email or password is incorrect") reaches the form, and
+  // don't fire the sign-out/redirect cascade mid-login.
+  const isAuthAttempt = /\/auth\/login(\?|$)/.test(res.url);
   if (res.status === 401 && !isAuthAttempt) {
     // Fire-and-forget the sign-out — we don't want every caller to await
     // it, but we still throw so the in-flight request short-circuits.

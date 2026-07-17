@@ -621,22 +621,17 @@ router.post("/outstanding/remind/:guestId", requireAuth, requirePermission("send
   const result = await messaging.sendSms({ to: g.phone, text: t.body });
   if (!result.ok) return fail(res, 502, "SEND_FAILED", result.error ?? "Send failed");
 
-  // Offline the message is QUEUED (provider "outbox"), not delivered — say so
-  // honestly in the audit log and the response instead of a false "sent".
-  const queued = result.provider === "outbox";
   await logActivity({
-    action: queued ? "payment_reminder_queued" : "payment_reminder_sent",
+    action: "payment_reminder_sent",
     entityType: "guest",
     entityId: guestId,
-    description: queued
-      ? `Payment reminder queued for ${g.fullName} (₹${balance.toFixed(2)}) — sends when the desk is online`
-      : `Payment reminder sent to ${g.fullName} (₹${balance.toFixed(2)})`,
+    description: `Payment reminder sent to ${g.fullName} (₹${balance.toFixed(2)})`,
     performedBy: req.user!.id,
     ipAddress: req.ip,
   });
   return ok(res, {
-    sent: !queued,
-    queued,
+    sent: true,
+    queued: false,
     balance,
     provider: result.provider,
     messageId: result.id ?? null,

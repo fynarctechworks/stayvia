@@ -127,6 +127,26 @@ offline branches in `middleware/auth.ts` + `config/env.ts` (drop `OFFLINE_MODE`,
   `activated` → unlocked.
 - Existing money/date Vitest suites stay green throughout.
 
+## Reconciliation with PHASE2-TENANCY-AUDIT.md
+
+- **Squash wins over backfill.** The audit's §5 incremental migrations + PRIMARY backfills
+  assume the old live DB. Stayvia targets a FRESH database — all §5 schema changes land
+  inside the squashed `0001_stayvia_baseline.sql`; no backfills, no PRIMARY concept.
+- **`profiles.property_id` (not `property_members`) in v1.** One hotel per account;
+  role stays in `user_roles`. The audit's `property_members` design is the documented
+  upgrade path when multi-property accounts arrive.
+- Audit §4 items adopted: staff creation stamps the creator's `property_id`; `/auth/me`
+  returns `propertyId` + hotel name for shell branding; seed.ts routes through the same
+  provisioning helper as signup (incl. `user_roles` fix); staff-email collision returns a
+  non-revealing error (platform-global Supabase identity, one hotel per email in v1);
+  `forgot-password/check` becomes a constant-shape response (enumeration oracle).
+- Audit top-10 #4 (invoices stamp PRIMARY GSTIN) and #8 (settings singleton) are the same
+  root cause — per-hotel settings threading is the fix and lands with tenant resolution.
+- `idempotency_keys.property_id` + composite key: adopted into baseline.
+- Old prod DB (SLDT Supabase): `0052` sync-capture triggers + `sync_devices` are that
+  deployment's concern, not Stayvia's — flagged to the owner separately; Stayvia's fresh
+  DB never creates them.
+
 ## Execution order
 
 1. Offline-layer deletion (isolated, shrinks surface)

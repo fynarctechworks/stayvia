@@ -1,6 +1,5 @@
 import { env } from "../config/env.js";
 import { logger } from "./logger.js";
-import { enqueueMessage } from "./outbox.js";
 
 export interface SmsMessage {
   to: string;
@@ -207,48 +206,20 @@ async function sendWhatsAppLive(msg: SmsMessage): Promise<SendResult> {
   }
 }
 
-// Direct provider sends, exported for the offline outbox deliverer: the desk
-// drains its queue with the SAME Twilio/Resend clients the cloud API uses,
-// authenticated by operator-provided credentials (see config/handshake.ts's
-// messaging.env loader). Stub results are treated as "not configured" there.
-export const directSenders = {
-  whatsapp: sendWhatsAppLive,
-  email: sendEmailResend,
-  isWhatsAppConfigured: () =>
-    !!(
-      env.TWILIO_ACCOUNT_SID &&
-      env.TWILIO_AUTH_TOKEN &&
-      (env.TWILIO_WHATSAPP_FROM || env.TWILIO_MESSAGING_SERVICE_SID)
-    ),
-  isResendConfigured: () => !!(env.RESEND_API_KEY && env.RESEND_FROM),
-};
-
 export const messaging = {
   // Sends via Twilio WhatsApp Business API (or stub in dev mode).
   // Kept the name `sendSms` for backwards-compat with existing call sites.
   async sendSms(msg: SmsMessage): Promise<SendResult> {
-    if (env.OFFLINE_MODE) {
-      // No internet in the hot path: enqueue and return success. The drainer
-      // delivers when the desk reconnects. (outbox imports messaging only as
-      // a type, so a static import here is cycle-free and pkg-compatible.)
-      await enqueueMessage("sms", msg.to, msg);
-      return { ok: true, provider: "outbox", id: "queued" };
-    }
     return env.NOTIFICATIONS_PROVIDER === "live" ? sendWhatsAppLive(msg) : sendWhatsAppStub(msg);
   },
   // Email channel — uses Resend when configured, stub otherwise. The
   // switch is purely env-driven: presence of RESEND_API_KEY + RESEND_FROM
   // turns the channel on; absence keeps it disabled.
   async sendEmail(msg: EmailMessage): Promise<SendResult> {
-    if (env.OFFLINE_MODE) {
-      await enqueueMessage("email", msg.to, msg);
-      return { ok: true, provider: "outbox", id: "queued" };
-    }
     if (env.RESEND_API_KEY && env.RESEND_FROM) return sendEmailResend(msg);
     return sendEmailStub(msg);
   },
   isEmailConfigured(): boolean {
-    // Offline: email is "configured" in the sense that it queues and will send.
-    return env.OFFLINE_MODE || !!(env.RESEND_API_KEY && env.RESEND_FROM);
+    return !!(env.RESEND_API_KEY && env.RESEND_FROM);
   },
 };

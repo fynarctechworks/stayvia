@@ -193,24 +193,12 @@ router.post("/send", requireAuth, validate(sendSchema), async (req, res) => {
     );
   }
 
-  // Offline advisory: when the desk has no internet, WhatsApp/email can't
-  // deliver the code (it's queued in the outbox). Rather than block check-in,
-  // we reveal the code on-screen to the physically-present staff member, who
-  // reads it to the guest or proceeds. This is safe HERE because this route
-  // only ever mints purpose="checkin" OTPs — password-change OTPs live in a
-  // different route and NEVER get this reveal (factor-collapse guard).
-  const revealForOffline = env.OFFLINE_MODE ? code : undefined;
-
   return ok(res, {
     id: row!.id,
     channel,
     target: maskTarget(target, channel),
     expiresInSeconds: env.OTP_TTL_SECONDS,
     devCode: env.NOTIFICATIONS_PROVIDER === "stub" ? code : undefined,
-    // Present only offline; the UI shows it with an "offline — read to guest"
-    // note alongside the queued-message banner.
-    offlineCode: revealForOffline,
-    offline: env.OFFLINE_MODE || undefined,
   });
 });
 

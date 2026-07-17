@@ -31,11 +31,6 @@ interface SendResp {
   target: string;
   expiresInSeconds: number;
   devCode?: string;
-  // Offline mode: the desk has no internet, so the code can't be delivered via
-  // WhatsApp/SMS (it's queued). The server reveals it here so the staff member
-  // can read it to the guest. Check-in OTP only.
-  offlineCode?: string;
-  offline?: boolean;
 }
 
 export function OtpModal({ reservationId, guestId, phone, open, onClose, onVerified }: Props) {
@@ -173,17 +168,8 @@ export function OtpModal({ reservationId, guestId, phone, open, onClose, onVerif
           {step === "verify" && send && (
             <>
               <p className="text-sm text-textSecondary">
-                {send.offline ? (
-                  <>Offline — the code couldn't be sent to <strong className="text-textPrimary">{send.target}</strong> and is queued. Read it to the guest below.</>
-                ) : (
-                  <>Code sent to <strong className="text-textPrimary">{send.target}</strong>. Ask the guest to read it back.</>
-                )}
+                Code sent to <strong className="text-textPrimary">{send.target}</strong>. Ask the guest to read it back.
               </p>
-              {send.offlineCode && (
-                <div className="rounded-md border border-brand/40 bg-brand/10 px-3 py-2 text-sm text-brand-dark">
-                  Offline code (read to guest): <strong className="font-mono text-lg tracking-widest">{send.offlineCode}</strong>
-                </div>
-              )}
               {send.devCode && (
                 <div className="rounded-md border border-warning/40 bg-warning/10 px-3 py-2 text-sm text-warning">
                   Dev mode: code is <strong className="font-mono">{send.devCode}</strong>

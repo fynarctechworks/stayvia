@@ -2,12 +2,6 @@ import type { Session } from "@supabase/supabase-js";
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
 import { api } from "@/lib/api";
 import { UI_PREVIEW } from "@/lib/mock-data";
-import {
-  clearLocalSession,
-  getLocalToken,
-  isOfflineMode,
-  setLocalSession,
-} from "@/lib/offlineMode";
 import { supabase } from "@/lib/supabase";
 import type { Role } from "@stayvia/shared";
 
@@ -33,13 +27,6 @@ interface AuthCtx {
   // before the user is fully authenticated. While mfaPending is true the
   // app treats the user as NOT logged in (guards redirect to /login).
   signIn: (email: string, password: string) => Promise<{ mfaRequired: boolean }>;
-  // Desktop offline login: verify email + PIN/password against the local
-  // sidecar (/auth/login), store the local JWT, and load the profile. No
-  // Supabase, no MFA (the desk is physically secured by the PIN + device).
-  signInOffline: (email: string, secret: string) => Promise<void>;
-  // True when running in the desktop shell (offline mode) — the Login page
-  // uses this to show the PIN form instead of the Supabase email/password.
-  offline: boolean;
   // Completes the second-factor challenge with a 6-digit TOTP code.
   // Throws on a wrong/expired code so the caller can show an error.
   verifyMfa: (code: string) => Promise<void>;
@@ -71,22 +58,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // challenge. While true, guards keep them out of the app.
   const [mfaPending, setMfaPending] = useState(false);
 
-  const offline = isOfflineMode();
-
   useEffect(() => {
     if (UI_PREVIEW) return;
-    if (offline) {
-      // Desktop: restore from the stored local JWT. If present, synthesize a
-      // minimal session so the profile-load effect + route guards treat the
-      // user as logged in; the token itself is validated on the first API call
-      // (a stale token 401s -> handle401 clears it -> PIN login).
-      const token = getLocalToken();
-      if (token) {
-        setSession({ access_token: token, user: { id: "local" } } as unknown as Session);
-      }
-      setLoading(false);
-      return;
-    }
     supabase.auth.getSession().then(async ({ data }) => {
       setSession((prev) => (prev?.user.id === data.session?.user.id ? prev : data.session));
       if (!data.session) {
@@ -127,9 +100,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // Don't load the profile until the second factor is satisfied — the
     // user isn't fully authenticated while a challenge is outstanding.
     if (mfaPending) return;
-    // Online keys on the real Supabase user id; offline the session id is a
-    // synthetic "local", so key on "any profile already loaded" instead.
-    if (offline ? !!profile : profile?.id === userId) return;
+    if (profile?.id === userId) return;
     setLoading(true);
     api
       .get<{ profile: Profile }>("/auth/me")
@@ -168,21 +139,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     setMfaPending(needs);
     return { mfaRequired: needs };
-  }
-
-  // Desktop offline login. POSTs email + PIN/password to the local sidecar,
-  // stores the returned local JWT, synthesizes a session so guards pass, and
-  // loads the profile. Throws on bad credentials so the PIN form shows an error.
-  async function signInOffline(email: string, secret: string): Promise<void> {
-    const resp = await api.post<{
-      user: { id: string; email: string };
-      token: string;
-      refresh_token: string;
-    }>("/auth/login", { email, secret });
-    setLocalSession(resp.token, resp.refresh_token);
-    setSession({ access_token: resp.token, user: { id: "local" } } as unknown as Session);
-    // The profile-load effect fires off the new session; no MFA offline.
-    setMfaPending(false);
   }
 
   // Confirm the signed-in user has an active profile. /auth/me runs through
@@ -240,12 +196,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return;
     }
     setMfaPending(false);
-    if (offline) {
-      clearLocalSession();
-      setSession(null);
-      setProfile(null);
-      return;
-    }
     await supabase.auth.signOut();
   }
 
@@ -270,8 +220,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         isGodMode,
         can,
         signIn,
-        signInOffline,
-        offline,
         verifyMfa,
         mfaPending,
         signOut,

@@ -7,12 +7,9 @@ export function generateOtp(): string {
 }
 
 export function hashOtp(code: string): string {
-  // Pepper the OTP hash with a server secret. Online this is the Supabase JWT
-  // secret; offline (where that's absent) we use the local session secret.
-  // Either way the pepper is stable per deployment, which is all the hash
-  // needs — OTPs never cross the online/offline boundary.
-  const pepper = env.SUPABASE_JWT_SECRET ?? env.LOCAL_JWT_SECRET ?? "sldt-otp-pepper";
-  return createHash("sha256").update(`${code}:${pepper}`).digest("hex");
+  // Pepper the OTP hash with a server secret — stable per deployment, which
+  // is all the hash needs.
+  return createHash("sha256").update(`${code}:${env.SUPABASE_JWT_SECRET}`).digest("hex");
 }
 
 export function expiresAt(): Date {

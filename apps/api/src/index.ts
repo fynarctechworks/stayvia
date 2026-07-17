@@ -9,27 +9,12 @@ import { env } from "./config/env.js";
 import { closeBrowser } from "./lib/pdf.js";
 import { logger } from "./lib/logger.js";
 import { startDashboardSubscriber } from "./lib/redis.js";
-import {
-  failedMessageCount,
-  pendingMessageCount,
-  requeueFailedMessages,
-  setOutboxDeliverer,
-  startOutboxDrainer,
-} from "./lib/outbox.js";
-import { createDirectDeliverer, deliveryConfigured } from "./lib/outboxDeliverer.js";
-import { pendingPushCount, startSyncPusher } from "./lib/sync/pusher.js";
-import { requireAuth } from "./middleware/auth.js";
-import { bootstrapSchemaIfNeeded } from "./db/bootstrap/index.js";
-import { ensureOfflineAdmin } from "./db/bootstrap/seedAdmin.js";
 import { errorHandler, notFound } from "./middleware/error.js";
 import { loginLimiter, readLimiter, writeLimiter } from "./middleware/rateLimit.js";
 import activityRoutes from "./routes/activity.js";
 import amenitiesRoutes from "./routes/amenities.js";
 import auditRoutes from "./routes/audit.js";
 import authRoutes from "./routes/auth.js";
-import authLocalRoutes from "./routes/authLocal.js";
-import localFilesRoutes from "./routes/localFiles.js";
-import syncRoutes from "./routes/sync.js";
 import calendarRoutes from "./routes/calendar.js";
 import creditsRoutes from "./routes/credits.js";
 import dashboardRoutes from "./routes/dashboard.js";
@@ -53,11 +38,9 @@ import { settingsRouter, staffRouter } from "./routes/settings.js";
 
 const app = express();
 
-// Trust the first proxy hop ONLY online (behind nginx/Vercel). Offline the app
-// is a loopback sidecar with no proxy, so trusting XFF would let a loopback
-// caller spoof req.ip and dodge the IP rate-limiter. (The per-account lockout
-// still holds either way, so this isn't a login bypass — defense in depth.)
-app.set("trust proxy", env.OFFLINE_MODE ? false : 1);
+// Trust the first proxy hop (behind nginx/Vercel) so req.ip reflects the
+// real client for rate limiting and audit logs.
+app.set("trust proxy", 1);
 app.set("etag", false);
 
 // Explicit security headers. We extend Helmet's defaults rather than relying
@@ -110,19 +93,12 @@ app.use((_req, res, next) => {
   next();
 });
 
-// Allowed browser origins: the web front end, plus the Tauri desktop app.
-// Tauri serves the bundled UI from a tauri.localhost origin (scheme differs
-// by OS/webview), so we allow that family alongside FRONTEND_URL. Requests
-// with no Origin header (native fetch, health checks) are allowed through.
-const TAURI_ORIGINS = new Set([
-  "tauri://localhost",
-  "https://tauri.localhost",
-  "http://tauri.localhost",
-]);
+// Allowed browser origins: the web front end only. Requests with no Origin
+// header (native fetch, health checks) are allowed through.
 app.use(
   cors({
     origin(origin, callback) {
-      if (!origin || origin === env.FRONTEND_URL || TAURI_ORIGINS.has(origin)) {
+      if (!origin || origin === env.FRONTEND_URL) {
         callback(null, true);
       } else {
         callback(null, false);
@@ -142,50 +118,8 @@ app.get("/health", (_req, res) => res.json({ status: "ok", time: new Date().toIS
 
 const v1 = express.Router();
 
-// Desk status for the frontend's offline banner: mode, queued/failed message
-// counts, unsynced-change count, and whether delivery credentials exist. In
-// online mode everything reports zero/true so the banner stays hidden.
-v1.get("/system/status", requireAuth, async (_req, res) => {
-  try {
-    const offline = !!env.OFFLINE_MODE;
-    const [pending, failed, unsynced] = offline
-      ? await Promise.all([pendingMessageCount(), failedMessageCount(), pendingPushCount()])
-      : [0, 0, 0];
-    return res.json({
-      success: true,
-      data: {
-        offline,
-        messages: { pending, failed },
-        sync: { pending: unsynced, configured: !!process.env.SYNC_INGEST_URL },
-        delivery: offline ? deliveryConfigured() : { whatsapp: true, email: true },
-      },
-    });
-  } catch (err) {
-    logger.warn({ err: err instanceof Error ? err.message : err }, "system status failed");
-    return res.status(500).json({ success: false, error: { code: "STATUS_FAILED", message: "Could not read system status" } });
-  }
-});
-
 v1.use("/auth/login", loginLimiter);
-if (env.OFFLINE_MODE) {
-  // Offline desk: local credential login/refresh REPLACES the cloud login.
-  // Mounted first so its /login and /refresh win over the cloud auth router.
-  v1.use("/auth", authLocalRoutes);
-  v1.use("/auth", authRoutes);
-} else {
-  // Online: cloud auth owns /login etc. authLocal is mounted AFTER so only its
-  // /provision-local (which cloud auth doesn't define) is reachable — letting a
-  // signed-in user set up their desk PIN before going offline.
-  v1.use("/auth", authRoutes);
-  v1.use("/auth", authLocalRoutes);
-}
-
-// Local file serving (offline mode only). Auth is by HMAC signature in the
-// URL, not a bearer token — so mount it BEFORE the auth rate limiter block and
-// leave it un-gated, exactly like a cloud signed URL.
-if (env.OFFLINE_MODE) {
-  v1.use("/local-files", localFilesRoutes);
-}
+v1.use("/auth", authRoutes);
 
 v1.use((req, _res, next) => {
   if (["GET", "HEAD"].includes(req.method)) return readLimiter(req, _res, next);
@@ -219,12 +153,6 @@ v1.use("/calendar", calendarRoutes);
 v1.use("/search", searchRoutes);
 v1.use("/", ledgerRoutes);
 
-// Cloud replica ingest endpoint. Lives on the CLOUD/online API (the passive
-// replica the desk pushes to), never on the offline desk itself.
-if (!env.OFFLINE_MODE) {
-  v1.use("/sync", syncRoutes);
-}
-
 app.use("/api/v1", v1);
 
 app.use(notFound);
@@ -234,42 +162,9 @@ startDashboardSubscriber().catch((err) =>
   logger.warn({ err }, "dashboard subscriber failed to start"),
 );
 
-// Offline desk: start the message-outbox drainer so queued WhatsApp/email
-// messages deliver whenever connectivity returns, and the sync pusher so
-// business changes replicate to the cloud backup when online. Static-imported
-// (not dynamic import()) so the pkg-bundled sidecar can resolve them — they're
-// inert online anyway.
-if (env.OFFLINE_MODE) {
-  // Direct Twilio/Resend delivery from the desk (credentials from
-  // %LOCALAPPDATA%\SLDT\messaging.env). Messages parked as "failed" by the
-  // pre-deliverer stub get re-armed first — they never actually sent.
-  setOutboxDeliverer(createDirectDeliverer());
-  requeueFailedMessages()
-    .then(() => startOutboxDrainer())
-    .catch((err) => logger.warn({ err }, "outbox drainer failed to start"));
-  Promise.resolve()
-    .then(() => startSyncPusher())
-    .catch((err) => logger.warn({ err }, "sync pusher failed to start"));
-}
-
-// Offline first-run: build the schema on a fresh embedded cluster and ensure
-// there's an admin to log in with, BEFORE we start serving. No-op online and
-// on already-initialized offline clusters.
-async function offlineFirstRun(): Promise<void> {
-  if (!env.OFFLINE_MODE) return;
-  await bootstrapSchemaIfNeeded();
-  await ensureOfflineAdmin();
-}
-
 const server = app.listen(env.PORT, () => {
   logger.info(`Stayvia API listening on http://localhost:${env.PORT}`);
 });
-// Run the first-run bootstrap right after binding the port so /health responds
-// immediately (the shell health-gates on it); the schema build completes in
-// well under a second.
-offlineFirstRun().catch((err) =>
-  logger.error({ err }, "offline first-run bootstrap failed"),
-);
 
 async function shutdown(signal: string) {
   logger.info(`${signal} received, shutting down`);
@@ -286,20 +181,3 @@ async function shutdown(signal: string) {
 
 process.on("SIGTERM", () => shutdown("SIGTERM"));
 process.on("SIGINT", () => shutdown("SIGINT"));
-
-// Offline desk resilience: Express does NOT forward async-handler rejections
-// to the error middleware (no express-async-errors / asyncHandler in this
-// codebase), so any uncaught throw in an async route becomes an unhandled
-// rejection — and Node's default kills the process. In the cloud a supervisor
-// restarts it; on the desk the sidecar just dies and every subsequent request
-// shows "Failed to fetch" until the operator relaunches the whole app. Log
-// loudly and keep serving instead. The failed request itself never gets a
-// response (the client times out), but the app survives.
-if (env.OFFLINE_MODE) {
-  process.on("unhandledRejection", (reason) => {
-    logger.error(
-      { err: reason instanceof Error ? { message: reason.message, stack: reason.stack } : reason },
-      "unhandled promise rejection — kept alive (offline desk mode)",
-    );
-  });
-}

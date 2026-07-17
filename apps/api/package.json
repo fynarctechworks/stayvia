@@ -7,7 +7,7 @@
   "scripts": {
     "predev": "node scripts/free-port.mjs",
     "dev": "nodemon --watch src --ext ts --exec \"tsx src/index.ts\"",
-    "build": "node scripts/gen-baseline-ts.mjs && tsc -p tsconfig.json",
+    "build": "tsc -p tsconfig.json",
     "start": "node dist/index.js",
     "db:generate": "drizzle-kit generate",
     "db:push": "drizzle-kit push",

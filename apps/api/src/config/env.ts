@@ -3,13 +3,6 @@ import { resolve } from "node:path";
 import dotenv from "dotenv";
 import { z } from "zod";
 
-import { applyHandshake } from "./handshake.js";
-
-// Offline desktop sidecar: read the stdin handshake (DATABASE_URL + secrets)
-// into process.env BEFORE we resolve env files or validate. No-op unless the
-// Tauri shell set SLDT_HANDSHAKE_STDIN=1.
-applyHandshake();
-
 // Env-file resolution. dotenv has no built-in "mode" concept, so we layer
 // it ourselves to mirror Vite's behaviour on the web side:
 //
@@ -64,48 +57,20 @@ for (const file of [`.env.${nodeEnv}.local`, `.env.${nodeEnv}`, ".env"]) {
   if (existsSync(path)) dotenv.config({ path });
 }
 
-// Offline desktop mode. When set (by the Tauri sidecar handshake, or manually
-// for local testing), the app runs fully against embedded Postgres with NO
-// cloud dependencies: Supabase (auth/storage) and Upstash (Redis) become
-// optional. Auth falls back to local JWT verification, storage to the local
-// filesystem, and caching to an in-process store. WhatsApp/OTP delivery still
-// needs internet but queues offline.
-const OFFLINE = process.env.OFFLINE_MODE === "1" || process.env.OFFLINE_MODE === "true";
-
-// In offline mode, a cloud var that's absent is fine (optional). Online, it's
-// required exactly as before — no behavioural change for server/Docker.
-const cloudString = (min: number) =>
-  OFFLINE ? z.string().min(min).optional() : z.string().min(min);
-const cloudUrl = () => (OFFLINE ? z.string().url().optional() : z.string().url());
-
 const envSchema = z.object({
   NODE_ENV: z.enum(["development", "production", "test", "local"]).default("development"),
   PORT: z.coerce.number().default(3000),
 
-  // Offline flags surfaced on `env` so the rest of the app can branch on them.
-  OFFLINE_MODE: z
-    .string()
-    .optional()
-    .transform((v) => v === "1" || v === "true"),
-  // True on first launch of a fresh cluster: the sidecar must build the schema
-  // (drizzle push + migrate) before serving. Set by the handshake.
-  SLDT_SCHEMA_BOOTSTRAP: z
-    .string()
-    .optional()
-    .transform((v) => v === "1" || v === "true"),
-
   DATABASE_URL: z.string().url(),
-  SUPABASE_URL: cloudUrl(),
-  SUPABASE_SERVICE_ROLE_KEY: cloudString(20),
-  SUPABASE_JWT_SECRET: cloudString(20),
+  SUPABASE_URL: z.string().url(),
+  SUPABASE_SERVICE_ROLE_KEY: z.string().min(20),
+  SUPABASE_JWT_SECRET: z.string().min(20),
 
-  UPSTASH_REDIS_REST_URL: cloudUrl(),
-  UPSTASH_REDIS_REST_TOKEN: cloudString(10),
-  UPSTASH_REDIS_URL: cloudString(10),
-
-  // Local session-signing secret used by offline auth (Task 3). Required in
-  // offline mode, ignored online (Supabase mints tokens there).
-  LOCAL_JWT_SECRET: OFFLINE ? z.string().min(20) : z.string().min(20).optional(),
+  // Upstash Redis is optional by design: when absent, lib/redis.ts degrades to
+  // an in-process TTL cache with no pub/sub fan-out.
+  UPSTASH_REDIS_REST_URL: z.string().url().optional(),
+  UPSTASH_REDIS_REST_TOKEN: z.string().min(10).optional(),
+  UPSTASH_REDIS_URL: z.string().min(10).optional(),
 
   ENCRYPTION_KEY: z
     .string()

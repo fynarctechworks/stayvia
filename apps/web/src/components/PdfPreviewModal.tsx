@@ -26,7 +26,8 @@ export function PdfPreviewModal({ open, url, title, filename, onClose }: Props) 
 
     (async () => {
       try {
-        // Offline-aware token (local JWT on the desktop, Supabase online).
+        // Shared auth-header helper — same Supabase session token as the
+        // JSON API helpers.
         const headers = await authHeader();
         const sep = url.includes("?") ? "&" : "?";
         const res = await fetch(`${url}${sep}disposition=inline&_t=${Date.now()}`, {

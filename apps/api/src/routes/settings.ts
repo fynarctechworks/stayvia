@@ -26,10 +26,6 @@ import {
 import { supabaseAdmin } from "../lib/supabase.js";
 import { requireAuth, requirePermission } from "../middleware/auth.js";
 import { validate } from "../middleware/validate.js";
-import { randomUUID } from "node:crypto";
-import { env } from "../config/env.js";
-import { localCredentials } from "../db/schema/localCredentials.js";
-import { hashSecret } from "../lib/localAuth.js";
 
 const router = Router();
 
@@ -411,24 +407,13 @@ staffRouter.post("/", requireAuth, requirePermission("manage_staff"), validate(s
     phone?: string;
   };
 
-  // Offline desk: no Supabase — the account lives entirely in profiles +
-  // local_credentials. The admin-set password verifies against the scrypt
-  // hash at the local /auth/login; the new staffer can add a short desk PIN
-  // themselves via /auth/provision-local afterwards.
-  let userId: string;
-  if (env.OFFLINE_MODE) {
-    const [dup] = await db.select({ id: profiles.id }).from(profiles).where(eq(profiles.email, input.email)).limit(1);
-    if (dup) return fail(res, 400, "AUTH_ERROR", "A user with this email already exists");
-    userId = randomUUID();
-  } else {
-    const { data, error } = await supabaseAdmin.auth.admin.createUser({
-      email: input.email,
-      password: input.password,
-      email_confirm: true,
-    });
-    if (error || !data.user) return fail(res, 400, "AUTH_ERROR", error?.message ?? "Create failed");
-    userId = data.user.id;
-  }
+  const { data, error } = await supabaseAdmin.auth.admin.createUser({
+    email: input.email,
+    password: input.password,
+    email_confirm: true,
+  });
+  if (error || !data.user) return fail(res, 400, "AUTH_ERROR", error?.message ?? "Create failed");
+  const userId = data.user.id;
 
   const [profile] = await db
     .insert(profiles)
@@ -441,16 +426,6 @@ staffRouter.post("/", requireAuth, requirePermission("manage_staff"), validate(s
       isActive: true,
     })
     .returning();
-
-  if (env.OFFLINE_MODE) {
-    await db
-      .insert(localCredentials)
-      .values({ profileId: userId, passwordHash: hashSecret(input.password) })
-      .onConflictDoUpdate({
-        target: localCredentials.profileId,
-        set: { passwordHash: hashSecret(input.password), updatedAt: new Date() },
-      });
-  }
 
   // Map to RBAC user_roles. Falls back silently if the role row doesn't exist
   // (shouldn't happen — system roles are seeded — but don't block staff creation).
@@ -497,31 +472,11 @@ staffRouter.put(
     }
 
     if (input.email || input.password) {
-      if (env.OFFLINE_MODE) {
-        // Offline: password lives in local_credentials (this doubles as the
-        // admin "reset a forgotten PIN/password" path); email is only the
-        // profiles row, patched below. Resetting also clears any lockout.
-        if (input.password) {
-          await db
-            .insert(localCredentials)
-            .values({ profileId: id, passwordHash: hashSecret(input.password) })
-            .onConflictDoUpdate({
-              target: localCredentials.profileId,
-              set: {
-                passwordHash: hashSecret(input.password),
-                failedAttempts: 0,
-                lockedUntil: null,
-                updatedAt: new Date(),
-              },
-            });
-        }
-      } else {
-        const authUpdate: { email?: string; password?: string } = {};
-        if (input.email) authUpdate.email = input.email;
-        if (input.password) authUpdate.password = input.password;
-        const { error } = await supabaseAdmin.auth.admin.updateUserById(id, authUpdate);
-        if (error) return fail(res, 400, "AUTH_ERROR", error.message);
-      }
+      const authUpdate: { email?: string; password?: string } = {};
+      if (input.email) authUpdate.email = input.email;
+      if (input.password) authUpdate.password = input.password;
+      const { error } = await supabaseAdmin.auth.admin.updateUserById(id, authUpdate);
+      if (error) return fail(res, 400, "AUTH_ERROR", error.message);
     }
 
     const profilePatch: Record<string, unknown> = { updatedAt: new Date() };
@@ -615,13 +570,9 @@ staffRouter.delete("/:id/hard", requireAuth, requirePermission("manage_staff"), 
   }
 
   await db.delete(profiles).where(eq(profiles.id, id));
-  // Offline there's no Supabase auth record — the profile + local_credentials
-  // rows (cascade) ARE the account, and they're already gone at this point.
-  if (!env.OFFLINE_MODE) {
-    const { error } = await supabaseAdmin.auth.admin.deleteUser(id);
-    if (error) {
-      return fail(res, 500, "AUTH_DELETE_FAILED", `Profile deleted but auth user removal failed: ${error.message}`);
-    }
+  const { error } = await supabaseAdmin.auth.admin.deleteUser(id);
+  if (error) {
+    return fail(res, 500, "AUTH_DELETE_FAILED", `Profile deleted but auth user removal failed: ${error.message}`);
   }
 
   await logActivity({
