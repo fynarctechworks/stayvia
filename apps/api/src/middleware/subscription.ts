@@ -13,7 +13,11 @@ import { fail } from "../lib/response.js";
 // In-process cache: one subscription lookup per property per minute instead
 // of one per request. Billing writes + webhook updates call
 // invalidateSubscriptionCache so a payment unlocks immediately.
-const CACHE_TTL_MS = 60_000;
+// SUBSCRIPTION_CACHE_TTL_MS overrides the TTL — the e2e harness sets 0 so
+// direct DB status flips are visible on the next request; absent/invalid
+// falls back to the 60s default.
+const ttlOverride = Number(process.env.SUBSCRIPTION_CACHE_TTL_MS);
+const CACHE_TTL_MS = Number.isFinite(ttlOverride) ? ttlOverride : 60_000;
 type CacheEntry = { sub: Subscription | null; expires: number };
 const cache = new Map<string, CacheEntry>();
 

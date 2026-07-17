@@ -1,19 +1,19 @@
 import { defineConfig, devices } from "@playwright/test";
 
 // E2E stack ports — deliberately OFFSET from every dev/prod port so a running
-// dev server (5173/5180), the desktop sidecar (3010), or the desk's embedded
-// Postgres (5433) can never collide with — or be touched by — a test run.
-// The whole stack (Postgres cluster, API, file storage) lives under
-// e2e/.runtime and is rebuilt from scratch each run; it NEVER points at the
-// live desk data (D:\SLDT or %LOCALAPPDATA%\SLDT).
+// dev server (5173/5180) or dev API (3001) can never collide with — or be
+// touched by — a test run. The whole stack (throwaway Postgres cluster on
+// 5434, API on 3020 with fake secrets + the E2E auth shim, vite on 5273)
+// lives under e2e/.runtime and is rebuilt from scratch each run; it NEVER
+// points at live Supabase/Redis/Razorpay (see e2e/harness.ts).
 export const E2E_WEB_PORT = 5273;
 export const E2E_API_PORT = 3020;
 export const E2E_PG_PORT = 5434;
 
 export default defineConfig({
   testDir: "./e2e",
-  // The app under test is a single stateful desk (one DB, one drawer) —
-  // parallel workers would race each other's bookings. Keep runs serial.
+  // The suites share one seeded stack and the billing suite mutates hotel
+  // A's subscription row mid-file — parallel workers would race it. Serial.
   fullyParallel: false,
   workers: 1,
   forbidOnly: !!process.env.CI,
@@ -31,8 +31,17 @@ export default defineConfig({
     command: `npm run dev --workspace @stayvia/web -- --port ${E2E_WEB_PORT} --strictPort`,
     url: `http://127.0.0.1:${E2E_WEB_PORT}`,
     reuseExistingServer: !process.env.CI,
-    // Point the frontend at the throwaway test API, not the desk sidecar.
-    env: { VITE_API_URL: `http://127.0.0.1:${E2E_API_PORT}/api/v1` },
+    // Point the frontend at the throwaway test API and a fake Supabase.
+    // Real process env beats .env.development in Vite, so these can never
+    // leak dev/prod values into the suite. The supabase-js client is only
+    // constructed with the fake URL — the injected-session flow (e2e/
+    // session.ts) never actually calls it.
+    env: {
+      VITE_API_URL: `http://127.0.0.1:${E2E_API_PORT}/api/v1`,
+      VITE_SUPABASE_URL: "http://e2e-supabase.invalid",
+      VITE_SUPABASE_ANON_KEY: "e2e-fake-anon-key-not-a-real-secret",
+      VITE_UI_PREVIEW: "false",
+    },
     timeout: 120_000,
   },
 });

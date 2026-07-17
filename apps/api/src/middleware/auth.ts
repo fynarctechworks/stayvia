@@ -1,5 +1,7 @@
+import { createHmac, timingSafeEqual } from "node:crypto";
 import { eq } from "drizzle-orm";
 import type { NextFunction, Request, Response } from "express";
+import { env } from "../config/env.js";
 import { db } from "../db/client.js";
 import type { Role } from "../db/schema/enums.js";
 import { profiles } from "../db/schema/profiles.js";
@@ -27,6 +29,47 @@ declare module "express-serve-static-core" {
   }
 }
 
+// ---------------------------------------------------------------------------
+// TEST-ONLY auth shim. When E2E_AUTH_SHIM=1 (and never in production —
+// config/env.ts refuses to boot), the bearer token is verified LOCALLY as an
+// HS256 JWT signed with SUPABASE_JWT_SECRET instead of a Supabase Auth
+// round-trip. The e2e harness mints { sub: <profile uuid>, email } tokens
+// with the same secret, so the suite runs against a throwaway stack with no
+// GoTrue. Everything downstream of userId — profile lookup, tenancy, RBAC —
+// is byte-for-byte the real path.
+// ---------------------------------------------------------------------------
+const E2E_AUTH_SHIM_ENABLED = env.E2E_AUTH_SHIM === "1" && env.NODE_ENV !== "production";
+
+function fromBase64Url(part: string): Buffer {
+  return Buffer.from(part.replace(/-/g, "+").replace(/_/g, "/"), "base64");
+}
+
+// Returns the verified payload's sub, or null for anything malformed,
+// mis-signed, or expired. Manual HMAC on purpose: no jose/jsonwebtoken dep.
+function verifyShimToken(token: string): string | null {
+  const parts = token.split(".");
+  if (parts.length !== 3) return null;
+  const [head, body, sig] = parts as [string, string, string];
+  const expected = createHmac("sha256", env.SUPABASE_JWT_SECRET)
+    .update(`${head}.${body}`)
+    .digest();
+  const actual = fromBase64Url(sig);
+  if (expected.length !== actual.length || !timingSafeEqual(expected, actual)) return null;
+  try {
+    const header = JSON.parse(fromBase64Url(head).toString("utf8")) as { alg?: string };
+    if (header.alg !== "HS256") return null;
+    const payload = JSON.parse(fromBase64Url(body).toString("utf8")) as {
+      sub?: unknown;
+      exp?: unknown;
+    };
+    if (typeof payload.sub !== "string" || payload.sub.length === 0) return null;
+    if (typeof payload.exp === "number" && payload.exp * 1000 <= Date.now()) return null;
+    return payload.sub;
+  } catch {
+    return null;
+  }
+}
+
 export async function requireAuth(req: Request, res: Response, next: NextFunction) {
   // Already authenticated earlier in this request (the v1-level
   // subscription gate runs requireAuth before the routers do) — skip the
@@ -38,15 +81,28 @@ export async function requireAuth(req: Request, res: Response, next: NextFunctio
   }
   const token = header.slice("Bearer ".length).trim();
 
-  const { data, error } = await supabaseAdmin.auth.getUser(token);
-  if (error || !data.user) {
-    logger.warn(
-      { ip: req.ip ?? "unknown", path: req.path, reason: error?.message ?? "no_user" },
-      "auth failed: invalid token",
-    );
-    return fail(res, 401, "INVALID_TOKEN", "Token is invalid or expired");
+  let userId: string;
+  if (E2E_AUTH_SHIM_ENABLED) {
+    const sub = verifyShimToken(token);
+    if (!sub) {
+      logger.warn(
+        { ip: req.ip ?? "unknown", path: req.path, reason: "e2e_shim_rejected" },
+        "auth failed: invalid token",
+      );
+      return fail(res, 401, "INVALID_TOKEN", "Token is invalid or expired");
+    }
+    userId = sub;
+  } else {
+    const { data, error } = await supabaseAdmin.auth.getUser(token);
+    if (error || !data.user) {
+      logger.warn(
+        { ip: req.ip ?? "unknown", path: req.path, reason: error?.message ?? "no_user" },
+        "auth failed: invalid token",
+      );
+      return fail(res, 401, "INVALID_TOKEN", "Token is invalid or expired");
+    }
+    userId = data.user.id;
   }
-  const userId = data.user.id;
 
   const profile = await db
     .select()

@@ -15,12 +15,14 @@ from (historical; code wins on conflict). Design system: `apps/web/DESIGN.md`
 | Phase | Scope | Status |
 |---|---|---|
 | 0 | Fresh repo, Stayvia rebrand, desktop/Tauri removal, agent workflow | **done** |
-| 1 | New infra: Supabase, Upstash, Vercel, Razorpay accounts + env wiring | user provisioning |
-| 2 | Multi-tenant core: tenant=hotel resolution off auth profile, squashed baseline migration with `property_id` everywhere, per-hotel numbering/settings/storage, offline-layer removal | next |
-| 3 | Signup + onboarding wizard + trial + Razorpay subscription + billing page | pending |
-| 4 | Landing/pricing page, per-hotel branding surfaces | pending |
-| 5 | Tenant-isolation test suite (two-hotel fixtures), billing lifecycle tests | pending |
-| 6 | Deploy: Vercel web + VPS Docker API | pending |
+| 1 | New infra: Supabase, Upstash, Vercel, Razorpay accounts + env wiring | **user provisioning** |
+| 2 | Multi-tenant core: offline-layer removal, squashed baseline (property_id everywhere, per-hotel counters), per-request tenant resolution, every query scoped + adversarially verified | **done** |
+| 3 | Public signup + trial + Razorpay single-plan subscription + webhook + 402 gate | **done** |
+| 4 | Web signup/billing pages, 402 redirect, per-hotel shell branding, get-started card | **done** |
+| 5 | Cloud e2e harness (test-only auth shim, prod-guarded), two-hotel isolation suite (13 tests), billing lifecycle suite (5 tests) | **done** |
+| 6 | Deploy: Vercel web + VPS Docker API + Razorpay plan/webhook config | pending (needs Phase 1 keys) |
+
+Marketing/landing page: not built yet (product app assumed the deliverable; landing site is a separate follow-up).
 
 ## Commands
 ```bash

@@ -61,6 +61,12 @@ const envSchema = z.object({
   NODE_ENV: z.enum(["development", "production", "test", "local"]).default("development"),
   PORT: z.coerce.number().default(3000),
 
+  // TEST-ONLY. "1" switches requireAuth to local HS256 verification of the
+  // bearer token against SUPABASE_JWT_SECRET (see middleware/auth.ts) so the
+  // e2e harness can mint tokens without a live Supabase project. Guarded
+  // below: the process refuses to boot if this is set in production.
+  E2E_AUTH_SHIM: z.string().optional(),
+
   DATABASE_URL: z.string().url(),
   SUPABASE_URL: z.string().url(),
   SUPABASE_SERVICE_ROLE_KEY: z.string().min(20),
@@ -114,6 +120,16 @@ if (!parsed.success) {
   console.error("Invalid environment variables:");
   console.error(parsed.error.flatten().fieldErrors);
   process.exit(1);
+}
+
+// Hard guard: the e2e auth shim (locally-verified JWTs instead of Supabase
+// Auth) must never run in production. A stray E2E_AUTH_SHIM in a prod env
+// would let anyone who knows SUPABASE_JWT_SECRET mint arbitrary staff
+// tokens — refuse to boot rather than run with that door open.
+if (parsed.data.E2E_AUTH_SHIM !== undefined && parsed.data.NODE_ENV === "production") {
+  throw new Error(
+    "E2E_AUTH_SHIM is set while NODE_ENV=production — the test auth shim is forbidden in production. Unset E2E_AUTH_SHIM.",
+  );
 }
 
 export const env = parsed.data;

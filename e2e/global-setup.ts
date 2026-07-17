@@ -1,45 +1,36 @@
 import { execFileSync, spawn } from "node:child_process";
 import { existsSync, mkdirSync, openSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { dirname, join, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
+import { join } from "node:path";
 
-import { E2E_API_PORT, E2E_PG_PORT, E2E_WEB_PORT } from "../playwright.config";
+import { E2E_API_PORT, E2E_PG_PORT } from "../playwright.config";
+import {
+  API_DIR,
+  API_HEALTH_URL,
+  DATABASE_URL,
+  PGDATA,
+  PG_USER,
+  PIDS_FILE,
+  REPO,
+  RUNTIME,
+  apiChildEnv,
+  pgTool,
+} from "./harness";
 
-const __dirname = dirname(fileURLToPath(import.meta.url));
-
-// Boots a fully ISOLATED Stayvia stack for the E2E suite:
+// Boots a fully ISOLATED cloud-mode Stayvia stack for the E2E suite:
 //
-//   e2e/.runtime/pgdata    — throwaway embedded-Postgres cluster (port 5434)
-//   e2e/.runtime/storage   — throwaway file storage (KYC/PDFs)
-//   apps/api/dist          — the real API, OFFLINE_MODE, port 3020
+//   e2e/.runtime/pgdata   — throwaway local Postgres 16 cluster (port 5434)
+//   apps/api (tsx)        — the real API, NODE_ENV=test + E2E_AUTH_SHIM=1,
+//                           port 3020, obviously-fake secrets
+//   e2e/.runtime/fixtures.json — ids of the two seeded tenants
 //
-// The cluster is initdb'd fresh on every run and torn down afterwards, so
-// tests are deterministic and can never read or write the live desk data
-// (D:\SLDT / %LOCALAPPDATA%\SLDT). The API bootstraps its own schema
-// (SLDT_SCHEMA_BOOTSTRAP=1) and seeds the first-run admin
-// (admin@stayvia.local / PIN 424242) exactly like a fresh desk install.
+// The cluster is initdb'd fresh every run: migrations applied via the real
+// runner (scripts/migrate.mjs — 127.0.0.1 passes its non-local-host guard),
+// then two hotels seeded through lib/provisionProperty. Nothing touches live
+// Supabase/Redis/Razorpay: the harness sets every secret itself and the
+// suite refuses to run if an apps/api/.env(.test*) file could leak real
+// values into the NODE_ENV=test loader.
 
-const REPO = resolve(__dirname, "..");
-const RUNTIME = join(REPO, "e2e", ".runtime");
-const PGDATA = join(RUNTIME, "pgdata");
-const STORAGE = join(RUNTIME, "storage");
-const PG_BIN = join(REPO, "apps", "web", "src-tauri", "resources", "pgsql", "bin");
-const API_DIST = join(REPO, "apps", "api", "dist", "index.js");
-const PIDS = join(RUNTIME, "pids.json");
-
-const PG_USER = "stayvia";
-const DATABASE_URL = `postgresql://${PG_USER}@127.0.0.1:${E2E_PG_PORT}/stayvia`;
-
-function pgTool(name: string): string {
-  const exe = join(PG_BIN, process.platform === "win32" ? `${name}.exe` : name);
-  if (!existsSync(exe)) {
-    throw new Error(
-      `${exe} not found — the bundled PostgreSQL binaries are required for E2E ` +
-        `(see apps/web/src-tauri/resources/pgsql).`,
-    );
-  }
-  return exe;
-}
+const TSX_CLI = join(REPO, "node_modules", "tsx", "dist", "cli.mjs");
 
 async function waitFor(url: string, timeoutMs: number, label: string): Promise<void> {
   const deadline = Date.now() + timeoutMs;
@@ -58,21 +49,25 @@ async function waitFor(url: string, timeoutMs: number, label: string): Promise<v
 }
 
 export default async function globalSetup(): Promise<void> {
-  if (!existsSync(API_DIST)) {
-    throw new Error(
-      `apps/api/dist/index.js missing — run "npm run build:api" once before the E2E suite.`,
-    );
+  const stage = (msg: string) => console.log(`[e2e-setup] ${msg}`);
+
+  if (!existsSync(TSX_CLI)) {
+    throw new Error(`${TSX_CLI} missing — run npm install first.`);
+  }
+  // The API's layered env loader under NODE_ENV=test reads .env.test.local,
+  // .env.test and .env from apps/api. None of these exist in this repo; if
+  // one appears it could inject real infra into the test API — refuse.
+  for (const file of [".env.test.local", ".env.test", ".env"]) {
+    if (existsSync(join(API_DIR, file))) {
+      throw new Error(
+        `apps/api/${file} exists — it would be loaded by the NODE_ENV=test API and could point the e2e stack at live infrastructure. Remove or rename it before running the suite.`,
+      );
+    }
   }
 
   // Fresh runtime every run.
   rmSync(RUNTIME, { recursive: true, force: true });
-  mkdirSync(STORAGE, { recursive: true });
-
-  const stage = (msg: string) => {
-    // Playwright is silent during globalSetup — log stages to the console AND
-    // a file so a hang is diagnosable instead of a mystery.
-    console.log(`[e2e-setup] ${msg}`);
-  };
+  mkdirSync(RUNTIME, { recursive: true });
 
   // 1. Throwaway Postgres cluster. Loopback + trust auth is fine for a test
   //    cluster that lives for one suite run and holds only fixture data.
@@ -103,40 +98,51 @@ export default async function globalSetup(): Promise<void> {
       );
       break;
     } catch (e) {
-      const msg = e instanceof Error && "stderr" in e ? String((e as { stderr?: Buffer }).stderr ?? e) : String(e);
+      const msg =
+        e instanceof Error && "stderr" in e ? String((e as { stderr?: Buffer }).stderr ?? e) : String(e);
       if (msg.includes("already exists")) break;
       if (Date.now() > deadline) throw new Error(`createdb failed after retries: ${msg}`);
       await new Promise((r) => setTimeout(r, 1000));
     }
   }
 
-  // 2. The real API in offline mode against the throwaway cluster. Its
-  //    output goes to a FILE (not pipes tied to this short-lived setup
-  //    process) so a mid-suite crash is diagnosable and the child can't be
-  //    killed by its pipes going away. Detached: the child must outlive the
-  //    setup process and keep serving for the whole suite.
+  // 2. Schema via the real migration runner. DATABASE_URL is set in the
+  //    child env, which wins over any dotenv file, and 127.0.0.1 passes the
+  //    runner's guard-db-target check.
+  stage("applying migrations…");
+  execFileSync(process.execPath, [join(API_DIR, "scripts", "migrate.mjs")], {
+    cwd: API_DIR,
+    env: apiChildEnv(),
+    stdio: "pipe",
+  });
+
+  // 3. Seed the two tenants + fixture ids. `node --import tsx` (not the tsx
+  //    CLI, which re-spawns a child process) so the seeder — which imports
+  //    the API's TS sources directly — runs in a single killable process.
+  stage("seeding tenants…");
+  execFileSync(process.execPath, ["--import", "tsx", join(REPO, "e2e", "seed.ts")], {
+    cwd: API_DIR,
+    env: apiChildEnv(),
+    stdio: "pipe",
+  });
+
+  // 4. The real API against the throwaway cluster, run from TS via
+  //    `node --import tsx` (single process — the teardown's process.kill
+  //    must hit the server itself, not a tsx wrapper). Output goes to a
+  //    FILE (not pipes tied to this short-lived setup process) so a
+  //    mid-suite crash is diagnosable and the child can't be killed by its
+  //    pipes going away. Detached: it must outlive the setup process and
+  //    keep serving for the whole suite.
   stage("starting API…");
   const apiLogFd = openSync(join(RUNTIME, "api.log"), "a");
-  const api = spawn(process.execPath, [API_DIST], {
-    cwd: join(REPO, "apps", "api"),
-    env: {
-      ...process.env,
-      NODE_ENV: "production",
-      OFFLINE_MODE: "1",
-      SLDT_SCHEMA_BOOTSTRAP: "1",
-      DATABASE_URL,
-      PORT: String(E2E_API_PORT),
-      LOCAL_JWT_SECRET: "e2e-".padEnd(64, "x"),
-      ENCRYPTION_KEY: "ab".repeat(32),
-      SLDT_STORAGE_DIR: STORAGE,
-      NOTIFICATIONS_PROVIDER: "stub",
-      // CORS: the API only trusts FRONTEND_URL + the Tauri origins; the test
-      // vite server lives on its own port and must be allowed explicitly.
-      FRONTEND_URL: `http://127.0.0.1:${E2E_WEB_PORT}`,
-    },
+  const api = spawn(process.execPath, ["--import", "tsx", join(API_DIR, "src", "index.ts")], {
+    cwd: API_DIR,
+    env: apiChildEnv(),
     stdio: ["ignore", apiLogFd, apiLogFd],
     detached: true,
   });
+  writeFileSync(PIDS_FILE, JSON.stringify({ api: api.pid }));
+
   const apiLog = () => {
     try {
       return readFileSync(join(RUNTIME, "api.log"), "utf8").slice(-4000);
@@ -145,42 +151,12 @@ export default async function globalSetup(): Promise<void> {
     }
   };
 
-  writeFileSync(PIDS, JSON.stringify({ api: api.pid }));
-
   stage("waiting for API health…");
   try {
-    await waitFor(`http://127.0.0.1:${E2E_API_PORT}/health`, 60_000, "E2E API");
+    await waitFor(API_HEALTH_URL, 60_000, "E2E API");
   } catch (e) {
     throw new Error(`${e instanceof Error ? e.message : e}\nAPI log:\n${apiLog()}`);
   }
-
-  // /health answers before the first-run bootstrap (schema + admin seed)
-  // finishes, so also wait until the seeded admin credential exists. Checked
-  // via psql, NOT /auth/login — the login endpoint is rate-limited to 5
-  // requests per window and the suite needs those for the real login tests.
-  stage("waiting for first-run seed…");
-  const seedDeadline = Date.now() + 60_000;
-  for (;;) {
-    try {
-      const out = execFileSync(
-        pgTool("psql"),
-        [
-          "-h", "127.0.0.1", "-p", String(E2E_PG_PORT), "-U", PG_USER, "-d", "stayvia",
-          "-tAc", "SELECT count(*) FROM local_credentials",
-        ],
-        { stdio: "pipe" },
-      )
-        .toString()
-        .trim();
-      if (Number(out) > 0) break;
-    } catch {
-      /* table not created yet */
-    }
-    if (Date.now() > seedDeadline) {
-      throw new Error(`first-run seed did not complete in time.\nAPI log:\n${apiLog()}`);
-    }
-    await new Promise((r) => setTimeout(r, 1000));
-  }
-  stage("stack ready");
+  stage(`stack ready (pg :${E2E_PG_PORT}, api :${E2E_API_PORT}, db ${DATABASE_URL})`);
   api.unref();
 }
