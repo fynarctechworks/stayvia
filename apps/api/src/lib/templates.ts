@@ -1,7 +1,11 @@
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { db } from "../db/client.js";
 import { messageTemplates, type TemplateKey } from "../db/schema/messageTemplates.js";
+import { env } from "../config/env.js";
 import { logger } from "./logger.js";
+// Static import — settings.ts pulls only db/schema, no cycle (same rationale
+// as notify.ts: dynamic import() breaks inside the pkg-bundled sidecar).
+import { getSettings } from "./settings.js";
 
 export interface TemplateDefault {
   subject?: string;
@@ -29,11 +33,11 @@ export const TEMPLATE_DEFAULTS: Record<TemplateKey, TemplateDefault> = {
   },
   payment_reminder_guest_sms: {
     body:
-      "🙏 Hello {guest_name},\n\nThis is a friendly reminder from {hotel} about a pending balance from your stay.\n\nAmount due: ₹{balance}\n\nWe'd appreciate it if you could settle this at your convenience. For any clarification, please reach us on {hotel_phone}.\n\nThank you,\n— {hotel}, Sabbavaram",
+      "🙏 Hello {guest_name},\n\nThis is a friendly reminder from {hotel} about a pending balance from your stay.\n\nAmount due: ₹{balance}\n\nWe'd appreciate it if you could settle this at your convenience. For any clarification, please reach us on {hotel_phone}.\n\nThank you,\n— {hotel}",
   },
   booking_advance_guest_sms: {
     body:
-      "🙏 Hello {guest_name},\n\nThank you for your booking with {hotel}.\n\nReservation: {reservation_number}\nCheck-in: {check_in_date}\nCheck-out: {check_out_date}\n\nAdvance received: ₹{advance_paid}\nBalance at check-in: ₹{balance}{receipt_block}\n\nWe look forward to hosting you.\n— {hotel}, Sabbavaram",
+      "🙏 Hello {guest_name},\n\nThank you for your booking with {hotel}.\n\nReservation: {reservation_number}\nCheck-in: {check_in_date}\nCheck-out: {check_out_date}\n\nAdvance received: ₹{advance_paid}\nBalance at check-in: ₹{balance}{receipt_block}\n\nWe look forward to hosting you.\n— {hotel}",
   },
   booking_advance_owner_sms: {
     body:
@@ -69,27 +73,46 @@ export const TEMPLATE_LABELS: Record<TemplateKey, { group: string; label: string
   review_prompt_guest_sms: { group: "Review prompt", label: "WhatsApp to guest (post-stay)", channel: "sms", recipient: "guest" },
 };
 
-const cache = new Map<TemplateKey, { subject?: string | null; body: string; enabled: boolean }>();
-let cacheLoadedAt = 0;
+// Per-property cache, keyed `${propertyId}:${templateKey}`. Load state is
+// tracked per property so hotel A's rows never serve (or clobber) hotel B's.
+const cache = new Map<string, { subject?: string | null; body: string; enabled: boolean }>();
+const cacheLoadedAt = new Map<string, number>();
 const TTL = 60_000;
 
-async function loadCache() {
-  if (cache.size > 0 && Date.now() - cacheLoadedAt < TTL) return;
-  cache.clear();
-  const rows = await db.select().from(messageTemplates);
+function cacheKey(propertyId: string, key: TemplateKey): string {
+  return `${propertyId}:${key}`;
+}
+
+async function loadCache(propertyId: string) {
+  const loadedAt = cacheLoadedAt.get(propertyId) ?? 0;
+  if (loadedAt > 0 && Date.now() - loadedAt < TTL) return;
+  for (const k of cache.keys()) {
+    if (k.startsWith(`${propertyId}:`)) cache.delete(k);
+  }
+  const rows = await db
+    .select()
+    .from(messageTemplates)
+    .where(eq(messageTemplates.propertyId, propertyId));
   for (const row of rows) {
-    cache.set(row.key as TemplateKey, {
+    cache.set(cacheKey(propertyId, row.key as TemplateKey), {
       subject: row.subject,
       body: row.body,
       enabled: row.enabled,
     });
   }
-  cacheLoadedAt = Date.now();
+  cacheLoadedAt.set(propertyId, Date.now());
 }
 
-export function invalidateTemplateCache() {
-  cache.clear();
-  cacheLoadedAt = 0;
+export function invalidateTemplateCache(propertyId?: string) {
+  if (!propertyId) {
+    cache.clear();
+    cacheLoadedAt.clear();
+    return;
+  }
+  for (const k of cache.keys()) {
+    if (k.startsWith(`${propertyId}:`)) cache.delete(k);
+  }
+  cacheLoadedAt.delete(propertyId);
 }
 
 function fillVars(text: string, vars: Record<string, string | number | null | undefined>): string {
@@ -107,27 +130,43 @@ export interface RenderResult {
 }
 
 export async function renderTemplate(
+  propertyId: string,
   key: TemplateKey,
   vars: Record<string, string | number | null | undefined>,
 ): Promise<RenderResult> {
   try {
-    await loadCache();
+    await loadCache(propertyId);
   } catch (err) {
     logger.warn({ err }, "template cache load failed; using defaults");
   }
-  const row = cache.get(key);
+  // The hotel display name/phone come from THIS property's settings row —
+  // env.HOTEL_DISPLAY_NAME is only the last-resort fallback when the row
+  // can't be loaded.
+  let merged = vars;
+  try {
+    const s = await getSettings(propertyId);
+    merged = {
+      ...vars,
+      hotel: s.hotelName || vars.hotel || env.HOTEL_DISPLAY_NAME,
+      hotel_phone: vars.hotel_phone ?? s.hotelPhone,
+    };
+  } catch (err) {
+    logger.warn({ err }, "settings lookup failed for template render");
+    merged = { ...vars, hotel: vars.hotel ?? env.HOTEL_DISPLAY_NAME };
+  }
+  const row = cache.get(cacheKey(propertyId, key));
   const def = TEMPLATE_DEFAULTS[key];
   const subjectTpl = row?.subject ?? def.subject;
   const bodyTpl = row?.body ?? def.body;
   const enabled = row?.enabled ?? true;
   return {
     enabled,
-    subject: subjectTpl ? fillVars(subjectTpl, vars) : undefined,
-    body: fillVars(bodyTpl, vars),
+    subject: subjectTpl ? fillVars(subjectTpl, merged) : undefined,
+    body: fillVars(bodyTpl, merged),
   };
 }
 
-export async function getAllTemplatesForUI(): Promise<
+export async function getAllTemplatesForUI(propertyId: string): Promise<
   {
     key: TemplateKey;
     group: string;
@@ -141,9 +180,9 @@ export async function getAllTemplatesForUI(): Promise<
     availableVars: readonly string[];
   }[]
 > {
-  await loadCache();
+  await loadCache(propertyId);
   return (Object.keys(TEMPLATE_DEFAULTS) as TemplateKey[]).map((key) => {
-    const row = cache.get(key);
+    const row = cache.get(cacheKey(propertyId, key));
     const def = TEMPLATE_DEFAULTS[key];
     const meta = TEMPLATE_LABELS[key];
     return {
@@ -162,11 +201,15 @@ export async function upsertTemplate(
   key: TemplateKey,
   patch: { subject?: string | null; body?: string; enabled?: boolean },
   // Templates are per hotel — the row created/updated belongs to the
-  // caller's tenant. TODO(phase-2.4): scope reads (loadCache/render) too.
+  // caller's tenant.
   propertyId: string,
 ): Promise<void> {
   // Try update first
-  const existing = await db.select().from(messageTemplates).where(eq(messageTemplates.key, key)).limit(1);
+  const scoped = and(
+    eq(messageTemplates.key, key),
+    eq(messageTemplates.propertyId, propertyId),
+  );
+  const existing = await db.select().from(messageTemplates).where(scoped).limit(1);
   if (existing.length > 0) {
     await db
       .update(messageTemplates)
@@ -176,7 +219,7 @@ export async function upsertTemplate(
         ...(patch.enabled !== undefined ? { enabled: patch.enabled } : {}),
         updatedAt: new Date(),
       })
-      .where(eq(messageTemplates.key, key));
+      .where(scoped);
   } else {
     const def = TEMPLATE_DEFAULTS[key];
     await db.insert(messageTemplates).values({
@@ -187,5 +230,5 @@ export async function upsertTemplate(
       enabled: patch.enabled ?? true,
     });
   }
-  invalidateTemplateCache();
+  invalidateTemplateCache(propertyId);
 }

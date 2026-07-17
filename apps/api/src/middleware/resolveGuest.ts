@@ -14,7 +14,7 @@
 // already decodes path params, so we usually see the literal "+".
 
 import type { NextFunction, Request, Response } from "express";
-import { desc, eq, sql } from "drizzle-orm";
+import { and, desc, eq, sql } from "drizzle-orm";
 import { db } from "../db/client.js";
 import { guestPhoneHistory, guests } from "../db/schema/guests.js";
 import { normalisePhone } from "../lib/phone.js";
@@ -68,23 +68,27 @@ export async function resolveGuestId(
   if (UUID_RE.test(raw)) return next();
 
   if (PHONE_RE.test(raw)) {
+    // Phones are unique per hotel (uq_guests_property_phone) — the same
+    // number can belong to different guests at different hotels, so both
+    // the cache key and every lookup carry the tenant.
     const normalised = normalisePhone(raw);
-    const cached = cacheGet(normalised);
+    const cacheKey = `${req.propertyId}:${normalised}`;
+    const cached = cacheGet(cacheKey);
     if (cached) {
       req.params.id = cached;
       return next();
     }
 
     // Primary lookup: live guests table, exact match. Fast — hits the
-    // unique index on guests.phone.
+    // per-property unique index on guests.phone.
     const live = await db
       .select({ id: guests.id })
       .from(guests)
-      .where(eq(guests.phone, normalised))
+      .where(and(eq(guests.phone, normalised), eq(guests.propertyId, req.propertyId)))
       .limit(1);
 
     if (live.length) {
-      cacheSet(normalised, live[0]!.id);
+      cacheSet(cacheKey, live[0]!.id);
       req.params.id = live[0]!.id;
       return next();
     }
@@ -92,16 +96,23 @@ export async function resolveGuestId(
     // Fallback 1: phone_history exact match. A guest who updated
     // their phone leaves their old number(s) here. Pick the row with
     // the latest valid_from so two guests who shared a number at
-    // different times resolve to the most recent owner.
+    // different times resolve to the most recent owner. History rows
+    // carry no property_id — join the guest row to scope by tenant.
     const historic = await db
       .select({ guestId: guestPhoneHistory.guestId })
       .from(guestPhoneHistory)
-      .where(eq(guestPhoneHistory.phone, normalised))
+      .innerJoin(guests, eq(guests.id, guestPhoneHistory.guestId))
+      .where(
+        and(
+          eq(guestPhoneHistory.phone, normalised),
+          eq(guests.propertyId, req.propertyId),
+        ),
+      )
       .orderBy(desc(guestPhoneHistory.validFrom))
       .limit(1);
 
     if (historic.length) {
-      cacheSet(normalised, historic[0]!.guestId);
+      cacheSet(cacheKey, historic[0]!.guestId);
       req.params.id = historic[0]!.guestId;
       return next();
     }
@@ -115,12 +126,15 @@ export async function resolveGuestId(
       .select({ id: guests.id })
       .from(guests)
       .where(
-        sql`regexp_replace(${guests.phone}, '[\\s\\-()]', '', 'g') = ${normalised}`,
+        and(
+          sql`regexp_replace(${guests.phone}, '[\\s\\-()]', '', 'g') = ${normalised}`,
+          eq(guests.propertyId, req.propertyId),
+        ),
       )
       .limit(1);
 
     if (tolerant.length) {
-      cacheSet(normalised, tolerant[0]!.id);
+      cacheSet(cacheKey, tolerant[0]!.id);
       req.params.id = tolerant[0]!.id;
       return next();
     }

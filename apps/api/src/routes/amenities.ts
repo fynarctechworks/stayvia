@@ -4,7 +4,7 @@
 // continue to maintain the boolean shadow for back-compat — see
 // rooms.ts. New consumers should prefer this route.
 
-import { and, asc, eq, inArray } from "drizzle-orm";
+import { and, asc, eq, inArray, isNull, or } from "drizzle-orm";
 import { Router } from "express";
 import multer from "multer";
 import { z } from "zod";
@@ -42,11 +42,18 @@ const upload = multer({
 
 // -------------------- Amenities catalog --------------------
 
-router.get("/amenities", requireAuth, async (_req, res) => {
+router.get("/amenities", requireAuth, async (req, res) => {
+  // Catalog = platform-shared rows (property_id NULL) + this hotel's
+  // custom rows. Never another tenant's customs.
   const rows = await db
     .select()
     .from(amenities)
-    .where(eq(amenities.isActive, true))
+    .where(
+      and(
+        eq(amenities.isActive, true),
+        or(isNull(amenities.propertyId), eq(amenities.propertyId, req.propertyId)),
+      ),
+    )
     .orderBy(asc(amenities.sortOrder), asc(amenities.label));
   return ok(res, rows);
 });
@@ -71,16 +78,35 @@ router.post(
   validate(amenityUpsertSchema),
   async (req, res) => {
     const input = req.body as z.infer<typeof amenityUpsertSchema>;
-    const [row] = await db.insert(amenities).values(input).onConflictDoUpdate({
-      target: amenities.key,
-      set: {
-        label: input.label,
-        icon: input.icon ?? null,
-        category: input.category,
-        isActive: input.isActive,
-        sortOrder: input.sortOrder,
-      },
-    }).returning();
+    // `key` is globally unique, so a blind upsert would let one tenant
+    // clobber the shared catalog or another hotel's custom row. Resolve
+    // the key first and only update rows owned by this property.
+    const [existing] = await db
+      .select({ id: amenities.id, propertyId: amenities.propertyId })
+      .from(amenities)
+      .where(eq(amenities.key, input.key))
+      .limit(1);
+    if (existing && existing.propertyId !== req.propertyId) {
+      return fail(res, 409, "KEY_TAKEN", "Amenity key is already in use");
+    }
+    if (existing) {
+      const [row] = await db
+        .update(amenities)
+        .set({
+          label: input.label,
+          icon: input.icon ?? null,
+          category: input.category,
+          isActive: input.isActive,
+          sortOrder: input.sortOrder,
+        })
+        .where(and(eq(amenities.id, existing.id), eq(amenities.propertyId, req.propertyId)))
+        .returning();
+      return ok(res, row);
+    }
+    const [row] = await db
+      .insert(amenities)
+      .values({ ...input, propertyId: req.propertyId })
+      .returning();
     return ok(res, row);
   },
 );
@@ -93,6 +119,12 @@ router.get(
   requirePermission("view_rooms"),
   async (req, res) => {
     const roomId = req.params.roomId!;
+    const [exists] = await db
+      .select({ id: rooms.id })
+      .from(rooms)
+      .where(and(eq(rooms.id, roomId), eq(rooms.propertyId, req.propertyId)))
+      .limit(1);
+    if (!exists) return fail(res, 404, "NOT_FOUND", "Room not found");
     const rows = await db
       .select({
         id: amenities.id,
@@ -126,17 +158,24 @@ router.put(
     const [exists] = await db
       .select({ id: rooms.id })
       .from(rooms)
-      .where(eq(rooms.id, roomId))
+      .where(and(eq(rooms.id, roomId), eq(rooms.propertyId, req.propertyId)))
       .limit(1);
     if (!exists) return fail(res, 404, "NOT_FOUND", "Room not found");
 
     // Validate every amenityId resolves to an active row before writing.
-    // Saves a useless FK round-trip and gives a clearer error.
+    // Saves a useless FK round-trip and gives a clearer error. Only the
+    // shared catalog (property_id NULL) or this hotel's own rows count.
     if (amenityIds.length) {
       const found = await db
         .select({ id: amenities.id })
         .from(amenities)
-        .where(and(inArray(amenities.id, amenityIds), eq(amenities.isActive, true)));
+        .where(
+          and(
+            inArray(amenities.id, amenityIds),
+            eq(amenities.isActive, true),
+            or(isNull(amenities.propertyId), eq(amenities.propertyId, req.propertyId)),
+          ),
+        );
       if (found.length !== amenityIds.length) {
         return fail(res, 400, "INVALID_AMENITIES", "One or more amenity ids are unknown or inactive");
       }
@@ -152,6 +191,7 @@ router.put(
     });
 
     await logActivity({
+      propertyId: req.propertyId,
       action: "room_amenities_updated",
       entityType: "room",
       entityId: roomId,
@@ -159,7 +199,7 @@ router.put(
       performedBy: req.user!.id,
       ipAddress: req.ip,
     });
-    await invalidateDashboard();
+    await invalidateDashboard(req.propertyId);
     return ok(res, { count: amenityIds.length });
   },
 );
@@ -172,6 +212,12 @@ router.get(
   requirePermission("view_rooms"),
   async (req, res) => {
     const roomId = req.params.roomId!;
+    const [exists] = await db
+      .select({ id: rooms.id })
+      .from(rooms)
+      .where(and(eq(rooms.id, roomId), eq(rooms.propertyId, req.propertyId)))
+      .limit(1);
+    if (!exists) return fail(res, 404, "NOT_FOUND", "Room not found");
     const rows = await db
       .select()
       .from(roomImages)
@@ -195,7 +241,7 @@ router.post(
     const [exists] = await db
       .select({ id: rooms.id })
       .from(rooms)
-      .where(eq(rooms.id, roomId))
+      .where(and(eq(rooms.id, roomId), eq(rooms.propertyId, req.propertyId)))
       .limit(1);
     if (!exists) return fail(res, 404, "NOT_FOUND", "Room not found");
 
@@ -205,7 +251,7 @@ router.post(
     const inserted = await Promise.all(
       files.map(async (f) => {
         const path = `rooms/${roomId}/${Date.now()}-${safeName(f.originalname)}`;
-        const url = await uploadPublicFile(path, f.buffer, f.mimetype);
+        const url = await uploadPublicFile(req.propertyId, path, f.buffer, f.mimetype);
         if (!url) {
           throw new Error("Failed to upload room image to storage");
         }
@@ -223,6 +269,7 @@ router.post(
     );
 
     await logActivity({
+      propertyId: req.propertyId,
       action: "room_images_added",
       entityType: "room",
       entityId: roomId,
@@ -247,6 +294,12 @@ router.patch(
   validate(imageUpdateSchema),
   async (req, res) => {
     const { roomId, imageId } = req.params as { roomId: string; imageId: string };
+    const [exists] = await db
+      .select({ id: rooms.id })
+      .from(rooms)
+      .where(and(eq(rooms.id, roomId), eq(rooms.propertyId, req.propertyId)))
+      .limit(1);
+    if (!exists) return fail(res, 404, "NOT_FOUND", "Room not found");
     const input = req.body as z.infer<typeof imageUpdateSchema>;
     const patch: Record<string, unknown> = {};
     if (input.caption !== undefined) patch.caption = input.caption;
@@ -282,6 +335,12 @@ router.delete(
   requirePermission("edit_rooms"),
   async (req, res) => {
     const { roomId, imageId } = req.params as { roomId: string; imageId: string };
+    const [exists] = await db
+      .select({ id: rooms.id })
+      .from(rooms)
+      .where(and(eq(rooms.id, roomId), eq(rooms.propertyId, req.propertyId)))
+      .limit(1);
+    if (!exists) return fail(res, 404, "NOT_FOUND", "Room not found");
     const [deleted] = await db
       .delete(roomImages)
       .where(and(eq(roomImages.id, imageId), eq(roomImages.roomId, roomId)))

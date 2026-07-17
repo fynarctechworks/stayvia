@@ -65,13 +65,19 @@ export const redis: RestCache = REDIS_ENABLED
   : localRest;
 
 const DASHBOARD_CHANNEL = "dashboard:invalidate";
-const DASHBOARD_KEY = "dashboard:data";
 const SETTINGS_CHANNEL = "settings:invalidate";
 
-export async function invalidateDashboard() {
+// Per-property dashboard cache key — hotel A's payload can never be served
+// to hotel B.
+export function dashboardKey(propertyId: string): string {
+  return `dashboard:data:${propertyId}`;
+}
+
+export async function invalidateDashboard(propertyId: string) {
   try {
-    await redis.del(DASHBOARD_KEY);
-    await pubClient?.publish(DASHBOARD_CHANNEL, "invalidate");
+    await redis.del(dashboardKey(propertyId));
+    // The message carries the property id so subscribers bust only that key.
+    await pubClient?.publish(DASHBOARD_CHANNEL, propertyId);
   } catch (err) {
     logger.debug({ err: err instanceof Error ? err.message : err }, "dashboard cache invalidation skipped");
   }
@@ -80,14 +86,14 @@ export async function invalidateDashboard() {
 // Broadcasts a settings-cache bust to every API instance. The local cache is
 // cleared via the subscriber on each instance (including this one). Without
 // Redis (single instance) there are no other instances, and we clear directly.
-export async function publishSettingsInvalidation() {
+export async function publishSettingsInvalidation(propertyId: string) {
   if (!REDIS_ENABLED) {
     // No fan-out needed for a single process; clear our own settings cache now.
-    invalidateSettings();
+    invalidateSettings(propertyId);
     return;
   }
   try {
-    await pubClient?.publish(SETTINGS_CHANNEL, "invalidate");
+    await pubClient?.publish(SETTINGS_CHANNEL, propertyId);
   } catch (err) {
     logger.debug(
       { err: err instanceof Error ? err.message : err },
@@ -135,11 +141,12 @@ export async function startDashboardSubscriber() {
     await subClient.connect();
     await pubClient.connect();
     await subClient.subscribe(DASHBOARD_CHANNEL, SETTINGS_CHANNEL);
-    subClient.on("message", async (channel: string) => {
+    subClient.on("message", async (channel: string, message: string) => {
+      // The message is the property id whose cache should be busted.
       if (channel === DASHBOARD_CHANNEL) {
-        await redis.del(DASHBOARD_KEY);
+        if (message) await redis.del(dashboardKey(message));
       } else if (channel === SETTINGS_CHANNEL) {
-        invalidateSettings();
+        invalidateSettings(message || undefined);
       }
     });
     logger.info("Dashboard + settings pub/sub subscriber started");
@@ -150,5 +157,3 @@ export async function startDashboardSubscriber() {
     );
   }
 }
-
-export const dashboardKey = DASHBOARD_KEY;

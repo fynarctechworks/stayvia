@@ -7,7 +7,7 @@
 // stay valid until the row is deleted.
 
 import type { NextFunction, Request, Response } from "express";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { db } from "../db/client.js";
 import { rooms } from "../db/schema/rooms.js";
 import { fail } from "../lib/response.js";
@@ -62,7 +62,9 @@ export async function resolveRoomId(
   // Distinguish room-number from anything bogus. UUIDs were caught
   // above; UUIDs ALSO match the alphanumeric pattern, hence the order.
   if (ROOM_NUMBER_RE.test(raw)) {
-    const key = raw;
+    // Room numbers are per-hotel ("101" exists everywhere) — scope the
+    // lookup and the cache by tenant.
+    const key = `${req.propertyId}:${raw}`;
     const cached = cacheGet(key);
     if (cached) {
       req.params.id = cached;
@@ -72,7 +74,7 @@ export async function resolveRoomId(
     const r = await db
       .select({ id: rooms.id })
       .from(rooms)
-      .where(eq(rooms.roomNumber, key))
+      .where(and(eq(rooms.roomNumber, raw), eq(rooms.propertyId, req.propertyId)))
       .limit(1);
 
     if (!r.length) {

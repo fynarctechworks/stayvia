@@ -21,7 +21,7 @@ import { validate } from "../middleware/validate.js";
 
 const router = Router();
 
-async function loadIssueDetail(issueId: string) {
+async function loadIssueDetail(issueId: string, propertyId: string) {
   const rows = await db
     .select({
       issue: maintenanceIssues,
@@ -34,7 +34,12 @@ async function loadIssueDetail(issueId: string) {
     })
     .from(maintenanceIssues)
     .innerJoin(rooms, eq(rooms.id, maintenanceIssues.roomId))
-    .where(eq(maintenanceIssues.id, issueId))
+    .where(
+      and(
+        eq(maintenanceIssues.id, issueId),
+        eq(maintenanceIssues.propertyId, propertyId),
+      ),
+    )
     .limit(1);
   if (!rows.length) return null;
   const { issue, room } = rows[0]!;
@@ -98,7 +103,7 @@ router.get(
       per_page,
     } = parsed;
 
-    const conditions = [];
+    const conditions = [eq(maintenanceIssues.propertyId, req.propertyId)];
     if (status) conditions.push(eq(maintenanceIssues.status, status));
     if (statuses) {
       const stList = statuses
@@ -123,7 +128,7 @@ router.get(
       );
     }
 
-    const where = conditions.length ? and(...conditions) : undefined;
+    const where = and(...conditions);
     const offset = (page - 1) * per_page;
 
     const severityOrder = sql`CASE ${maintenanceIssues.severity}
@@ -174,7 +179,7 @@ router.get(
   requirePermission("view_maintenance"),
   async (req, res) => {
     const id = req.params.id!;
-    const detail = await loadIssueDetail(id);
+    const detail = await loadIssueDetail(id, req.propertyId);
     if (!detail) return fail(res, 404, "NOT_FOUND", "Issue not found");
     return ok(res, detail);
   },
@@ -188,6 +193,13 @@ router.post(
   async (req, res) => {
     const input = req.body as import("@stayvia/shared").MaintenanceCreateInput;
     const propertyId = req.propertyId;
+
+    const [room] = await db
+      .select({ id: rooms.id })
+      .from(rooms)
+      .where(and(eq(rooms.id, input.roomId), eq(rooms.propertyId, propertyId)))
+      .limit(1);
+    if (!room) return fail(res, 404, "NOT_FOUND", "Room not found");
 
     const [created] = await db
       .insert(maintenanceIssues)
@@ -204,6 +216,7 @@ router.post(
       .returning();
 
     await logActivity({
+      propertyId: req.propertyId,
       action: "maintenance_issue_created",
       entityType: "maintenance_issue",
       entityId: created!.id,
@@ -212,7 +225,7 @@ router.post(
       ipAddress: req.ip,
     });
 
-    const detail = await loadIssueDetail(created!.id);
+    const detail = await loadIssueDetail(created!.id, propertyId);
     return ok(res, detail, 201);
   },
 );
@@ -229,9 +242,28 @@ router.patch(
     const [before] = await db
       .select()
       .from(maintenanceIssues)
-      .where(eq(maintenanceIssues.id, id))
+      .where(
+        and(
+          eq(maintenanceIssues.id, id),
+          eq(maintenanceIssues.propertyId, req.propertyId),
+        ),
+      )
       .limit(1);
     if (!before) return fail(res, 404, "NOT_FOUND", "Issue not found");
+
+    if (input.assignedTo) {
+      const [assignee] = await db
+        .select({ id: profiles.id })
+        .from(profiles)
+        .where(
+          and(
+            eq(profiles.id, input.assignedTo),
+            eq(profiles.propertyId, req.propertyId),
+          ),
+        )
+        .limit(1);
+      if (!assignee) return fail(res, 404, "NOT_FOUND", "Assignee not found");
+    }
 
     const flippingToResolved =
       input.status === "resolved" && before.status !== "resolved";
@@ -271,9 +303,15 @@ router.patch(
     await db
       .update(maintenanceIssues)
       .set(patch)
-      .where(eq(maintenanceIssues.id, id));
+      .where(
+        and(
+          eq(maintenanceIssues.id, id),
+          eq(maintenanceIssues.propertyId, req.propertyId),
+        ),
+      );
 
     await logActivity({
+      propertyId: req.propertyId,
       action: "maintenance_issue_updated",
       entityType: "maintenance_issue",
       entityId: id,
@@ -282,7 +320,7 @@ router.patch(
       ipAddress: req.ip,
     });
 
-    const detail = await loadIssueDetail(id);
+    const detail = await loadIssueDetail(id, req.propertyId);
     return ok(res, detail);
   },
 );
@@ -299,7 +337,12 @@ router.post(
     const [exists] = await db
       .select({ id: maintenanceIssues.id })
       .from(maintenanceIssues)
-      .where(eq(maintenanceIssues.id, id))
+      .where(
+        and(
+          eq(maintenanceIssues.id, id),
+          eq(maintenanceIssues.propertyId, req.propertyId),
+        ),
+      )
       .limit(1);
     if (!exists) return fail(res, 404, "NOT_FOUND", "Issue not found");
 
@@ -315,7 +358,12 @@ router.post(
     await db
       .update(maintenanceIssues)
       .set({ updatedAt: new Date() })
-      .where(eq(maintenanceIssues.id, id));
+      .where(
+        and(
+          eq(maintenanceIssues.id, id),
+          eq(maintenanceIssues.propertyId, req.propertyId),
+        ),
+      );
 
     return ok(res, created, 201);
   },

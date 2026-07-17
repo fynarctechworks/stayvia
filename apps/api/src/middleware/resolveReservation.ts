@@ -12,7 +12,7 @@
 // row through a back-channel.
 
 import type { NextFunction, Request, Response } from "express";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { db } from "../db/client.js";
 import { reservations } from "../db/schema/reservations.js";
 import { fail } from "../lib/response.js";
@@ -74,9 +74,11 @@ export async function resolveReservationId(
   // wrong. Avoiding the extra query on the common path matters.
   if (UUID_RE.test(raw)) return next();
 
-  // Recognised reservation-number shape. Resolve to UUID.
+  // Recognised reservation-number shape. Resolve to UUID. Numbers are
+  // per-hotel, so both the lookup and the cache key carry the tenant —
+  // hotel B's RES-0005 can never resolve to hotel A's row.
   if (RES_NUMBER_RE.test(raw)) {
-    const key = raw.toUpperCase();
+    const key = `${req.propertyId}:${raw.toUpperCase()}`;
     const cached = cacheGet(key);
     if (cached) {
       req.params.id = cached;
@@ -86,7 +88,12 @@ export async function resolveReservationId(
     const rows = await db
       .select({ id: reservations.id })
       .from(reservations)
-      .where(eq(reservations.reservationNumber, key))
+      .where(
+        and(
+          eq(reservations.reservationNumber, raw.toUpperCase()),
+          eq(reservations.propertyId, req.propertyId),
+        ),
+      )
       .limit(1);
 
     if (!rows.length) {

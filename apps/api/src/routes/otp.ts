@@ -6,6 +6,7 @@ import { db } from "../db/client.js";
 import { guests, otps, reservations } from "../db/schema/index.js";
 import { logger } from "../lib/logger.js";
 import { messaging } from "../lib/messaging.js";
+import { hotelDisplayName } from "../lib/notify.js";
 import { expiresAt, generateOtp, hashOtp, maskTarget } from "../lib/otp.js";
 import { normalisePhone } from "../lib/phone.js";
 import { renderTemplate } from "../lib/templates.js";
@@ -49,21 +50,21 @@ router.post("/send", requireAuth, validate(sendSchema), async (req, res) => {
     const [r] = await db
       .select()
       .from(reservations)
-      .where(eq(reservations.id, reservationId))
+      .where(and(eq(reservations.id, reservationId), eq(reservations.propertyId, req.propertyId)))
       .limit(1);
     if (!r) return fail(res, 404, "NOT_FOUND", "Reservation not found");
     resvId = r.id;
     const [foundGuest] = await db
       .select()
       .from(guests)
-      .where(eq(guests.id, r.guestId))
+      .where(and(eq(guests.id, r.guestId), eq(guests.propertyId, req.propertyId)))
       .limit(1);
     g = foundGuest;
   } else if (guestId) {
     const [foundGuest] = await db
       .select()
       .from(guests)
-      .where(eq(guests.id, guestId))
+      .where(and(eq(guests.id, guestId), eq(guests.propertyId, req.propertyId)))
       .limit(1);
     g = foundGuest;
   }
@@ -88,6 +89,7 @@ router.post("/send", requireAuth, validate(sendSchema), async (req, res) => {
     .from(otps)
     .where(
       and(
+        eq(otps.propertyId, req.propertyId),
         eq(otps.target, target),
         eq(otps.purpose, "checkin"),
         gt(otps.createdAt, sql`now() - interval '1 minute'`),
@@ -104,6 +106,7 @@ router.post("/send", requireAuth, validate(sendSchema), async (req, res) => {
     .from(otps)
     .where(
       and(
+        eq(otps.propertyId, req.propertyId),
         eq(otps.target, target),
         eq(otps.purpose, "checkin"),
         gt(otps.createdAt, sql`now() - interval '24 hours'`),
@@ -131,6 +134,7 @@ router.post("/send", requireAuth, validate(sendSchema), async (req, res) => {
     .from(otps)
     .where(
       and(
+        eq(otps.propertyId, req.propertyId),
         eq(otps.ipAddress, clientIp),
         gt(otps.createdAt, sql`now() - interval '1 hour'`),
       ),
@@ -149,6 +153,7 @@ router.post("/send", requireAuth, validate(sendSchema), async (req, res) => {
   const [row] = await db
     .insert(otps)
     .values({
+      propertyId: req.propertyId,
       purpose: "checkin",
       channel,
       target,
@@ -163,19 +168,18 @@ router.post("/send", requireAuth, validate(sendSchema), async (req, res) => {
     .returning({ id: otps.id });
 
   const otpVars = {
-    hotel: env.HOTEL_DISPLAY_NAME,
     otp_code: code,
     otp_minutes: Math.floor(env.OTP_TTL_SECONDS / 60),
   };
   if (channel === "sms") {
-    const t = await renderTemplate("otp_guest_sms", otpVars);
+    const t = await renderTemplate(req.propertyId, "otp_guest_sms", otpVars);
     await messaging.sendSms({ to: target, text: t.body });
   } else {
     // Email OTP uses the same body template since there's no separate email template for OTP
-    const t = await renderTemplate("otp_guest_sms", otpVars);
+    const t = await renderTemplate(req.propertyId, "otp_guest_sms", otpVars);
     await messaging.sendEmail({
       to: target,
-      subject: `${env.HOTEL_DISPLAY_NAME} check-in code: ${code}`,
+      subject: `${await hotelDisplayName(req.propertyId)} check-in code: ${code}`,
       text: t.body,
     });
   }
@@ -221,12 +225,14 @@ router.post("/verify", requireAuth, validate(verifySchema), async (req, res) => 
   // Look up the most recent non-consumed OTP by the anchor used at send.
   const whereClause = reservationId
     ? and(
+        eq(otps.propertyId, req.propertyId),
         eq(otps.reservationId, reservationId),
         eq(otps.purpose, "checkin"),
         isNull(otps.consumedAt),
       )
     : guestId
       ? and(
+          eq(otps.propertyId, req.propertyId),
           eq(otps.guestId, guestId),
           // In guest-only mode there's no reservation yet, so the row must
           // not be linked to one. This stops a code intended for a different
@@ -238,6 +244,7 @@ router.post("/verify", requireAuth, validate(verifySchema), async (req, res) => 
       : and(
           // Phone-anchored: no guest row exists yet either — match by the
           // send target with both anchors empty.
+          eq(otps.propertyId, req.propertyId),
           eq(otps.target, normalisePhone(phone!)),
           isNull(otps.reservationId),
           isNull(otps.guestId),
@@ -271,7 +278,10 @@ router.post("/verify", requireAuth, validate(verifySchema), async (req, res) => 
   }
 
   if (row.codeHash !== hashOtp(code)) {
-    await db.update(otps).set({ attempts: row.attempts + 1 }).where(eq(otps.id, row.id));
+    await db
+      .update(otps)
+      .set({ attempts: row.attempts + 1 })
+      .where(and(eq(otps.id, row.id), eq(otps.propertyId, req.propertyId)));
     logger.warn(
       { ...anchorLog, ip: clientIp, attempts: row.attempts + 1, reason: "wrong_code" },
       "OTP verify failed",
@@ -284,7 +294,10 @@ router.post("/verify", requireAuth, validate(verifySchema), async (req, res) => 
   // OTP itself and mark it consumed in the same transaction so a verified
   // OTP can't be replayed against a different payload.
   if (reservationId) {
-    await db.update(otps).set({ consumedAt: new Date() }).where(eq(otps.id, row.id));
+    await db
+      .update(otps)
+      .set({ consumedAt: new Date() })
+      .where(and(eq(otps.id, row.id), eq(otps.propertyId, req.propertyId)));
   }
 
   return ok(res, {

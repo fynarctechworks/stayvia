@@ -9,7 +9,7 @@
 // onboarding is a Phase 4 feature with billing implications; until
 // then there's exactly one row (PRIMARY) and the API enforces it.
 
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { Router } from "express";
 import { z } from "zod";
 import { db } from "../db/client.js";
@@ -30,8 +30,11 @@ router.get("/me", requireAuth, async (req, res) => {
   return ok(res, row);
 });
 
-router.get("/", requireAuth, requirePermission("manage_settings"), async (_req, res) => {
-  const rows = await db.select().from(properties);
+router.get("/", requireAuth, requirePermission("manage_settings"), async (req, res) => {
+  const rows = await db
+    .select()
+    .from(properties)
+    .where(eq(properties.id, req.propertyId));
   return ok(res, rows);
 });
 
@@ -78,7 +81,7 @@ router.patch(
         longitude: patch.longitude == null ? null : String(patch.longitude),
         updatedAt: new Date(),
       })
-      .where(eq(properties.id, id))
+      .where(and(eq(properties.id, id), eq(properties.id, req.propertyId)))
       .returning();
     if (!updated) return fail(res, 404, "NOT_FOUND", "Property not found");
     return ok(res, updated);

@@ -15,7 +15,7 @@ router.get(
   "/guests",
   requireAuth,
   requirePermission("view_revenue"),
-  async (_req, res) => {
+  async (req, res) => {
     const rows = await db.execute<{
       guest_id: string;
       full_name: string;
@@ -40,7 +40,9 @@ router.get(
         MAX(gl.created_at)::text AS last_activity_at,
         COUNT(gl.id)::int        AS entry_count
       FROM guests g
-      INNER JOIN guest_ledger gl ON gl.guest_id = g.id
+      INNER JOIN guest_ledger gl
+        ON gl.guest_id = g.id AND gl.property_id = ${req.propertyId}
+      WHERE g.property_id = ${req.propertyId}
       GROUP BY g.id, g.full_name, g.phone, g.email
       HAVING COALESCE(SUM(
         CASE

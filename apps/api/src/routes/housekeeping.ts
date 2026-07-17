@@ -32,13 +32,13 @@ const notesUpdate = z.object({
 
 router.get("/", requireAuth, async (req, res) => {
   const { floor, status } = req.query as Record<string, string | undefined>;
-  const conditions = [];
+  const conditions = [eq(rooms.propertyId, req.propertyId)];
   if (floor !== undefined) conditions.push(eq(rooms.floor, Number(floor)));
   if (status) conditions.push(eq(rooms.status, status as never));
   const rows = await db
     .select()
     .from(rooms)
-    .where(conditions.length ? and(...conditions) : undefined)
+    .where(and(...conditions))
     .orderBy(rooms.floor, rooms.roomNumber);
 
   // Per-room open-issue counts so the housekeeping card can render a
@@ -80,7 +80,11 @@ router.patch("/:roomId", requireAuth, validate(statusUpdate), async (req, res) =
     reason?: string;
   };
 
-  const current = await db.select().from(rooms).where(eq(rooms.id, roomId)).limit(1);
+  const current = await db
+    .select()
+    .from(rooms)
+    .where(and(eq(rooms.id, roomId), eq(rooms.propertyId, req.propertyId)))
+    .limit(1);
   if (!current.length) return fail(res, 404, "NOT_FOUND", "Room not found");
   const room = current[0]!;
 
@@ -108,10 +112,11 @@ router.patch("/:roomId", requireAuth, validate(statusUpdate), async (req, res) =
   const [updated] = await db
     .update(rooms)
     .set({ status: status as never, updatedAt: new Date() })
-    .where(eq(rooms.id, roomId))
+    .where(and(eq(rooms.id, roomId), eq(rooms.propertyId, req.propertyId)))
     .returning();
 
   await logActivity({
+    propertyId: req.propertyId,
     action: "housekeeping_update",
     entityType: "room",
     entityId: roomId,
@@ -119,7 +124,7 @@ router.patch("/:roomId", requireAuth, validate(statusUpdate), async (req, res) =
     performedBy: req.user!.id,
     ipAddress: req.ip,
   });
-  await invalidateDashboard();
+  await invalidateDashboard(req.propertyId);
   return ok(res, updated);
 });
 
@@ -134,11 +139,12 @@ router.post(
     const [updated] = await db
       .update(rooms)
       .set({ status: "maintenance", notes: reason, updatedAt: new Date() })
-      .where(eq(rooms.id, roomId))
+      .where(and(eq(rooms.id, roomId), eq(rooms.propertyId, req.propertyId)))
       .returning();
     if (!updated) return fail(res, 404, "NOT_FOUND", "Room not found");
 
     await logActivity({
+      propertyId: req.propertyId,
       action: "maintenance_flagged",
       entityType: "room",
       entityId: roomId,
@@ -146,7 +152,7 @@ router.post(
       performedBy: req.user!.id,
       ipAddress: req.ip,
     });
-    await invalidateDashboard();
+    await invalidateDashboard(req.propertyId);
     return ok(res, updated);
   },
 );
@@ -159,11 +165,12 @@ router.patch("/:roomId/notes", requireAuth, validate(notesUpdate), async (req, r
   const [updated] = await db
     .update(rooms)
     .set({ notes: trimmed, updatedAt: new Date() })
-    .where(eq(rooms.id, roomId))
+    .where(and(eq(rooms.id, roomId), eq(rooms.propertyId, req.propertyId)))
     .returning();
   if (!updated) return fail(res, 404, "NOT_FOUND", "Room not found");
 
   await logActivity({
+    propertyId: req.propertyId,
     action: trimmed ? "room_note_updated" : "room_note_cleared",
     entityType: "room",
     entityId: roomId,
@@ -173,7 +180,7 @@ router.patch("/:roomId/notes", requireAuth, validate(notesUpdate), async (req, r
     performedBy: req.user!.id,
     ipAddress: req.ip,
   });
-  await invalidateDashboard();
+  await invalidateDashboard(req.propertyId);
   return ok(res, updated);
 });
 
@@ -182,11 +189,12 @@ router.post("/:roomId/resolve", requireAuth, requirePermission("resolve_maintena
   const [updated] = await db
     .update(rooms)
     .set({ status: "dirty", updatedAt: new Date() })
-    .where(eq(rooms.id, roomId))
+    .where(and(eq(rooms.id, roomId), eq(rooms.propertyId, req.propertyId)))
     .returning();
   if (!updated) return fail(res, 404, "NOT_FOUND", "Room not found");
 
   await logActivity({
+    propertyId: req.propertyId,
     action: "maintenance_resolved",
     entityType: "room",
     entityId: roomId,
@@ -194,7 +202,7 @@ router.post("/:roomId/resolve", requireAuth, requirePermission("resolve_maintena
     performedBy: req.user!.id,
     ipAddress: req.ip,
   });
-  await invalidateDashboard();
+  await invalidateDashboard(req.propertyId);
   return ok(res, updated);
 });
 

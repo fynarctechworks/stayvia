@@ -14,6 +14,7 @@ import {
   recordSuccess,
 } from "../lib/loginLockout.js";
 import { messaging } from "../lib/messaging.js";
+import { hotelDisplayName } from "../lib/notify.js";
 import { expiresAt, generateOtp, hashOtp, maskTarget } from "../lib/otp.js";
 import { supabaseAdmin } from "../lib/supabase.js";
 import { fail, ok } from "../lib/response.js";
@@ -193,6 +194,7 @@ router.put("/me", requireAuth, validate(meUpdateSchema), async (req, res) => {
   if (input.phone !== undefined) changes.push("phone");
 
   await logActivity({
+    propertyId: req.propertyId,
     action: "profile_self_updated",
     entityType: "profile",
     entityId: id,
@@ -281,6 +283,7 @@ router.post(
       .from(otps)
       .where(
         and(
+          eq(otps.propertyId, req.propertyId),
           eq(otps.target, phone),
           eq(otps.purpose, "password_change"),
           gt(otps.createdAt, sql`now() - interval '1 minute'`),
@@ -296,6 +299,7 @@ router.post(
       .from(otps)
       .where(
         and(
+          eq(otps.propertyId, req.propertyId),
           eq(otps.target, phone),
           eq(otps.purpose, "password_change"),
           gt(otps.createdAt, sql`now() - interval '24 hours'`),
@@ -312,6 +316,7 @@ router.post(
 
     const code = generateOtp();
     await db.insert(otps).values({
+      propertyId: req.propertyId,
       purpose: "password_change",
       channel: "sms",
       target: phone,
@@ -323,7 +328,8 @@ router.post(
     });
 
     const minutes = Math.floor(env.OTP_TTL_SECONDS / 60);
-    const text = `${env.HOTEL_DISPLAY_NAME}: Your password change code is ${code}. Valid for ${minutes} minutes. Do not share this code.`;
+    const hotel = await hotelDisplayName(req.propertyId);
+    const text = `${hotel}: Your password change code is ${code}. Valid for ${minutes} minutes. Do not share this code.`;
     const sendResult = await messaging.sendSms({ to: phone, text });
     if (!sendResult.ok && env.NOTIFICATIONS_PROVIDER === "live") {
       logger.warn({ userId, error: sendResult.error }, "password-change OTP send failed");
@@ -396,6 +402,7 @@ router.post(
       .from(otps)
       .where(
         and(
+          eq(otps.propertyId, req.propertyId),
           eq(otps.target, phone),
           eq(otps.purpose, "password_change"),
           isNull(otps.consumedAt),
@@ -427,6 +434,7 @@ router.post(
     await db.update(otps).set({ consumedAt: new Date() }).where(eq(otps.id, otpRow.id));
 
     await logActivity({
+      propertyId: req.propertyId,
       action: "password_changed",
       entityType: "profile",
       entityId: userId,

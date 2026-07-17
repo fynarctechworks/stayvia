@@ -8,7 +8,6 @@ import { guests } from "../db/schema/guests.js";
 import { invoices, payments } from "../db/schema/invoices.js";
 import { reservationRooms, reservations } from "../db/schema/reservations.js";
 import { rooms } from "../db/schema/rooms.js";
-import { env } from "../config/env.js";
 import { logActivity } from "../lib/activity.js";
 import { messaging } from "../lib/messaging.js";
 import { fail, ok } from "../lib/response.js";
@@ -36,13 +35,20 @@ function rangeDefaults(req: { query: Record<string, string | undefined> }) {
 
 router.get("/occupancy", requireAuth, requirePermission("view_reports"), async (req, res) => {
   const { from, to, fromStr, toStr } = rangeDefaults(req as never);
-  const totalRooms = (await db.select({ c: sql<number>`count(*)::int` }).from(rooms))[0]!.c;
+  const propertyId = req.propertyId;
+  const totalRooms = (
+    await db
+      .select({ c: sql<number>`count(*)::int` })
+      .from(rooms)
+      .where(eq(rooms.propertyId, propertyId))
+  )[0]!.c;
 
   const rows = await db.execute<{ day: string; occupied: number }>(sql`
     SELECT gs::date::text as day,
       (SELECT count(*)::int FROM ${reservationRooms} rr
        INNER JOIN ${reservations} r ON r.id = rr.reservation_id
-       WHERE r.check_in_date <= gs AND r.check_out_date > gs
+       WHERE r.property_id = ${propertyId}
+       AND r.check_in_date <= gs AND r.check_out_date > gs
        AND r.status IN ('checked_in','checked_out','confirmed')
        AND r.booking_source <> 'complimentary') as occupied
     FROM generate_series(${fromStr}::date, ${toStr}::date, '1 day') gs
@@ -69,6 +75,7 @@ router.get("/occupancy", requireAuth, requirePermission("view_reports"), async (
 // so the UI can offer a detailed CSV export.
 router.get("/daily-ledger", requireAuth, requirePermission("view_reports"), async (req, res) => {
   const { from, to, fromStr, toStr } = rangeDefaults(req as never);
+  const propertyId = req.propertyId;
 
   // One row per occupied room-night. Half-open [check_in, check_out)
   // matches the billing convention (checkout day isn't a sold night);
@@ -90,7 +97,8 @@ router.get("/daily-ledger", requireAuth, requirePermission("view_reports"), asyn
            r.booking_source
     FROM generate_series(${fromStr}::date, ${toStr}::date, '1 day') gs
     JOIN ${reservations} r
-      ON r.status IN ('checked_in','checked_out','confirmed')
+      ON r.property_id = ${propertyId}
+     AND r.status IN ('checked_in','checked_out','confirmed')
      AND (
        (r.stay_type = 'overnight' AND r.check_in_date <= gs AND r.check_out_date > gs)
        OR (r.stay_type = 'short_stay' AND r.check_in_date = gs)
@@ -112,7 +120,8 @@ router.get("/daily-ledger", requireAuth, requirePermission("view_reports"), asyn
     SELECT DATE(p.payment_date AT TIME ZONE 'Asia/Kolkata')::text AS day,
            COALESCE(SUM(p.amount),0)::text AS total
     FROM ${payments} p
-    WHERE p.payment_date >= ${from.toISOString()} AND p.payment_date <= ${to.toISOString()}
+    WHERE p.property_id = ${propertyId}
+      AND p.payment_date >= ${from.toISOString()} AND p.payment_date <= ${to.toISOString()}
       AND p.voided = false AND p.status = 'received'
     GROUP BY DATE(p.payment_date AT TIME ZONE 'Asia/Kolkata')
   `);
@@ -123,7 +132,13 @@ router.get("/daily-ledger", requireAuth, requirePermission("view_reports"), asyn
       total: sql<string>`COALESCE(SUM(${expenses.amount}),0)::text`,
     })
     .from(expenses)
-    .where(and(gte(expenses.expenseDate, fromStr), lte(expenses.expenseDate, toStr)))
+    .where(
+      and(
+        eq(expenses.propertyId, propertyId),
+        gte(expenses.expenseDate, fromStr),
+        lte(expenses.expenseDate, toStr),
+      ),
+    )
     .groupBy(expenses.expenseDate);
 
   const collectedByDay = new Map(collectedRows.map((r) => [r.day, Number(r.total)]));
@@ -182,6 +197,7 @@ router.get("/daily-ledger", requireAuth, requirePermission("view_reports"), asyn
 
 router.get("/revenue", requireAuth, requirePermission("view_reports"), async (req, res) => {
   const { from, to } = rangeDefaults(req as never);
+  const propertyId = req.propertyId;
 
   // Real revenue = received (not pending), not voided, not complimentary.
   //   - Pending = staff recorded a promise of payment ("unpaid"); not cash yet.
@@ -195,7 +211,9 @@ router.get("/revenue", requireAuth, requirePermission("view_reports"), async (re
       COUNT(*)::int as count
     FROM ${payments} p
     INNER JOIN ${reservations} r ON r.id = p.reservation_id
-    WHERE p.payment_date >= ${from.toISOString()} AND p.payment_date <= ${to.toISOString()}
+    WHERE p.property_id = ${propertyId}
+      AND r.property_id = ${propertyId}
+      AND p.payment_date >= ${from.toISOString()} AND p.payment_date <= ${to.toISOString()}
       AND p.voided = false
       AND p.status = 'received'
       AND r.booking_source <> 'complimentary'
@@ -216,6 +234,8 @@ router.get("/revenue", requireAuth, requirePermission("view_reports"), async (re
     .innerJoin(rooms, eq(rooms.id, reservationRooms.roomId))
     .where(
       and(
+        eq(payments.propertyId, propertyId),
+        eq(reservations.propertyId, propertyId),
         gte(payments.paymentDate, from),
         lte(payments.paymentDate, to),
         eq(payments.voided, false),
@@ -238,6 +258,8 @@ router.get("/revenue", requireAuth, requirePermission("view_reports"), async (re
     .innerJoin(reservations, eq(reservations.id, payments.reservationId))
     .where(
       and(
+        eq(payments.propertyId, propertyId),
+        eq(reservations.propertyId, propertyId),
         gte(payments.paymentDate, from),
         lte(payments.paymentDate, to),
         eq(payments.voided, false),
@@ -252,6 +274,7 @@ router.get("/revenue", requireAuth, requirePermission("view_reports"), async (re
 
 router.get("/collections", requireAuth, requirePermission("view_reports"), async (req, res) => {
   const { from, to } = rangeDefaults(req as never);
+  const propertyId = req.propertyId;
   // Exclude complimentary-reservation payments from the by-method
   // breakdown. They're shown in the Complimentary report instead.
   const byMethod = await db
@@ -264,6 +287,8 @@ router.get("/collections", requireAuth, requirePermission("view_reports"), async
     .innerJoin(reservations, eq(reservations.id, payments.reservationId))
     .where(
       and(
+        eq(payments.propertyId, propertyId),
+        eq(reservations.propertyId, propertyId),
         gte(payments.paymentDate, from),
         lte(payments.paymentDate, to),
         eq(payments.voided, false),
@@ -282,6 +307,8 @@ router.get("/collections", requireAuth, requirePermission("view_reports"), async
     .innerJoin(reservations, eq(reservations.id, payments.reservationId))
     .where(
       and(
+        eq(payments.propertyId, propertyId),
+        eq(reservations.propertyId, propertyId),
         gte(payments.paymentDate, from),
         lte(payments.paymentDate, to),
         sql`${reservations.bookingSource} <> 'complimentary'`,
@@ -308,6 +335,7 @@ router.get("/gst-summary", requireAuth, requirePermission("view_reports"), async
     date_from?: string;
     date_to?: string;
   };
+  const propertyId = req.propertyId;
 
   let from: Date;
   let to: Date;
@@ -346,6 +374,8 @@ router.get("/gst-summary", requireAuth, requirePermission("view_reports"), async
     .innerJoin(reservations, eq(reservations.id, invoices.reservationId))
     .where(
       and(
+        eq(invoices.propertyId, propertyId),
+        eq(reservations.propertyId, propertyId),
         gte(invoices.createdAt, from),
         lte(invoices.createdAt, to),
         ne(invoices.status, "voided"),
@@ -381,7 +411,8 @@ router.get("/gst-summary", requireAuth, requirePermission("view_reports"), async
   return ok(res, { month: label, from, to, byStatus, creditNotes });
 });
 
-router.get("/outstanding", requireAuth, requirePermission("view_revenue"), async (_req, res) => {
+router.get("/outstanding", requireAuth, requirePermission("view_revenue"), async (req, res) => {
+  const propertyId = req.propertyId;
   // Complimentary reservations are not chased — they were comped, there
   // is no debt. All three sub-queries below filter them out.
   // 1. Invoices that still have a balance.
@@ -406,6 +437,7 @@ router.get("/outstanding", requireAuth, requirePermission("view_revenue"), async
     .innerJoin(reservations, eq(reservations.id, invoices.reservationId))
     .where(
       and(
+        eq(invoices.propertyId, propertyId),
         ne(invoices.status, "voided"),
         ne(invoices.status, "paid"),
         sql`${reservations.bookingSource} <> 'complimentary'`,
@@ -444,6 +476,7 @@ router.get("/outstanding", requireAuth, requirePermission("view_revenue"), async
     .leftJoin(invoices, eq(invoices.reservationId, reservations.id))
     .where(
       and(
+        eq(reservations.propertyId, propertyId),
         inArray(reservations.status, ["confirmed", "checked_in"]),
         sql`${invoices.id} IS NULL`,
         sql`${reservations.balanceDue}::numeric > 0.009`,
@@ -471,6 +504,7 @@ router.get("/outstanding", requireAuth, requirePermission("view_revenue"), async
     .innerJoin(guests, eq(guests.id, reservations.guestId))
     .where(
       and(
+        eq(payments.propertyId, propertyId),
         eq(payments.status, "pending"),
         eq(payments.voided, false),
         sql`${reservations.bookingSource} <> 'complimentary'`,
@@ -522,7 +556,12 @@ router.get("/outstanding", requireAuth, requirePermission("view_revenue"), async
       balanceDue: reservations.balanceDue,
     })
     .from(reservations)
-    .where(sql`${reservations.balanceDue}::numeric > 0.009`);
+    .where(
+      and(
+        eq(reservations.propertyId, propertyId),
+        sql`${reservations.balanceDue}::numeric > 0.009`,
+      ),
+    );
   const resBalanceMap = new Map(
     reservationBalances.map((r) => [r.id, Number(r.balanceDue)]),
   );
@@ -551,6 +590,7 @@ router.get("/outstanding", requireAuth, requirePermission("view_revenue"), async
 
 router.get("/room-performance", requireAuth, requirePermission("view_reports"), async (req, res) => {
   const { from, to } = rangeDefaults(req as never);
+  const propertyId = req.propertyId;
   // Complimentary reservations are filtered out of every aggregate — they
   // shouldn't inflate per-room booking counts or revenue.
   const notComp = sql`${reservations.bookingSource} <> 'complimentary'`;
@@ -578,6 +618,7 @@ router.get("/room-performance", requireAuth, requirePermission("view_reports"), 
         lte(payments.paymentDate, to),
       ),
     )
+    .where(eq(rooms.propertyId, propertyId))
     .groupBy(rooms.id)
     .orderBy(rooms.roomNumber);
   return ok(res, rows);
@@ -585,7 +626,12 @@ router.get("/room-performance", requireAuth, requirePermission("view_reports"), 
 
 router.post("/outstanding/remind/:guestId", requireAuth, requirePermission("send_reminders"), async (req, res) => {
   const guestId = req.params.guestId!;
-  const [g] = await db.select().from(guests).where(eq(guests.id, guestId)).limit(1);
+  const propertyId = req.propertyId;
+  const [g] = await db
+    .select()
+    .from(guests)
+    .where(and(eq(guests.id, guestId), eq(guests.propertyId, propertyId)))
+    .limit(1);
   if (!g) return fail(res, 404, "NOT_FOUND", "Guest not found");
   if (!g.phone) return fail(res, 400, "NO_PHONE", "Guest has no phone number");
 
@@ -598,6 +644,7 @@ router.post("/outstanding/remind/:guestId", requireAuth, requirePermission("send
     .from(reservations)
     .where(
       and(
+        eq(reservations.propertyId, propertyId),
         eq(reservations.guestId, guestId),
         sql`${reservations.balanceDue}::numeric > 0.009`,
         sql`${reservations.bookingSource} <> 'complimentary'`,
@@ -608,9 +655,8 @@ router.post("/outstanding/remind/:guestId", requireAuth, requirePermission("send
     return fail(res, 400, "NO_BALANCE", "Guest has no outstanding balance");
   }
 
-  const settings = await getSettings();
-  const t = await renderTemplate("payment_reminder_guest_sms", {
-    hotel: env.HOTEL_DISPLAY_NAME,
+  const settings = await getSettings(propertyId);
+  const t = await renderTemplate(propertyId, "payment_reminder_guest_sms", {
     hotel_phone: settings.hotelPhone ?? "",
     guest_name: g.fullName,
     guest_phone: g.phone,
@@ -622,6 +668,7 @@ router.post("/outstanding/remind/:guestId", requireAuth, requirePermission("send
   if (!result.ok) return fail(res, 502, "SEND_FAILED", result.error ?? "Send failed");
 
   await logActivity({
+    propertyId: req.propertyId,
     action: "payment_reminder_sent",
     entityType: "guest",
     entityId: guestId,
@@ -641,6 +688,7 @@ router.post("/outstanding/remind/:guestId", requireAuth, requirePermission("send
 
 router.get("/credit-bookings", requireAuth, requirePermission("view_reports"), async (req, res) => {
   const { from, to } = rangeDefaults(req as never);
+  const propertyId = req.propertyId;
   const rows = await db
     .select({
       id: reservations.id,
@@ -673,6 +721,7 @@ router.get("/credit-bookings", requireAuth, requirePermission("view_reports"), a
     .innerJoin(guests, eq(guests.id, reservations.guestId))
     .where(
       and(
+        eq(reservations.propertyId, propertyId),
         eq(reservations.bookingSource, "complimentary"),
         gte(reservations.createdAt, from),
         lte(reservations.createdAt, to),
@@ -697,6 +746,7 @@ router.get("/credit-bookings", requireAuth, requirePermission("view_reports"), a
 
 router.get("/guests", requireAuth, requirePermission("view_reports"), async (req, res) => {
   const { from, to } = rangeDefaults(req as never);
+  const propertyId = req.propertyId;
   // Stays count includes comps (a stay happened, even if comped). Revenue
   // excludes comp-booking payments — those live in the Complimentary
   // report so the guest's "real revenue" isn't inflated.
@@ -718,6 +768,7 @@ router.get("/guests", requireAuth, requirePermission("view_reports"), async (req
         lte(payments.paymentDate, to),
       ),
     )
+    .where(eq(guests.propertyId, propertyId))
     .groupBy(guests.id)
     .orderBy(sql`count(distinct ${reservations.id}) DESC`)
     .limit(100);
@@ -742,6 +793,7 @@ router.get("/guests", requireAuth, requirePermission("view_reports"), async (req
 //     curves: { "0": [12,13,...], "7": [...], "14": [...], "30": [...] } }
 router.get("/pace", requireAuth, requirePermission("view_reports"), async (req, res) => {
   const { fromStr, toStr } = rangeDefaults(req as never);
+  const propertyId = req.propertyId;
   const leads = [0, 7, 14, 30];
 
   const rows = await db.execute<{ stay_date: string; lead: number; nights: number }>(sql`
@@ -756,7 +808,8 @@ router.get("/pace", requireAuth, requirePermission("view_reports"), async (req, 
         SELECT COUNT(*)::int
         FROM reservation_rooms rr
         JOIN reservations r ON r.id = rr.reservation_id
-        WHERE r.status IN ('confirmed','checked_in','checked_out','hold','pending_payment')
+        WHERE r.property_id = ${propertyId}
+          AND r.status IN ('confirmed','checked_in','checked_out','hold','pending_payment')
           AND r.booking_source <> 'complimentary'
           AND r.created_at::date <= (sd.d - (l.l || ' days')::interval)::date
           AND daterange(r.check_in_date, GREATEST(r.check_out_date, r.check_in_date + 1), '[)') @> sd.d
@@ -794,6 +847,7 @@ router.get("/pace", requireAuth, requirePermission("view_reports"), async (req, 
 //     rows: [{ stay_date, picked_up_last_7d, picked_up_last_30d }, ...] }
 router.get("/pickup", requireAuth, requirePermission("view_reports"), async (req, res) => {
   const { fromStr, toStr } = rangeDefaults(req as never);
+  const propertyId = req.propertyId;
 
   const rows = await db.execute<{ stay_date: string; pu7: number; pu30: number }>(sql`
     WITH stay_days AS (
@@ -805,7 +859,8 @@ router.get("/pickup", requireAuth, requirePermission("view_reports"), async (req
         SELECT COUNT(*)::int
         FROM reservation_rooms rr
         JOIN reservations r ON r.id = rr.reservation_id
-        WHERE r.status IN ('confirmed','checked_in','checked_out','hold','pending_payment')
+        WHERE r.property_id = ${propertyId}
+          AND r.status IN ('confirmed','checked_in','checked_out','hold','pending_payment')
           AND r.booking_source <> 'complimentary'
           AND r.created_at >= (sd.d - interval '7 days')
           AND r.created_at < sd.d
@@ -815,7 +870,8 @@ router.get("/pickup", requireAuth, requirePermission("view_reports"), async (req
         SELECT COUNT(*)::int
         FROM reservation_rooms rr
         JOIN reservations r ON r.id = rr.reservation_id
-        WHERE r.status IN ('confirmed','checked_in','checked_out','hold','pending_payment')
+        WHERE r.property_id = ${propertyId}
+          AND r.status IN ('confirmed','checked_in','checked_out','hold','pending_payment')
           AND r.booking_source <> 'complimentary'
           AND r.created_at >= (sd.d - interval '30 days')
           AND r.created_at < sd.d

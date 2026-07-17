@@ -19,6 +19,7 @@ import {
   guestPhoneHistory,
   guests,
 } from "../db/schema/guests.js";
+import { profiles } from "../db/schema/profiles.js";
 import { reservationCoGuests, reservations, reservationRooms } from "../db/schema/reservations.js";
 import { rooms } from "../db/schema/rooms.js";
 import { invoices, payments } from "../db/schema/invoices.js";
@@ -99,7 +100,7 @@ router.get(
     };
     const offset = (page - 1) * per_page;
 
-    const conditions = [];
+    const conditions = [eq(guests.propertyId, req.propertyId)];
     if (search) {
       conditions.push(
         or(
@@ -119,7 +120,7 @@ router.get(
         sql`EXISTS (SELECT 1 FROM ${guestFollowUps} f WHERE f.guest_id = ${guests.id} AND f.status = 'pending')`,
       );
     }
-    const where = conditions.length ? and(...conditions) : undefined;
+    const where = and(...conditions);
 
     const [rows, totalRows] = await Promise.all([
       db
@@ -149,9 +150,10 @@ router.get(
           COUNT(DISTINCT r.id) FILTER (WHERE r.status = 'checked_out' AND r.booking_source <> 'complimentary')::int AS completed,
           COALESCE(SUM(CASE WHEN p.voided = false AND p.status = 'received' AND r.booking_source <> 'complimentary' THEN p.amount::numeric ELSE 0 END), 0)::text AS spent
         FROM ${guests} g
-        LEFT JOIN ${reservations} r ON r.guest_id = g.id
+        LEFT JOIN ${reservations} r ON r.guest_id = g.id AND r.property_id = ${req.propertyId}
         LEFT JOIN ${payments} p ON p.reservation_id = r.id
         WHERE g.id = ANY(${sql.raw(`ARRAY[${guestIds.map((id) => `'${id}'::uuid`).join(",")}]`)})
+          AND g.property_id = ${req.propertyId}
         GROUP BY g.id
       `);
       for (const a of aggRows) {
@@ -166,7 +168,9 @@ router.get(
     // can render thumbnails. Rows without a guestPhoto get null. URLs are
     // short-lived (5 min) — fine for the list view.
     const photoUrls = await Promise.all(
-      rows.map((r) => (r.guestPhoto ? signedKycUrl(r.guestPhoto) : Promise.resolve(null))),
+      rows.map((r) =>
+        r.guestPhoto ? signedKycUrl(req.propertyId, r.guestPhoto) : Promise.resolve(null),
+      ),
     );
 
     const masked = rows.map((r, i) => {
@@ -242,7 +246,7 @@ router.get(
         idProofLast4: guests.idProofLast4,
       })
       .from(guests)
-      .where(or(...conditions))
+      .where(and(eq(guests.propertyId, req.propertyId), or(...conditions)))
       .limit(5);
 
     // Annotate each match with WHY it matched so the UI can render
@@ -290,7 +294,11 @@ router.get(
   requirePermission("view_guests"),
   async (req, res) => {
     const id = req.params.id!;
-    const exists = await db.select({ id: guests.id }).from(guests).where(eq(guests.id, id)).limit(1);
+    const exists = await db
+      .select({ id: guests.id })
+      .from(guests)
+      .where(and(eq(guests.id, id), eq(guests.propertyId, req.propertyId)))
+      .limit(1);
     if (!exists.length) return fail(res, 404, "NOT_FOUND", "Guest not found");
 
     // Complimentary reservations don't appear as "owed" anywhere — they
@@ -311,6 +319,7 @@ router.get(
         .where(
           and(
             eq(invoices.guestId, id),
+            eq(reservations.propertyId, req.propertyId),
             sql`${invoices.status} NOT IN ('voided','paid')`,
             sql`${invoices.balanceDue}::numeric > 0.009`,
             sql`${reservations.bookingSource} <> 'complimentary'`,
@@ -338,6 +347,7 @@ router.get(
         .where(
           and(
             eq(reservations.guestId, id),
+            eq(reservations.propertyId, req.propertyId),
             inArray(reservations.status, ["confirmed", "checked_in"]),
             sql`${invoices.id} IS NULL`,
             sql`${reservations.balanceDue}::numeric > 0.009`,
@@ -356,6 +366,7 @@ router.get(
         .where(
           and(
             eq(reservations.guestId, id),
+            eq(reservations.propertyId, req.propertyId),
             eq(payments.status, "pending"),
             eq(payments.voided, false),
             sql`${reservations.bookingSource} <> 'complimentary'`,
@@ -378,7 +389,12 @@ router.get(
           balanceDue: reservations.balanceDue,
         })
         .from(reservations)
-        .where(inArray(reservations.id, Array.from(reservationIds)));
+        .where(
+          and(
+            inArray(reservations.id, Array.from(reservationIds)),
+            eq(reservations.propertyId, req.propertyId),
+          ),
+        );
       total = +balRows
         .reduce((s, r) => s + Number(r.balanceDue), 0)
         .toFixed(2);
@@ -461,7 +477,7 @@ router.get(
     const exists = await db
       .select({ id: guests.id })
       .from(guests)
-      .where(eq(guests.id, id))
+      .where(and(eq(guests.id, id), eq(guests.propertyId, req.propertyId)))
       .limit(1);
     if (!exists.length) return fail(res, 404, "NOT_FOUND", "Guest not found");
 
@@ -472,7 +488,7 @@ router.get(
     const bookerIds = await db
       .select({ id: reservations.id })
       .from(reservations)
-      .where(eq(reservations.guestId, id));
+      .where(and(eq(reservations.guestId, id), eq(reservations.propertyId, req.propertyId)));
     const occupantIds = await db
       .select({ id: reservationRooms.reservationId })
       .from(reservationRooms)
@@ -506,10 +522,19 @@ router.get(
         createdAt: reservations.createdAt,
       })
       .from(reservations)
-      .where(inArray(reservations.id, allIds))
+      .where(
+        and(
+          inArray(reservations.id, allIds),
+          eq(reservations.propertyId, req.propertyId),
+        ),
+      )
       .orderBy(desc(reservations.checkInDate), desc(reservations.createdAt));
 
-    const roomRows = await db
+    // reservation_rooms / reservation_co_guests carry no property_id —
+    // restrict the room fetch to the reservation ids that survived the
+    // property filter above so cross-tenant links never leak room rows.
+    const scopedIds = resvRows.map((r) => r.id);
+    const roomRows = scopedIds.length === 0 ? [] : await db
       .select({
         id: reservationRooms.id,
         reservationId: reservationRooms.reservationId,
@@ -522,7 +547,7 @@ router.get(
       })
       .from(reservationRooms)
       .innerJoin(rooms, eq(rooms.id, reservationRooms.roomId))
-      .where(inArray(reservationRooms.reservationId, allIds));
+      .where(inArray(reservationRooms.reservationId, scopedIds));
 
     const roomsByRes = new Map<string, typeof roomRows>();
     for (const r of roomRows) {
@@ -558,7 +583,11 @@ router.get(
   requirePermission("view_guests"),
   async (req, res) => {
     const id = req.params.id!;
-    const found = await db.select().from(guests).where(eq(guests.id, id)).limit(1);
+    const found = await db
+      .select()
+      .from(guests)
+      .where(and(eq(guests.id, id), eq(guests.propertyId, req.propertyId)))
+      .limit(1);
     if (!found.length) return fail(res, 404, "NOT_FOUND", "Guest not found");
 
     const [resStats, paidStats] = await Promise.all([
@@ -583,9 +612,10 @@ router.get(
           FROM ${reservations} r
           LEFT JOIN ${reservationRooms} rr ON rr.reservation_id = r.id
           LEFT JOIN ${reservationCoGuests} cg ON cg.reservation_id = r.id
-          WHERE r.guest_id = ${id}
+          WHERE r.property_id = ${req.propertyId}
+            AND (r.guest_id = ${id}
              OR rr.guest_id = ${id}
-             OR cg.guest_id = ${id}
+             OR cg.guest_id = ${id})
         )
         SELECT
           COUNT(*)::int AS total,
@@ -618,6 +648,7 @@ router.get(
           SELECT r.id, r.status, r.balance_due
           FROM ${reservations} r
           WHERE r.guest_id = ${id}
+            AND r.property_id = ${req.propertyId}
             AND r.booking_source <> 'complimentary'
         ),
         paid AS (
@@ -641,7 +672,9 @@ router.get(
       `),
     ]);
 
-    const photoUrl = found[0]!.guestPhoto ? await signedKycUrl(found[0]!.guestPhoto) : null;
+    const photoUrl = found[0]!.guestPhoto
+      ? await signedKycUrl(req.propertyId, found[0]!.guestPhoto)
+      : null;
     const walletBalance = await getGuestBalance(id);
 
     const completedStays = resStats[0]?.completed ?? 0;
@@ -727,7 +760,7 @@ router.post(
         idProofLast4: guests.idProofLast4,
       })
       .from(guests)
-      .where(or(...dupConditions))
+      .where(and(eq(guests.propertyId, req.propertyId), or(...dupConditions)))
       .limit(3);
     if (dups.length) {
       const reasons: ("phone" | "email" | "id")[] = [];
@@ -836,6 +869,7 @@ router.post(
     }
 
     await logActivity({
+      propertyId: req.propertyId,
       action: "guest_created",
       entityType: "guest",
       entityId: created!.id,
@@ -920,7 +954,7 @@ router.put(
             idProofLast4: guests.idProofLast4,
           })
           .from(guests)
-          .where(eq(guests.id, id))
+          .where(and(eq(guests.id, id), eq(guests.propertyId, req.propertyId)))
           .limit(1);
         if (!before) return TX_NOT_FOUND;
 
@@ -928,7 +962,12 @@ router.put(
           const collision = await tx
             .select({ id: guests.id })
             .from(guests)
-            .where(eq(guests.phone, nextPhone))
+            .where(
+              and(
+                eq(guests.propertyId, req.propertyId),
+                eq(guests.phone, nextPhone),
+              ),
+            )
             .limit(1);
           if (collision.length && collision[0]!.id !== id) {
             collisionReason = "phone";
@@ -945,7 +984,12 @@ router.put(
           const collision = await tx
             .select({ id: guests.id })
             .from(guests)
-            .where(sql`LOWER(${guests.email}) = ${nextEmail}`)
+            .where(
+              and(
+                eq(guests.propertyId, req.propertyId),
+                sql`LOWER(${guests.email}) = ${nextEmail}`,
+              ),
+            )
             .limit(1);
           if (collision.length && collision[0]!.id !== id) {
             collisionReason = "email";
@@ -966,6 +1010,7 @@ router.put(
             .from(guests)
             .where(
               and(
+                eq(guests.propertyId, req.propertyId),
                 eq(guests.idProofType, effIdType),
                 eq(guests.idProofLast4, effIdLast4),
               ),
@@ -980,7 +1025,7 @@ router.put(
         const [row] = await tx
           .update(guests)
           .set(update)
-          .where(eq(guests.id, id))
+          .where(and(eq(guests.id, id), eq(guests.propertyId, req.propertyId)))
           .returning();
 
         if (nextPhone && nextPhone !== before.phone) {
@@ -1060,6 +1105,7 @@ router.put(
     if (!updated) return fail(res, 404, "NOT_FOUND", "Guest not found");
 
     await logActivity({
+      propertyId: req.propertyId,
       action: "guest_updated",
       entityType: "guest",
       entityId: id,
@@ -1082,7 +1128,11 @@ router.post(
   ]),
   async (req, res) => {
     const id = req.params.id!;
-    const existing = await db.select().from(guests).where(eq(guests.id, id)).limit(1);
+    const existing = await db
+      .select()
+      .from(guests)
+      .where(and(eq(guests.id, id), eq(guests.propertyId, req.propertyId)))
+      .limit(1);
     if (!existing.length) return fail(res, 404, "NOT_FOUND", "Guest not found");
 
     const files = req.files as Record<string, Express.Multer.File[]> | undefined;
@@ -1118,9 +1168,9 @@ router.post(
       existing[0]!.fullName,
       existing[0]!.phone?.replace(/\D/g, "") || id.slice(0, 8),
     );
-    const frontPath = front ? await uploadKycPhoto(folder, "front", front) : null;
-    const backPath = back ? await uploadKycPhoto(folder, "back", back) : null;
-    const photoPath = photo ? await uploadKycPhoto(folder, "photo", photo) : null;
+    const frontPath = front ? await uploadKycPhoto(req.propertyId, folder, "front", front) : null;
+    const backPath = back ? await uploadKycPhoto(req.propertyId, folder, "back", back) : null;
+    const photoPath = photo ? await uploadKycPhoto(req.propertyId, folder, "photo", photo) : null;
 
     const [updated] = await db
       .update(guests)
@@ -1132,10 +1182,11 @@ router.post(
         kycVerifiedBy: req.user!.id,
         updatedAt: new Date(),
       })
-      .where(eq(guests.id, id))
+      .where(and(eq(guests.id, id), eq(guests.propertyId, req.propertyId)))
       .returning();
 
     await logActivity({
+      propertyId: req.propertyId,
       action: "kyc_uploaded",
       entityType: "guest",
       entityId: id,
@@ -1159,13 +1210,17 @@ router.get(
   requirePermission("view_guests"),
   async (req, res) => {
     const id = req.params.id!;
-    const found = await db.select().from(guests).where(eq(guests.id, id)).limit(1);
+    const found = await db
+      .select()
+      .from(guests)
+      .where(and(eq(guests.id, id), eq(guests.propertyId, req.propertyId)))
+      .limit(1);
     if (!found.length) return fail(res, 404, "NOT_FOUND", "Guest not found");
     const g = found[0]!;
     const [frontUrl, backUrl, photoUrl] = await Promise.all([
-      g.idProofPhotoFront ? signedKycUrl(g.idProofPhotoFront) : null,
-      g.idProofPhotoBack ? signedKycUrl(g.idProofPhotoBack) : null,
-      g.guestPhoto ? signedKycUrl(g.guestPhoto) : null,
+      g.idProofPhotoFront ? signedKycUrl(req.propertyId, g.idProofPhotoFront) : null,
+      g.idProofPhotoBack ? signedKycUrl(req.propertyId, g.idProofPhotoBack) : null,
+      g.guestPhoto ? signedKycUrl(req.propertyId, g.guestPhoto) : null,
     ]);
     return ok(res, {
       verified: g.kycVerifiedAt !== null && !!g.guestPhoto,
@@ -1195,19 +1250,24 @@ router.delete(
     const col = columnMap[field];
     if (!col) return fail(res, 400, "INVALID_FIELD", "field must be photo, front, or back");
 
-    const [g] = await db.select().from(guests).where(eq(guests.id, id)).limit(1);
+    const [g] = await db
+      .select()
+      .from(guests)
+      .where(and(eq(guests.id, id), eq(guests.propertyId, req.propertyId)))
+      .limit(1);
     if (!g) return fail(res, 404, "NOT_FOUND", "Guest not found");
 
     const storagePath = g[col];
     if (!storagePath) return ok(res, { deleted: false });
 
-    await deleteKycFile(storagePath);
+    await deleteKycFile(req.propertyId, storagePath);
     await db
       .update(guests)
       .set({ [col]: null, updatedAt: new Date() })
-      .where(eq(guests.id, id));
+      .where(and(eq(guests.id, id), eq(guests.propertyId, req.propertyId)));
 
     await logActivity({
+      propertyId: req.propertyId,
       action: "kyc_deleted",
       entityType: "guest",
       entityId: id,
@@ -1239,11 +1299,12 @@ router.patch(
     const [updated] = await db
       .update(guests)
       .set({ tags: normalized, updatedAt: new Date() })
-      .where(eq(guests.id, id))
+      .where(and(eq(guests.id, id), eq(guests.propertyId, req.propertyId)))
       .returning();
     if (!updated) return fail(res, 404, "NOT_FOUND", "Guest not found");
 
     await logActivity({
+      propertyId: req.propertyId,
       action: "guest_tags_updated",
       entityType: "guest",
       entityId: id,
@@ -1270,10 +1331,11 @@ router.patch(
     const [updated] = await db
       .update(guests)
       .set({ isVip, updatedAt: new Date() })
-      .where(eq(guests.id, id))
+      .where(and(eq(guests.id, id), eq(guests.propertyId, req.propertyId)))
       .returning();
     if (!updated) return fail(res, 404, "NOT_FOUND", "Guest not found");
     await logActivity({
+      propertyId: req.propertyId,
       action: isVip ? "guest_vip_set" : "guest_vip_cleared",
       entityType: "guest",
       entityId: id,
@@ -1316,10 +1378,11 @@ router.patch(
     const [updated] = await db
       .update(guests)
       .set(patch)
-      .where(eq(guests.id, id))
+      .where(and(eq(guests.id, id), eq(guests.propertyId, req.propertyId)))
       .returning();
     if (!updated) return fail(res, 404, "NOT_FOUND", "Guest not found");
     await logActivity({
+      propertyId: req.propertyId,
       action: input.isBlacklisted ? "guest_blacklisted" : "guest_unblacklisted",
       entityType: "guest",
       entityId: id,
@@ -1364,10 +1427,11 @@ router.patch(
     const [updated] = await db
       .update(guests)
       .set({ preferences, updatedAt: new Date() })
-      .where(eq(guests.id, id))
+      .where(and(eq(guests.id, id), eq(guests.propertyId, req.propertyId)))
       .returning();
     if (!updated) return fail(res, 404, "NOT_FOUND", "Guest not found");
     await logActivity({
+      propertyId: req.propertyId,
       action: "guest_preferences_updated",
       entityType: "guest",
       entityId: id,
@@ -1402,10 +1466,11 @@ router.patch(
         marketingConsentChannel: granted ? channel ?? "in_person" : null,
         updatedAt: new Date(),
       })
-      .where(eq(guests.id, id))
+      .where(and(eq(guests.id, id), eq(guests.propertyId, req.propertyId)))
       .returning();
     if (!updated) return fail(res, 404, "NOT_FOUND", "Guest not found");
     await logActivity({
+      propertyId: req.propertyId,
       action: granted ? "guest_consent_granted" : "guest_consent_revoked",
       entityType: "guest",
       entityId: id,
@@ -1428,6 +1493,13 @@ router.get(
   requirePermission("view_guests"),
   async (req, res) => {
     const id = req.params.id!;
+    const guestExists = await db
+      .select({ id: guests.id })
+      .from(guests)
+      .where(and(eq(guests.id, id), eq(guests.propertyId, req.propertyId)))
+      .limit(1);
+    if (!guestExists.length) return fail(res, 404, "NOT_FOUND", "Guest not found");
+
     const rows = await db
       .select()
       .from(guestNotes)
@@ -1445,7 +1517,11 @@ router.post(
   async (req, res) => {
     const id = req.params.id!;
     const { body } = req.body as { body: string };
-    const guestExists = await db.select({ id: guests.id }).from(guests).where(eq(guests.id, id)).limit(1);
+    const guestExists = await db
+      .select({ id: guests.id })
+      .from(guests)
+      .where(and(eq(guests.id, id), eq(guests.propertyId, req.propertyId)))
+      .limit(1);
     if (!guestExists.length) return fail(res, 404, "NOT_FOUND", "Guest not found");
 
     const [created] = await db
@@ -1462,6 +1538,13 @@ router.get(
   requirePermission("view_guests"),
   async (req, res) => {
     const id = req.params.id!;
+    const guestExists = await db
+      .select({ id: guests.id })
+      .from(guests)
+      .where(and(eq(guests.id, id), eq(guests.propertyId, req.propertyId)))
+      .limit(1);
+    if (!guestExists.length) return fail(res, 404, "NOT_FOUND", "Guest not found");
+
     const rows = await db
       .select()
       .from(guestFollowUps)
@@ -1479,8 +1562,25 @@ router.post(
   async (req, res) => {
     const id = req.params.id!;
     const input = req.body as { task: string; dueDate: string; assignedTo?: string | null };
-    const guestExists = await db.select({ id: guests.id }).from(guests).where(eq(guests.id, id)).limit(1);
+    const guestExists = await db
+      .select({ id: guests.id })
+      .from(guests)
+      .where(and(eq(guests.id, id), eq(guests.propertyId, req.propertyId)))
+      .limit(1);
     if (!guestExists.length) return fail(res, 404, "NOT_FOUND", "Guest not found");
+
+    // assignedTo comes from the request body — make sure it points at a
+    // staff profile of THIS property, not another tenant's user.
+    if (input.assignedTo) {
+      const assignee = await db
+        .select({ id: profiles.id })
+        .from(profiles)
+        .where(and(eq(profiles.id, input.assignedTo), eq(profiles.propertyId, req.propertyId)))
+        .limit(1);
+      if (!assignee.length) {
+        return fail(res, 400, "INVALID_ASSIGNEE", "Assigned staff member not found");
+      }
+    }
 
     const [created] = await db
       .insert(guestFollowUps)
@@ -1494,6 +1594,7 @@ router.post(
       .returning();
 
     await logActivity({
+      propertyId: req.propertyId,
       action: "followup_created",
       entityType: "guest",
       entityId: id,
@@ -1511,13 +1612,31 @@ router.patch(
   requirePermission("view_guests"),
   validate(followUpUpdateSchema),
   async (req, res) => {
-    const { followUpId } = req.params as { followUpId: string };
+    const { id, followUpId } = req.params as { id: string; followUpId: string };
     const input = req.body as {
       status?: "pending" | "done" | "cancelled";
       task?: string;
       dueDate?: string;
       assignedTo?: string | null;
     };
+    const guestExists = await db
+      .select({ id: guests.id })
+      .from(guests)
+      .where(and(eq(guests.id, id), eq(guests.propertyId, req.propertyId)))
+      .limit(1);
+    if (!guestExists.length) return fail(res, 404, "NOT_FOUND", "Guest not found");
+
+    if (input.assignedTo) {
+      const assignee = await db
+        .select({ id: profiles.id })
+        .from(profiles)
+        .where(and(eq(profiles.id, input.assignedTo), eq(profiles.propertyId, req.propertyId)))
+        .limit(1);
+      if (!assignee.length) {
+        return fail(res, 400, "INVALID_ASSIGNEE", "Assigned staff member not found");
+      }
+    }
+
     const patch: Record<string, unknown> = {};
     if (input.status !== undefined) {
       patch.status = input.status;
@@ -1530,7 +1649,12 @@ router.patch(
     const [updated] = await db
       .update(guestFollowUps)
       .set(patch)
-      .where(eq(guestFollowUps.id, followUpId))
+      .where(
+        and(
+          eq(guestFollowUps.id, followUpId),
+          eq(guestFollowUps.guestId, id),
+        ),
+      )
       .returning();
     if (!updated) return fail(res, 404, "NOT_FOUND", "Follow-up not found");
     return ok(res, updated);
@@ -1558,6 +1682,7 @@ router.get(
       .innerJoin(guests, eq(guests.id, guestFollowUps.guestId))
       .where(
         and(
+          eq(guests.propertyId, req.propertyId),
           eq(guestFollowUps.status, "pending"),
           sql`${guestFollowUps.dueDate} <= (CURRENT_DATE + ${days}::int)`,
         ),
@@ -1588,7 +1713,11 @@ router.post(
   async (req, res) => {
     const id = req.params.id!;
 
-    const [g] = await db.select().from(guests).where(eq(guests.id, id)).limit(1);
+    const [g] = await db
+      .select()
+      .from(guests)
+      .where(and(eq(guests.id, id), eq(guests.propertyId, req.propertyId)))
+      .limit(1);
     if (!g) return ok(res, { deleted: false, reason: "not_found" });
 
     // Guard 2: never sweep a guest that's been on file for a while.
@@ -1624,7 +1753,9 @@ router.post(
 
     await db.transaction(async (tx) => {
       await tx.delete(guestPhoneHistory).where(eq(guestPhoneHistory.guestId, id));
-      await tx.delete(guests).where(eq(guests.id, id));
+      await tx
+        .delete(guests)
+        .where(and(eq(guests.id, id), eq(guests.propertyId, req.propertyId)));
     });
 
     // Best-effort KYC cleanup — storage failures must not fail the request.
@@ -1633,7 +1764,7 @@ router.post(
     );
     for (const p of kycPaths) {
       try {
-        await deleteKycFile(p);
+        await deleteKycFile(req.propertyId, p);
       } catch (err) {
         logger.warn({ err, path: p }, "kyc cleanup failed during abandon-cleanup");
       }
@@ -1646,6 +1777,18 @@ router.post(
 
 router.delete("/:id", requireAuth, requirePermission("delete_guests"), async (req, res) => {
   const id = req.params.id!;
+
+  // Tenant-guard FIRST so a cross-property id gets a plain 404 and never
+  // reaches the stay-count probe (whose 409 body would leak that the
+  // guest exists somewhere). Pulling the full row up front also lets us
+  // (a) clean up KYC files from storage and (b) log the name in activity
+  // after the row is gone.
+  const [existing] = await db
+    .select()
+    .from(guests)
+    .where(and(eq(guests.id, id), eq(guests.propertyId, req.propertyId)))
+    .limit(1);
+  if (!existing) return fail(res, 404, "NOT_FOUND", "Guest not found");
 
   // Refuse the delete if the guest has any stay history. A guest tied
   // to a reservation (as booker, per-room occupant, or co-guest) is an
@@ -1684,15 +1827,6 @@ router.delete("/:id", requireAuth, requirePermission("delete_guests"), async (re
     );
   }
 
-  // Pull the row up front so we can (a) clean up KYC files from
-  // storage and (b) log the name in activity after the row is gone.
-  const [existing] = await db
-    .select()
-    .from(guests)
-    .where(eq(guests.id, id))
-    .limit(1);
-  if (!existing) return fail(res, 404, "NOT_FOUND", "Guest not found");
-
   // Delete the row + dependent phone history in one tx. The phone
   // history FK has ON DELETE CASCADE in the schema, but explicit
   // delete keeps the intent visible and survives schema drift.
@@ -1700,7 +1834,9 @@ router.delete("/:id", requireAuth, requirePermission("delete_guests"), async (re
     await tx
       .delete(guestPhoneHistory)
       .where(eq(guestPhoneHistory.guestId, id));
-    await tx.delete(guests).where(eq(guests.id, id));
+    await tx
+      .delete(guests)
+      .where(and(eq(guests.id, id), eq(guests.propertyId, req.propertyId)));
   });
 
   // Best-effort KYC cleanup — storage failures shouldn't roll back
@@ -1713,13 +1849,14 @@ router.delete("/:id", requireAuth, requirePermission("delete_guests"), async (re
   ].filter((p): p is string => !!p);
   for (const p of kycPaths) {
     try {
-      await deleteKycFile(p);
+      await deleteKycFile(req.propertyId, p);
     } catch (err) {
       logger.warn({ err, path: p }, "kyc cleanup failed during guest delete");
     }
   }
 
   await logActivity({
+    propertyId: req.propertyId,
     action: "guest_deleted",
     entityType: "guest",
     entityId: id,

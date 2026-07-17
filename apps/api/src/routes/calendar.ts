@@ -55,12 +55,20 @@ router.get(
           FROM ${reservationRooms}
           JOIN ${rooms} ON ${rooms.id} = ${reservationRooms.roomId}
           WHERE ${reservationRooms.reservationId} = ${reservations.id}
+            AND ${rooms.propertyId} = ${req.propertyId}
         ), '')`,
       })
       .from(reservations)
-      .innerJoin(guests, eq(guests.id, reservations.guestId))
+      .innerJoin(
+        guests,
+        and(
+          eq(guests.id, reservations.guestId),
+          eq(guests.propertyId, req.propertyId),
+        ),
+      )
       .where(
         and(
+          eq(reservations.propertyId, req.propertyId),
           lte(reservations.checkInDate, lastDay),
           gte(reservations.checkOutDate, firstDay),
           // Complimentary bookings stay off the calendar — they're only

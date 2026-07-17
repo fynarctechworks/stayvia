@@ -54,11 +54,14 @@ router.get(
         })
         .from(guests)
         .where(
-          or(
-            ilike(guests.fullName, wild),
-            ilike(guests.phone, wild),
-            ilike(guests.idProofLast4, wild),
-            guests.email ? ilike(guests.email, wild) : sql`FALSE`,
+          and(
+            eq(guests.propertyId, req.propertyId),
+            or(
+              ilike(guests.fullName, wild),
+              ilike(guests.phone, wild),
+              ilike(guests.idProofLast4, wild),
+              guests.email ? ilike(guests.email, wild) : sql`FALSE`,
+            ),
           ),
         )
         .orderBy(desc(guests.updatedAt))
@@ -75,9 +78,16 @@ router.get(
           guestName: guests.fullName,
         })
         .from(reservations)
-        .innerJoin(guests, eq(guests.id, reservations.guestId))
+        .innerJoin(
+          guests,
+          and(
+            eq(guests.id, reservations.guestId),
+            eq(guests.propertyId, req.propertyId),
+          ),
+        )
         .where(
           and(
+            eq(reservations.propertyId, req.propertyId),
             or(
               ilike(reservations.reservationNumber, wild),
               ilike(guests.fullName, wild),
@@ -100,7 +110,12 @@ router.get(
           status: rooms.status,
         })
         .from(rooms)
-        .where(ilike(rooms.roomNumber, wild))
+        .where(
+          and(
+            eq(rooms.propertyId, req.propertyId),
+            ilike(rooms.roomNumber, wild),
+          ),
+        )
         .orderBy(asc(rooms.floor), asc(rooms.roomNumber))
         .limit(limit),
     ]);

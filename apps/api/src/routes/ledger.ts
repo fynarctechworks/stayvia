@@ -1,4 +1,4 @@
-import { desc, eq } from "drizzle-orm";
+import { and, desc, eq } from "drizzle-orm";
 import { Router } from "express";
 import { z } from "zod";
 import { db } from "../db/client.js";
@@ -19,14 +19,18 @@ router.get(
   requirePermission("view_guests"),
   async (req, res) => {
     const id = req.params.id!;
-    const g = await db.select({ id: guests.id }).from(guests).where(eq(guests.id, id)).limit(1);
+    const g = await db
+      .select({ id: guests.id })
+      .from(guests)
+      .where(and(eq(guests.id, id), eq(guests.propertyId, req.propertyId)))
+      .limit(1);
     if (!g.length) return fail(res, 404, "NOT_FOUND", "Guest not found");
 
     const [entries, balance] = await Promise.all([
       db
         .select()
         .from(guestLedger)
-        .where(eq(guestLedger.guestId, id))
+        .where(and(eq(guestLedger.guestId, id), eq(guestLedger.propertyId, req.propertyId)))
         .orderBy(desc(guestLedger.createdAt)),
       getGuestBalance(id),
     ]);
@@ -47,6 +51,12 @@ router.post(
   validate(cashoutSchema),
   async (req, res) => {
     const id = req.params.id!;
+    const g = await db
+      .select({ id: guests.id })
+      .from(guests)
+      .where(and(eq(guests.id, id), eq(guests.propertyId, req.propertyId)))
+      .limit(1);
+    if (!g.length) return fail(res, 404, "NOT_FOUND", "Guest not found");
     const { amount, note } = req.body as z.infer<typeof cashoutSchema>;
     const balance = await getGuestBalance(id);
     if (amount > balance + 0.009) {
@@ -54,12 +64,14 @@ router.post(
     }
     const entry = await addLedgerEntry({
       guestId: id,
+      propertyId: req.propertyId,
       entryType: "cashout",
       amount,
       note: note ?? "Cash refund from wallet credit",
       createdBy: req.user!.id,
     });
     await logActivity({
+      propertyId: req.propertyId,
       action: "ledger_cashout",
       entityType: "guest",
       entityId: id,
@@ -85,18 +97,26 @@ router.post(
   validate(adjustSchema),
   async (req, res) => {
     const id = req.params.id!;
+    const g = await db
+      .select({ id: guests.id })
+      .from(guests)
+      .where(and(eq(guests.id, id), eq(guests.propertyId, req.propertyId)))
+      .limit(1);
+    if (!g.length) return fail(res, 404, "NOT_FOUND", "Guest not found");
     const { amount, note } = req.body as z.infer<typeof adjustSchema>;
     if (Math.abs(amount) < 0.01) return fail(res, 400, "ZERO", "Amount cannot be zero");
 
     const entryType: "credit_issued" | "cashout" = amount > 0 ? "credit_issued" : "cashout";
     const entry = await addLedgerEntry({
       guestId: id,
+      propertyId: req.propertyId,
       entryType,
       amount: Math.abs(amount),
       note,
       createdBy: req.user!.id,
     });
     await logActivity({
+      propertyId: req.propertyId,
       action: "ledger_adjustment",
       entityType: "guest",
       entityId: id,

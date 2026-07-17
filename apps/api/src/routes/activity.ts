@@ -35,6 +35,7 @@ router.get(
     // entries logged between 00:00 and 05:30 IST landed in the wrong
     // day's bucket.
     const conds = [];
+    conds.push(eq(activityLog.propertyId, req.propertyId));
     if (date_from) conds.push(gte(activityLog.createdAt, propertyDayStart(date_from)));
     if (date_to) conds.push(lte(activityLog.createdAt, propertyDayEnd(date_to)));
     // Hide entries tied to complimentary reservations — they're silent

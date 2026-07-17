@@ -6,12 +6,12 @@ import {
   staffUpdateSchema,
   unlockSettingsCodeSchema,
 } from "@stayvia/shared";
-import { and, asc, count as sqlCount, eq, sql } from "drizzle-orm";
+import { and, asc, count as sqlCount, eq, inArray, sql } from "drizzle-orm";
 import { Router } from "express";
 import { db } from "../db/client.js";
 import { profiles } from "../db/schema/profiles.js";
 import { roles, userRoles } from "../db/schema/rbac.js";
-import { reservationRooms } from "../db/schema/reservations.js";
+import { reservationRooms, reservations } from "../db/schema/reservations.js";
 import { rooms } from "../db/schema/rooms.js";
 import { roomTypes, settings } from "../db/schema/settings.js";
 import { logActivity } from "../lib/activity.js";
@@ -29,9 +29,17 @@ import { validate } from "../middleware/validate.js";
 
 const router = Router();
 
-router.get("/", requireAuth, requirePermission("manage_settings"), async (_req, res) => {
-  const rows = await db.select().from(settings).limit(1);
-  const types = await db.select().from(roomTypes).orderBy(asc(roomTypes.label));
+router.get("/", requireAuth, requirePermission("manage_settings"), async (req, res) => {
+  const rows = await db
+    .select()
+    .from(settings)
+    .where(eq(settings.propertyId, req.propertyId))
+    .limit(1);
+  const types = await db
+    .select()
+    .from(roomTypes)
+    .where(eq(roomTypes.propertyId, req.propertyId))
+    .orderBy(asc(roomTypes.label));
   // Mask the unlock code even from admins — they can SET it but they
   // shouldn't see the existing value (a colleague over their shoulder
   // would be enough). The UI uses the boolean to decide whether to
@@ -47,7 +55,7 @@ router.get("/", requireAuth, requirePermission("manage_settings"), async (_req, 
   return ok(res, { settings: masked, roomTypes: types });
 });
 
-router.get("/public", requireAuth, async (_req, res) => {
+router.get("/public", requireAuth, async (req, res) => {
   const rows = await db
     .select({
       hotelName: settings.hotelName,
@@ -77,6 +85,7 @@ router.get("/public", requireAuth, async (_req, res) => {
       complimentaryUnlockCode: settings.complimentaryUnlockCode,
     })
     .from(settings)
+    .where(eq(settings.propertyId, req.propertyId))
     .limit(1);
   const row = rows[0] ?? null;
   if (!row) return ok(res, null);
@@ -92,14 +101,18 @@ router.get("/public", requireAuth, async (_req, res) => {
 
 router.put("/", requireAuth, requirePermission("manage_settings"), validate(settingsUpdateSchema), async (req, res) => {
   const input = req.body as Record<string, unknown>;
-  const rows = await db.select().from(settings).limit(1);
+  const rows = await db
+    .select()
+    .from(settings)
+    .where(eq(settings.propertyId, req.propertyId))
+    .limit(1);
   if (!rows.length) return fail(res, 404, "NOT_FOUND", "Settings not initialized");
   const update: Record<string, unknown> = { updatedAt: new Date() };
   for (const [k, v] of Object.entries(input)) if (v !== undefined) update[k] = v;
   const [updated] = await db
     .update(settings)
     .set(update)
-    .where(eq(settings.id, rows[0]!.id))
+    .where(and(eq(settings.id, rows[0]!.id), eq(settings.propertyId, req.propertyId)))
     .returning();
   // Mask the unlock code on the response so the value we just wrote
   // doesn't bounce back in plaintext. Same masking rule as the GET.
@@ -110,9 +123,10 @@ router.put("/", requireAuth, requirePermission("manage_settings"), validate(sett
         hasComplimentaryUnlockCode: !!updated.complimentaryUnlockCode,
       }
     : null;
-  invalidateSettings();
-  await publishSettingsInvalidation();
+  invalidateSettings(req.propertyId);
+  await publishSettingsInvalidation(req.propertyId);
   await logActivity({
+    propertyId: req.propertyId,
     action: "settings_updated",
     entityType: "settings",
     entityId: updated!.id,
@@ -140,6 +154,7 @@ router.post(
     const rows = await db
       .select({ stored: settings.complimentaryUnlockCode })
       .from(settings)
+      .where(eq(settings.propertyId, req.propertyId))
       .limit(1);
     const stored = rows[0]?.stored ?? null;
     if (!stored || stored !== code) {
@@ -154,7 +169,11 @@ router.get("/room-types", requireAuth, requirePermission("view_rooms", "manage_s
   const rows = await db
     .select()
     .from(roomTypes)
-    .where(includeArchived ? undefined : eq(roomTypes.isActive, true))
+    .where(
+      includeArchived
+        ? eq(roomTypes.propertyId, req.propertyId)
+        : and(eq(roomTypes.propertyId, req.propertyId), eq(roomTypes.isActive, true)),
+    )
     .orderBy(asc(roomTypes.label));
   return ok(res, rows);
 });
@@ -176,7 +195,11 @@ router.post(
       shortStayBands?: Array<{ label: string; hours: number; rate: number }>;
     };
 
-    const dup = await db.select({ id: roomTypes.id }).from(roomTypes).where(eq(roomTypes.slug, input.slug)).limit(1);
+    const dup = await db
+      .select({ id: roomTypes.id })
+      .from(roomTypes)
+      .where(and(eq(roomTypes.slug, input.slug), eq(roomTypes.propertyId, req.propertyId)))
+      .limit(1);
     if (dup.length) return fail(res, 409, "DUPLICATE_SLUG", "A room type with this slug already exists");
 
     const [row] = await db
@@ -195,6 +218,7 @@ router.post(
       .returning();
 
     await logActivity({
+      propertyId: req.propertyId,
       action: "room_type_created",
       entityType: "room_type",
       entityId: row!.id,
@@ -215,7 +239,11 @@ router.put(
     const id = req.params.id!;
     const input = req.body as Record<string, unknown>;
 
-    const existing = await db.select().from(roomTypes).where(eq(roomTypes.id, id)).limit(1);
+    const existing = await db
+      .select()
+      .from(roomTypes)
+      .where(and(eq(roomTypes.id, id), eq(roomTypes.propertyId, req.propertyId)))
+      .limit(1);
     if (!existing.length) return fail(res, 404, "NOT_FOUND", "Room type not found");
     const oldSlug = existing[0]!.slug;
 
@@ -232,7 +260,7 @@ router.put(
       const conflict = await db
         .select({ id: roomTypes.id })
         .from(roomTypes)
-        .where(eq(roomTypes.slug, newSlug))
+        .where(and(eq(roomTypes.slug, newSlug), eq(roomTypes.propertyId, req.propertyId)))
         .limit(1);
       if (conflict.length && conflict[0]!.id !== id) {
         return fail(res, 409, "DUPLICATE_SLUG", "Slug already taken");
@@ -253,19 +281,43 @@ router.put(
 
     let cascadedRooms = 0;
     const row = await db.transaction(async (tx) => {
-      const [r] = await tx.update(roomTypes).set(update).where(eq(roomTypes.id, id)).returning();
+      const [r] = await tx
+        .update(roomTypes)
+        .set(update)
+        .where(and(eq(roomTypes.id, id), eq(roomTypes.propertyId, req.propertyId)))
+        .returning();
       if (newSlug !== oldSlug) {
-        await tx.update(rooms).set({ roomType: newSlug, updatedAt: new Date() }).where(eq(rooms.roomType, oldSlug));
+        await tx
+          .update(rooms)
+          .set({ roomType: newSlug, updatedAt: new Date() })
+          .where(and(eq(rooms.roomType, oldSlug), eq(rooms.propertyId, req.propertyId)));
         await tx
           .update(reservationRooms)
           .set({ soldAsType: newSlug })
-          .where(eq(reservationRooms.soldAsType, oldSlug));
+          .where(
+            and(
+              eq(reservationRooms.soldAsType, oldSlug),
+              inArray(
+                reservationRooms.reservationId,
+                tx
+                  .select({ id: reservations.id })
+                  .from(reservations)
+                  .where(eq(reservations.propertyId, req.propertyId)),
+              ),
+            ),
+          );
       }
       if (rateChanged) {
         const bumped = await tx
           .update(rooms)
           .set({ baseRate: String(newDefaultRate), updatedAt: new Date() })
-          .where(and(eq(rooms.roomType, newSlug), eq(rooms.baseRate, String(oldDefaultRate))))
+          .where(
+            and(
+              eq(rooms.roomType, newSlug),
+              eq(rooms.baseRate, String(oldDefaultRate)),
+              eq(rooms.propertyId, req.propertyId),
+            ),
+          )
           .returning({ id: rooms.id });
         cascadedRooms = bumped.length;
       }
@@ -273,6 +325,7 @@ router.put(
     });
 
     await logActivity({
+      propertyId: req.propertyId,
       action: "room_type_updated",
       entityType: "room_type",
       entityId: id,
@@ -302,13 +355,17 @@ router.delete("/room-types/:id", requireAuth, requirePermission("manage_settings
   //     edits them.
   const force = String(req.query.force ?? "").toLowerCase() === "true";
 
-  const existing = await db.select().from(roomTypes).where(eq(roomTypes.id, id)).limit(1);
+  const existing = await db
+    .select()
+    .from(roomTypes)
+    .where(and(eq(roomTypes.id, id), eq(roomTypes.propertyId, req.propertyId)))
+    .limit(1);
   if (!existing.length) return fail(res, 404, "NOT_FOUND", "Room type not found");
 
   const dependentRooms = await db
     .select({ id: rooms.id, roomNumber: rooms.roomNumber })
     .from(rooms)
-    .where(eq(rooms.roomType, existing[0]!.slug));
+    .where(and(eq(rooms.roomType, existing[0]!.slug), eq(rooms.propertyId, req.propertyId)));
 
   if (dependentRooms.length && !force) {
     return fail(
@@ -330,11 +387,14 @@ router.delete("/room-types/:id", requireAuth, requirePermission("manage_settings
       await tx
         .update(rooms)
         .set({ roomType: "", updatedAt: new Date() })
-        .where(eq(rooms.roomType, existing[0]!.slug));
+        .where(and(eq(rooms.roomType, existing[0]!.slug), eq(rooms.propertyId, req.propertyId)));
     }
-    await tx.delete(roomTypes).where(eq(roomTypes.id, id));
+    await tx
+      .delete(roomTypes)
+      .where(and(eq(roomTypes.id, id), eq(roomTypes.propertyId, req.propertyId)));
   });
   await logActivity({
+    propertyId: req.propertyId,
     action: "room_type_deleted",
     entityType: "room_type",
     entityId: id,
@@ -350,8 +410,8 @@ router.delete("/room-types/:id", requireAuth, requirePermission("manage_settings
 
 // ============ MESSAGE TEMPLATES ============
 
-router.get("/templates", requireAuth, requirePermission("manage_templates"), async (_req, res) => {
-  const items = await getAllTemplatesForUI();
+router.get("/templates", requireAuth, requirePermission("manage_templates"), async (req, res) => {
+  const items = await getAllTemplatesForUI(req.propertyId);
   return ok(res, { items });
 });
 
@@ -366,6 +426,7 @@ router.put("/templates/:key", requireAuth, requirePermission("manage_templates")
   }
   await upsertTemplate(key as keyof typeof TEMPLATE_DEFAULTS, input, req.propertyId);
   await logActivity({
+    propertyId: req.propertyId,
     action: "template_updated",
     entityType: "template",
     entityId: key,
@@ -468,6 +529,7 @@ staffRouter.post("/", requireAuth, requirePermission("manage_staff"), validate(s
   }
 
   await logActivity({
+    propertyId: req.propertyId,
     action: "staff_created",
     entityType: "profile",
     entityId: userId,
@@ -541,6 +603,7 @@ staffRouter.put(
     if (input.isActive !== undefined) changes.push(input.isActive ? "reactivated" : "deactivated");
 
     await logActivity({
+      propertyId: req.propertyId,
       action: "staff_updated",
       entityType: "profile",
       entityId: id,
@@ -563,6 +626,7 @@ staffRouter.delete("/:id", requireAuth, requirePermission("manage_staff"), async
   if (!updated) return fail(res, 404, "NOT_FOUND", "Staff not found");
 
   await logActivity({
+    propertyId: req.propertyId,
     action: "staff_deactivated",
     entityType: "profile",
     entityId: id,
@@ -600,10 +664,10 @@ staffRouter.delete("/:id/hard", requireAuth, requirePermission("manage_staff"), 
 
   const referenceCheck = await db.execute(sql`
     select
-      coalesce((select count(*) from reservations where created_by = ${id} or checked_in_by = ${id} or checked_out_by = ${id}), 0)::int as res_count,
-      coalesce((select count(*) from invoices where issued_by = ${id} or voided_by = ${id}), 0)::int as inv_count,
-      coalesce((select count(*) from payments where received_by = ${id}), 0)::int as pay_count,
-      coalesce((select count(*) from activity_log where performed_by = ${id}), 0)::int as act_count
+      coalesce((select count(*) from reservations where property_id = ${req.propertyId} and (created_by = ${id} or checked_in_by = ${id} or checked_out_by = ${id})), 0)::int as res_count,
+      coalesce((select count(*) from invoices where property_id = ${req.propertyId} and (issued_by = ${id} or voided_by = ${id})), 0)::int as inv_count,
+      coalesce((select count(*) from payments where property_id = ${req.propertyId} and received_by = ${id}), 0)::int as pay_count,
+      coalesce((select count(*) from activity_log where (property_id = ${req.propertyId} or property_id is null) and performed_by = ${id}), 0)::int as act_count
   `);
   const counts = (Array.isArray(referenceCheck) ? referenceCheck[0] : (referenceCheck as { rows?: unknown[] }).rows?.[0]) as
     | { res_count: number; inv_count: number; pay_count: number; act_count: number }
@@ -627,6 +691,7 @@ staffRouter.delete("/:id/hard", requireAuth, requirePermission("manage_staff"), 
   }
 
   await logActivity({
+    propertyId: req.propertyId,
     action: "staff_deleted",
     entityType: "profile",
     entityId: id,

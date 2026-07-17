@@ -73,7 +73,9 @@ export function idempotent(routeKey: string) {
       return;
     }
 
-    const compositeId = `${req.user.id}::${routeKey}::${key}`;
+    // Property-scoped: the same user id can never exist across tenants today,
+    // but the prefix makes the key's tenant explicit and future-proof.
+    const compositeId = `${req.propertyId}::${req.user.id}::${routeKey}::${key}`;
     const bodyHash = hashBody(req.body);
 
     // Look up existing record.
@@ -133,6 +135,7 @@ export function idempotent(routeKey: string) {
         .values({
           id: compositeId,
           userId: req.user!.id,
+          propertyId: req.propertyId,
           routeKey,
           key,
           requestHash: bodyHash,

@@ -35,7 +35,11 @@ router.post(
   validate(paymentSchema),
   async (req, res) => {
     const input = req.body as import("@stayvia/shared").PaymentInput;
-    const inv = await db.select().from(invoices).where(eq(invoices.id, input.invoiceId)).limit(1);
+    const inv = await db
+      .select()
+      .from(invoices)
+      .where(and(eq(invoices.id, input.invoiceId), eq(invoices.propertyId, req.propertyId)))
+      .limit(1);
     if (!inv.length) return fail(res, 404, "NOT_FOUND", "Invoice not found");
     if (inv[0]!.status === "voided") return fail(res, 409, "VOIDED", "Invoice is voided");
 
@@ -94,6 +98,7 @@ router.post(
           .where(
             and(
               eq(payments.invoiceId, input.invoiceId),
+              eq(payments.propertyId, req.propertyId),
               eq(payments.status, "pending"),
               eq(payments.voided, false),
             ),
@@ -106,6 +111,7 @@ router.post(
 
     for (const v of result.autoVoided) {
       await logActivity({
+        propertyId: req.propertyId,
         action: "payment_voided",
         entityType: "payment",
         entityId: v.id,
@@ -123,20 +129,31 @@ router.post(
     // companion-footer block stays current. Async-safe: failures warn.
     const marker = extractCheckoutSourceReservation(input.notes ?? "");
     if (marker) {
+      const propertyId = req.propertyId;
       void (async () => {
         try {
           let resvId: string | null = null;
           if (marker.kind === "id") {
-            resvId = marker.value;
+            const [row] = await db
+              .select({ id: reservations.id })
+              .from(reservations)
+              .where(and(eq(reservations.id, marker.value), eq(reservations.propertyId, propertyId)))
+              .limit(1);
+            resvId = row?.id ?? null;
           } else {
             const [row] = await db
               .select({ id: reservations.id })
               .from(reservations)
-              .where(eq(reservations.reservationNumber, marker.value))
+              .where(
+                and(
+                  eq(reservations.reservationNumber, marker.value),
+                  eq(reservations.propertyId, propertyId),
+                ),
+              )
               .limit(1);
             resvId = row?.id ?? null;
           }
-          if (resvId) await regenerateInvoicePdfForReservation(resvId);
+          if (resvId) await regenerateInvoicePdfForReservation(propertyId, resvId);
         } catch (err) {
           logger.warn({ err, marker }, "companion-collection invoice PDF regen failed");
         }
@@ -144,6 +161,7 @@ router.post(
     }
 
     await logActivity({
+      propertyId: req.propertyId,
       action: "payment_recorded",
       entityType: "invoice",
       entityId: input.invoiceId,
@@ -151,14 +169,14 @@ router.post(
       performedBy: req.user!.id,
       ipAddress: req.ip,
     });
-    await invalidateDashboard();
+    await invalidateDashboard(req.propertyId);
     return ok(res, created, 201);
   },
 );
 
 router.get("/", requireAuth, requirePermission("view_revenue"), async (req, res) => {
   const { date_from, date_to, method } = req.query as Record<string, string | undefined>;
-  const conditions = [];
+  const conditions = [eq(payments.propertyId, req.propertyId)];
   if (date_from) conditions.push(gte(payments.paymentDate, propertyDayStart(date_from)));
   if (date_to) conditions.push(lte(payments.paymentDate, propertyDayEnd(date_to)));
   if (method) conditions.push(eq(payments.paymentMethod, method as never));
@@ -166,7 +184,7 @@ router.get("/", requireAuth, requirePermission("view_revenue"), async (req, res)
   const rows = await db
     .select()
     .from(payments)
-    .where(conditions.length ? and(...conditions) : undefined)
+    .where(and(...conditions))
     .orderBy(desc(payments.paymentDate))
     .limit(500);
   return ok(res, rows);
@@ -174,21 +192,35 @@ router.get("/", requireAuth, requirePermission("view_revenue"), async (req, res)
 
 router.get("/:id/receipt", requireAuth, requirePermission("record_payments"), async (req, res) => {
   const id = req.params.id!;
-  const pay = await db.select().from(payments).where(eq(payments.id, id)).limit(1);
+  const pay = await db
+    .select()
+    .from(payments)
+    .where(and(eq(payments.id, id), eq(payments.propertyId, req.propertyId)))
+    .limit(1);
   if (!pay.length) return fail(res, 404, "NOT_FOUND", "Payment not found");
 
   const r = await db
     .select()
     .from(reservations)
-    .where(eq(reservations.id, pay[0]!.reservationId))
+    .where(
+      and(eq(reservations.id, pay[0]!.reservationId), eq(reservations.propertyId, req.propertyId)),
+    )
     .limit(1);
   const g = r.length
-    ? await db.select().from(guests).where(eq(guests.id, r[0]!.guestId)).limit(1)
+    ? await db
+        .select()
+        .from(guests)
+        .where(and(eq(guests.id, r[0]!.guestId), eq(guests.propertyId, req.propertyId)))
+        .limit(1)
     : [];
   const inv = pay[0]!.invoiceId
-    ? await db.select().from(invoices).where(eq(invoices.id, pay[0]!.invoiceId)).limit(1)
+    ? await db
+        .select()
+        .from(invoices)
+        .where(and(eq(invoices.id, pay[0]!.invoiceId), eq(invoices.propertyId, req.propertyId)))
+        .limit(1)
     : [];
-  const settings = await getSettings();
+  const settings = await getSettings(req.propertyId);
 
   const pdf = await renderReceiptPdf({
     payment: pay[0]!,
@@ -219,7 +251,11 @@ router.patch(
       notes?: string | null;
     };
 
-    const existing = await db.select().from(payments).where(eq(payments.id, id)).limit(1);
+    const existing = await db
+      .select()
+      .from(payments)
+      .where(and(eq(payments.id, id), eq(payments.propertyId, req.propertyId)))
+      .limit(1);
     if (!existing.length) return fail(res, 404, "NOT_FOUND", "Payment not found");
     if (existing[0]!.voided) return fail(res, 400, "VOIDED", "Payment is voided");
 
@@ -233,8 +269,13 @@ router.patch(
     if (input.paymentMethod !== undefined) patch.paymentMethod = input.paymentMethod;
     if (input.notes !== undefined) patch.notes = input.notes;
 
-    const [updated] = await db.update(payments).set(patch).where(eq(payments.id, id)).returning();
+    const [updated] = await db
+      .update(payments)
+      .set(patch)
+      .where(and(eq(payments.id, id), eq(payments.propertyId, req.propertyId)))
+      .returning();
     await logActivity({
+      propertyId: req.propertyId,
       action: "payment_edited",
       entityType: "payment",
       entityId: id,
@@ -257,13 +298,21 @@ router.post(
     const id = req.params.id!;
     const { reason } = req.body as { reason: string };
 
-    const existing = await db.select().from(payments).where(eq(payments.id, id)).limit(1);
+    const existing = await db
+      .select()
+      .from(payments)
+      .where(and(eq(payments.id, id), eq(payments.propertyId, req.propertyId)))
+      .limit(1);
     if (!existing.length) return fail(res, 404, "NOT_FOUND", "Payment not found");
     if (existing[0]!.voided) return fail(res, 400, "ALREADY_VOIDED", "Already voided");
 
     const invoiceId = existing[0]!.invoiceId;
     const inv = invoiceId
-      ? await db.select().from(invoices).where(eq(invoices.id, invoiceId)).limit(1)
+      ? await db
+          .select()
+          .from(invoices)
+          .where(and(eq(invoices.id, invoiceId), eq(invoices.propertyId, req.propertyId)))
+          .limit(1)
       : [];
 
     await db.transaction(async (tx) => {
@@ -275,7 +324,7 @@ router.post(
           voidedBy: req.user!.id,
           voidedAt: new Date(),
         })
-        .where(eq(payments.id, id));
+        .where(and(eq(payments.id, id), eq(payments.propertyId, req.propertyId)));
 
       if (inv.length) {
         // Post-invoice void: reverse the invoice ledger.
@@ -299,6 +348,7 @@ router.post(
     });
 
     await logActivity({
+      propertyId: req.propertyId,
       action: "payment_voided",
       entityType: "payment",
       entityId: id,
@@ -306,7 +356,7 @@ router.post(
       performedBy: req.user!.id,
       ipAddress: req.ip,
     });
-    await invalidateDashboard();
+    await invalidateDashboard(req.propertyId);
     return ok(res, { success: true });
   },
 );
@@ -325,7 +375,11 @@ router.post(
       return fail(res, 400, "INVALID_METHOD", "Choose cash / upi / card / bank_transfer");
     }
 
-    const [existing] = await db.select().from(payments).where(eq(payments.id, id)).limit(1);
+    const [existing] = await db
+      .select()
+      .from(payments)
+      .where(and(eq(payments.id, id), eq(payments.propertyId, req.propertyId)))
+      .limit(1);
     if (!existing) return fail(res, 404, "NOT_FOUND", "Payment not found");
     if (existing.status !== "pending") {
       return fail(res, 400, "NOT_PENDING", "Payment is not pending");
@@ -344,10 +398,14 @@ router.post(
           receivedBy: req.user!.id,
           notes: body.notes ? body.notes : existing.notes,
         })
-        .where(eq(payments.id, id));
+        .where(and(eq(payments.id, id), eq(payments.propertyId, req.propertyId)));
 
       if (existing.invoiceId) {
-        const [inv] = await tx.select().from(invoices).where(eq(invoices.id, existing.invoiceId)).limit(1);
+        const [inv] = await tx
+          .select()
+          .from(invoices)
+          .where(and(eq(invoices.id, existing.invoiceId), eq(invoices.propertyId, req.propertyId)))
+          .limit(1);
         if (inv) {
           const newTotalPaid = +(Number(inv.totalPaid) + amount).toFixed(2);
           const newBalance = +(Number(inv.grandTotal) - newTotalPaid).toFixed(2);
@@ -370,6 +428,7 @@ router.post(
     });
 
     await logActivity({
+      propertyId: req.propertyId,
       action: "payment_marked_received",
       entityType: "payment",
       entityId: id,
@@ -377,7 +436,7 @@ router.post(
       performedBy: req.user!.id,
       ipAddress: req.ip,
     });
-    await invalidateDashboard();
+    await invalidateDashboard(req.propertyId);
     return ok(res, { success: true });
   },
 );
@@ -396,7 +455,7 @@ function extractCheckoutSourceReservation(
     /Collected at check-out of ([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})/i,
   );
   if (uuidMatch) return { kind: "id", value: uuidMatch[1]! };
-  const numberMatch = notes.match(/Collected at check-out of ((?:SLDT-)?RES-\d+)/i);
+  const numberMatch = notes.match(/Collected at check-out of ((?:[A-Z0-9]+-)?RES-\d+)/i);
   if (numberMatch) return { kind: "number", value: numberMatch[1]! };
   return null;
 }
@@ -405,19 +464,29 @@ function extractCheckoutSourceReservation(
 // the static link reflects the latest data (e.g. a freshly recorded
 // companion collection that should appear in the footer). Best-effort —
 // callers `.catch()` on this.
-async function regenerateInvoicePdfForReservation(reservationId: string): Promise<void> {
+async function regenerateInvoicePdfForReservation(
+  propertyId: string,
+  reservationId: string,
+): Promise<void> {
   const [inv] = await db
     .select()
     .from(invoices)
-    .where(eq(invoices.reservationId, reservationId))
+    .where(and(eq(invoices.reservationId, reservationId), eq(invoices.propertyId, propertyId)))
     .limit(1);
   if (!inv) return;
   const [items, pays, settings, companion, [resRow]] = await Promise.all([
     db.select().from(invoiceLineItems).where(eq(invoiceLineItems.invoiceId, inv.id)),
-    db.select().from(payments).where(eq(payments.invoiceId, inv.id)),
-    getSettings(),
-    collectCompanionCollections(reservationId, inv.id),
-    db.select().from(reservations).where(eq(reservations.id, reservationId)).limit(1),
+    db
+      .select()
+      .from(payments)
+      .where(and(eq(payments.invoiceId, inv.id), eq(payments.propertyId, propertyId))),
+    getSettings(propertyId),
+    collectCompanionCollections(propertyId, reservationId, inv.id),
+    db
+      .select()
+      .from(reservations)
+      .where(and(eq(reservations.id, reservationId), eq(reservations.propertyId, propertyId)))
+      .limit(1),
   ]);
   const pdf = await renderInvoicePdf({
     invoice: inv,
@@ -447,10 +516,11 @@ async function regenerateInvoicePdfForReservation(reservationId: string): Promis
     ? await db
         .select({ fullName: guests.fullName, phone: guests.phone })
         .from(guests)
-        .where(eq(guests.id, resRow.guestId))
+        .where(and(eq(guests.id, resRow.guestId), eq(guests.propertyId, propertyId)))
         .limit(1)
     : [];
   await uploadPublicPdf(
+    propertyId,
     `invoices/${inv.invoiceNumber}.pdf`,
     pdf,
     documentLabel(gLab?.fullName ?? inv.guestName, gLab?.phone),
@@ -463,6 +533,7 @@ async function regenerateInvoicePdfForReservation(reservationId: string): Promis
 // (those whose target reservation hasn't been checked out yet) are also
 // counted in the footer.
 async function collectCompanionCollections(
+  propertyId: string,
   reservationId: string,
   thisInvoiceId: string,
 ): Promise<
@@ -473,7 +544,7 @@ async function collectCompanionCollections(
   const [thisRes] = await db
     .select({ reservationNumber: reservations.reservationNumber })
     .from(reservations)
-    .where(eq(reservations.id, reservationId))
+    .where(and(eq(reservations.id, reservationId), eq(reservations.propertyId, propertyId)))
     .limit(1);
   const newMarker = thisRes
     ? `Collected at check-out of ${thisRes.reservationNumber}`
@@ -492,6 +563,7 @@ async function collectCompanionCollections(
     .leftJoin(invoices, eq(invoices.reservationId, payments.reservationId))
     .where(
       and(
+        eq(payments.propertyId, propertyId),
         eq(payments.voided, false),
         newMarker
           ? sql`${payments.notes} IN (${legacyMarker}, ${newMarker})`

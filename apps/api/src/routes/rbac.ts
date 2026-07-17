@@ -131,6 +131,7 @@ router.post(
     }
 
     await logActivity({
+      propertyId: req.propertyId,
       action: "role_created",
       entityType: "role",
       entityId: created!.id,
@@ -190,6 +191,7 @@ router.patch(
     }
 
     await logActivity({
+      propertyId: req.propertyId,
       action: "role_updated",
       entityType: "role",
       entityId: id,
@@ -237,6 +239,7 @@ router.delete(
     await db.delete(roles).where(eq(roles.id, id));
 
     await logActivity({
+      propertyId: req.propertyId,
       action: "role_deleted",
       entityType: "role",
       entityId: id,
@@ -309,6 +312,7 @@ router.put(
       .where(eq(profiles.id, userId));
 
     await logActivity({
+      propertyId: req.propertyId,
       action: "user_role_assigned",
       entityType: "user",
       entityId: userId,
@@ -384,6 +388,7 @@ router.put(
     }
 
     await logActivity({
+      propertyId: req.propertyId,
       action: "user_overrides_updated",
       entityType: "user",
       entityId: userId,

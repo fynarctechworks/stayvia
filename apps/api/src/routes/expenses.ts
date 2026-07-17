@@ -84,7 +84,7 @@ router.get(
       per_page: number;
     };
 
-    const conditions = [];
+    const conditions = [eq(expenses.propertyId, req.propertyId)];
     if (date_from) conditions.push(gte(expenses.expenseDate, date_from));
     if (date_to) conditions.push(lte(expenses.expenseDate, date_to));
     if (category) conditions.push(eq(expenses.category, category as never));
@@ -103,7 +103,7 @@ router.get(
         )!,
       );
     }
-    const where = conditions.length ? and(...conditions) : undefined;
+    const where = and(...conditions);
 
     const [rows, total] = await Promise.all([
       db
@@ -157,7 +157,7 @@ router.get(
   async (req, res) => {
     const { date_from, date_to, category, payment_method, status, q } =
       req.query as Record<string, string | undefined>;
-    const conditions = [];
+    const conditions = [eq(expenses.propertyId, req.propertyId)];
     if (date_from) conditions.push(gte(expenses.expenseDate, date_from));
     if (date_to) conditions.push(lte(expenses.expenseDate, date_to));
     if (category) conditions.push(eq(expenses.category, category as never));
@@ -176,7 +176,7 @@ router.get(
         )!,
       );
     }
-    const where = conditions.length ? and(...conditions) : undefined;
+    const where = and(...conditions);
 
     const [agg] = await db
       .select({
@@ -242,11 +242,11 @@ router.get(
       })
       .from(expenses)
       .leftJoin(profiles, eq(profiles.id, expenses.recordedBy))
-      .where(eq(expenses.id, id))
+      .where(and(eq(expenses.id, id), eq(expenses.propertyId, req.propertyId)))
       .limit(1);
     if (!row) return fail(res, 404, "NOT_FOUND", "Expense not found");
     const signedUrl = row.attachmentUrl
-      ? await signedExpenseAttachmentUrl(row.attachmentUrl)
+      ? await signedExpenseAttachmentUrl(req.propertyId, row.attachmentUrl)
       : null;
     return ok(res, { ...row, attachmentSignedUrl: signedUrl });
   },
@@ -316,6 +316,7 @@ router.post(
     if (req.file && created) {
       try {
         attachmentPath = await uploadExpenseAttachment(
+          propertyId,
           storageFolderLabel(created.description, created.id.slice(0, 8), "expense"),
           {
             buffer: req.file.buffer,
@@ -326,7 +327,9 @@ router.post(
         await db
           .update(expenses)
           .set({ attachmentUrl: attachmentPath, updatedAt: new Date() })
-          .where(eq(expenses.id, created.id));
+          .where(
+            and(eq(expenses.id, created.id), eq(expenses.propertyId, propertyId)),
+          );
       } catch (err) {
         // Don't fail the create — the row is committed and the bill
         // can be uploaded later via PATCH.
@@ -338,6 +341,7 @@ router.post(
     }
 
     await logActivity({
+      propertyId: req.propertyId,
       action: "expense_created",
       entityType: "expense",
       entityId: created!.id,
@@ -367,7 +371,7 @@ router.patch(
     const [existing] = await db
       .select()
       .from(expenses)
-      .where(eq(expenses.id, id))
+      .where(and(eq(expenses.id, id), eq(expenses.propertyId, req.propertyId)))
       .limit(1);
     if (!existing) return fail(res, 404, "NOT_FOUND", "Expense not found");
 
@@ -396,10 +400,11 @@ router.patch(
     const [updated] = await db
       .update(expenses)
       .set(update)
-      .where(eq(expenses.id, id))
+      .where(and(eq(expenses.id, id), eq(expenses.propertyId, req.propertyId)))
       .returning();
 
     await logActivity({
+      propertyId: req.propertyId,
       action: "expense_updated",
       entityType: "expense",
       entityId: id,
@@ -427,7 +432,7 @@ router.post(
     const [existing] = await db
       .select()
       .from(expenses)
-      .where(eq(expenses.id, id))
+      .where(and(eq(expenses.id, id), eq(expenses.propertyId, req.propertyId)))
       .limit(1);
     if (!existing) return fail(res, 404, "NOT_FOUND", "Expense not found");
 
@@ -435,7 +440,7 @@ router.post(
     // orphaned files when staff re-uploads.
     if (existing.attachmentUrl) {
       try {
-        await deleteExpenseAttachment(existing.attachmentUrl);
+        await deleteExpenseAttachment(req.propertyId, existing.attachmentUrl);
       } catch (err) {
         logger.warn(
           { err: err instanceof Error ? err.message : err, expenseId: id },
@@ -445,6 +450,7 @@ router.post(
     }
 
     const path = await uploadExpenseAttachment(
+      req.propertyId,
       storageFolderLabel(existing.description, id.slice(0, 8), "expense"),
       {
         buffer: req.file.buffer,
@@ -455,9 +461,9 @@ router.post(
     const [updated] = await db
       .update(expenses)
       .set({ attachmentUrl: path, updatedAt: new Date() })
-      .where(eq(expenses.id, id))
+      .where(and(eq(expenses.id, id), eq(expenses.propertyId, req.propertyId)))
       .returning();
-    const signedUrl = await signedExpenseAttachmentUrl(path);
+    const signedUrl = await signedExpenseAttachmentUrl(req.propertyId, path);
     return ok(res, { ...updated, attachmentSignedUrl: signedUrl });
   },
 );
@@ -472,13 +478,13 @@ router.delete(
     const [existing] = await db
       .select()
       .from(expenses)
-      .where(eq(expenses.id, id))
+      .where(and(eq(expenses.id, id), eq(expenses.propertyId, req.propertyId)))
       .limit(1);
     if (!existing) return fail(res, 404, "NOT_FOUND", "Expense not found");
 
     if (existing.attachmentUrl) {
       try {
-        await deleteExpenseAttachment(existing.attachmentUrl);
+        await deleteExpenseAttachment(req.propertyId, existing.attachmentUrl);
       } catch (err) {
         logger.warn(
           { err: err instanceof Error ? err.message : err, expenseId: id },
@@ -486,8 +492,11 @@ router.delete(
         );
       }
     }
-    await db.delete(expenses).where(eq(expenses.id, id));
+    await db
+      .delete(expenses)
+      .where(and(eq(expenses.id, id), eq(expenses.propertyId, req.propertyId)));
     await logActivity({
+      propertyId: req.propertyId,
       action: "expense_deleted",
       entityType: "expense",
       entityId: id,

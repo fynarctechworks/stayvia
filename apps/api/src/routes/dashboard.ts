@@ -59,14 +59,14 @@ function propertyDateOffset(days: number): string {
   return propertyDateString(base);
 }
 
-async function buildDashboard() {
+async function buildDashboard(propertyId: string) {
   const today = propertyToday();
   const startOfDay = propertyStartOfDay();
   const startOfMonth = propertyStartOfMonth();
   // 7-day forecast window. Inclusive on both ends. The "next 7 days"
   // means today + 6 in standard calendar talk.
   const forecastEnd = propertyDateOffset(6);
-  const settings = await getSettings();
+  const settings = await getSettings(propertyId);
 
   // Pre-arrival reminder window. Confirmed bookings with a check-in
   // date today + (arrivalReminderHoursBefore / 24) round-up days that
@@ -94,11 +94,15 @@ async function buildDashboard() {
     likelyNoShowsRow,
     revenueByMethodTodayRows,
   ] = await Promise.all([
-      db.select().from(rooms).orderBy(rooms.floor, rooms.roomNumber),
+      db
+        .select()
+        .from(rooms)
+        .where(eq(rooms.propertyId, propertyId))
+        .orderBy(rooms.floor, rooms.roomNumber),
       db
         .select({ count: sql<number>`count(*)::int` })
         .from(rooms)
-        .where(eq(rooms.status, "occupied")),
+        .where(and(eq(rooms.propertyId, propertyId), eq(rooms.status, "occupied"))),
       // "Arriving today" — every reservation whose check-in date is today
       // and isn't cancelled/no-show. Includes already-checked-in so staff
       // can see "they did arrive" rather than the row vanishing the moment
@@ -153,6 +157,7 @@ async function buildDashboard() {
         .innerJoin(guests, eq(guests.id, reservations.guestId))
         .where(
           and(
+            eq(reservations.propertyId, propertyId),
             eq(reservations.checkInDate, today),
             inArray(reservations.status, ["confirmed", "checked_in"]),
           ),
@@ -209,6 +214,7 @@ async function buildDashboard() {
         .innerJoin(guests, eq(guests.id, reservations.guestId))
         .where(
           and(
+            eq(reservations.propertyId, propertyId),
             eq(reservations.checkOutDate, today),
             inArray(reservations.status, ["checked_in", "checked_out"]),
           ),
@@ -223,7 +229,13 @@ async function buildDashboard() {
         })
         .from(reservations)
         .innerJoin(guests, eq(guests.id, reservations.guestId))
-        .where(and(lt(reservations.checkOutDate, today), eq(reservations.status, "checked_in"))),
+        .where(
+          and(
+            eq(reservations.propertyId, propertyId),
+            lt(reservations.checkOutDate, today),
+            eq(reservations.status, "checked_in"),
+          ),
+        ),
       // Revenue today — payments received today on non-complimentary
       // reservations only. Comp bookings live in Reports → Complimentary;
       // their cash flow is intentionally excluded from "real revenue".
@@ -233,6 +245,8 @@ async function buildDashboard() {
         .innerJoin(reservations, eq(reservations.id, payments.reservationId))
         .where(
           and(
+            eq(payments.propertyId, propertyId),
+            eq(reservations.propertyId, propertyId),
             gte(payments.paymentDate, startOfDay),
             eq(payments.voided, false),
             eq(payments.status, "received"),
@@ -264,10 +278,13 @@ async function buildDashboard() {
         // silent everywhere outside the Complimentary report. (entity_id
         // is a uuid column, so the join is always type-safe.)
         .where(
-          sql`NOT (${activityLog.entityType} = 'reservation' AND EXISTS (
-            SELECT 1 FROM ${reservations} r
-            WHERE r.id = ${activityLog.entityId}
-              AND r.booking_source = 'complimentary'))`,
+          and(
+            eq(activityLog.propertyId, propertyId),
+            sql`NOT (${activityLog.entityType} = 'reservation' AND EXISTS (
+              SELECT 1 FROM ${reservations} r
+              WHERE r.id = ${activityLog.entityId}
+                AND r.booking_source = 'complimentary'))`,
+          ),
         )
         .orderBy(desc(activityLog.createdAt))
         .limit(10),
@@ -335,6 +352,7 @@ async function buildDashboard() {
         .innerJoin(guests, eq(guests.id, reservations.guestId))
         .where(
           and(
+            eq(reservations.propertyId, propertyId),
             eq(reservations.checkOutDate, today),
             eq(reservations.status, "checked_in"),
           ),
@@ -349,6 +367,8 @@ async function buildDashboard() {
         .innerJoin(reservations, eq(reservations.id, payments.reservationId))
         .where(
           and(
+            eq(payments.propertyId, propertyId),
+            eq(reservations.propertyId, propertyId),
             gte(payments.paymentDate, startOfMonth),
             eq(payments.voided, false),
             eq(payments.status, "received"),
@@ -366,7 +386,8 @@ async function buildDashboard() {
       db.execute<{ total: string }>(sql`
         SELECT COALESCE(SUM(r.balance_due::numeric), 0)::text AS total
         FROM ${reservations} r
-        WHERE r.booking_source <> 'complimentary'
+        WHERE r.property_id = ${propertyId}
+          AND r.booking_source <> 'complimentary'
           AND r.status <> 'cancelled'
       `),
       // Pending check-outs today — reservations whose check-out date
@@ -378,6 +399,7 @@ async function buildDashboard() {
         .from(reservations)
         .where(
           and(
+            eq(reservations.propertyId, propertyId),
             eq(reservations.checkOutDate, today),
             eq(reservations.status, "checked_in"),
           ),
@@ -389,7 +411,7 @@ async function buildDashboard() {
       db
         .select({ count: sql<number>`count(*)::int` })
         .from(rooms)
-        .where(inArray(rooms.status, ["maintenance", "dirty"])),
+        .where(and(eq(rooms.propertyId, propertyId), inArray(rooms.status, ["maintenance", "dirty"]))),
       // 7-day forecast: per-day count of reservations occupying a
       // room. We unnest a generate_series over the window and join
       // against reservation_rooms whose parent overlaps the day. The
@@ -409,14 +431,16 @@ async function buildDashboard() {
               SELECT COUNT(DISTINCT rr.room_id)::int
               FROM reservation_rooms rr
               JOIN reservations r ON r.id = rr.reservation_id
-              WHERE r.status IN ('confirmed','checked_in','hold','pending_payment')
+              WHERE r.property_id = ${propertyId}
+                AND r.status IN ('confirmed','checked_in','hold','pending_payment')
                 AND daterange(r.check_in_date, GREATEST(r.check_out_date, r.check_in_date + 1), '[)')
                     @> d
             ), 0) AS occupied,
             COALESCE((
               SELECT COUNT(*)::int
               FROM reservations r
-              WHERE r.status IN ('confirmed','checked_in','hold','pending_payment')
+              WHERE r.property_id = ${propertyId}
+                AND r.status IN ('confirmed','checked_in','hold','pending_payment')
                 AND r.check_in_date = d
             ), 0) AS arrivals
           FROM days
@@ -439,6 +463,7 @@ async function buildDashboard() {
         .innerJoin(guests, eq(guests.id, reservations.guestId))
         .where(
           and(
+            eq(reservations.propertyId, propertyId),
             eq(reservations.status, "confirmed"),
             gte(reservations.checkInDate, today),
             lte(reservations.checkInDate, reminderWindowEnd),
@@ -468,6 +493,7 @@ async function buildDashboard() {
         .innerJoin(guests, eq(guests.id, reservations.guestId))
         .where(
           and(
+            eq(reservations.propertyId, propertyId),
             eq(reservations.status, "confirmed"),
             lte(reservations.checkInDate, today),
             // No no-show alert for complimentary bookings.
@@ -496,6 +522,8 @@ async function buildDashboard() {
         .innerJoin(reservations, eq(reservations.id, payments.reservationId))
         .where(
           and(
+            eq(payments.propertyId, propertyId),
+            eq(reservations.propertyId, propertyId),
             gte(payments.paymentDate, startOfDay),
             eq(payments.voided, false),
             eq(payments.status, "received"),
@@ -552,6 +580,7 @@ async function buildDashboard() {
     .innerJoin(guests, eq(guests.id, reservations.guestId))
     .where(
       and(
+        eq(reservations.propertyId, propertyId),
         inArray(reservations.status, ["checked_in", "confirmed"]),
         // Active segment filter — exclude closed-leg rows (effective_to
         // already passed) and future-leg rows (effective_from not yet
@@ -880,8 +909,9 @@ router.get("/", requireAuth, requirePermission("view_dashboard"), async (req, re
     },
   >(d: T) => (canSeeRevenue ? d : canSeeDaily ? keepDailyOnly(d) : stripRevenue(d));
 
+  const cacheKey = dashboardKey(req.propertyId);
   try {
-    const cached = await redis.get<string>(dashboardKey);
+    const cached = await redis.get<string>(cacheKey);
     if (cached) {
       const data = typeof cached === "string" ? JSON.parse(cached) : cached;
       return ok(res, project(data));
@@ -890,16 +920,16 @@ router.get("/", requireAuth, requirePermission("view_dashboard"), async (req, re
     logger.warn({ err }, "dashboard cache read failed");
   }
 
-  const data = await buildDashboard();
+  const data = await buildDashboard(req.propertyId);
   try {
-    await redis.setex(dashboardKey, TTL_SECONDS, JSON.stringify(data));
+    await redis.setex(cacheKey, TTL_SECONDS, JSON.stringify(data));
   } catch (err) {
     logger.debug({ err: err instanceof Error ? err.message : err }, "dashboard cache write skipped");
   }
   // Fire-and-forget: send any due arrival reminders. The race lock is
   // the DB UPDATE — only the row that flips from NULL to now() actually
   // sends. Concurrent dashboard ticks see "already sent" and skip.
-  void dispatchDueArrivalReminders(data.upcoming_arrivals).catch((err) => {
+  void dispatchDueArrivalReminders(req.propertyId, data.upcoming_arrivals).catch((err) => {
     logger.warn({ err: err instanceof Error ? err.message : err }, "arrival reminders dispatch failed");
   });
   return ok(res, project(data));
@@ -942,6 +972,7 @@ function keepDailyOnly<
 // check-in date + hotel phone. The exact template is the property's
 // choice via Settings later; default is fine here.
 async function dispatchDueArrivalReminders(
+  propertyId: string,
   arrivals: {
     id: string;
     reservationNumber: string;
@@ -953,7 +984,7 @@ async function dispatchDueArrivalReminders(
 ): Promise<void> {
   const candidates = arrivals.filter((a) => !a.reminderSent);
   if (candidates.length === 0) return;
-  const s = await getSettings();
+  const s = await getSettings(propertyId);
   for (const a of candidates) {
     const claim = await db
       .update(reservations)
@@ -961,6 +992,7 @@ async function dispatchDueArrivalReminders(
       .where(
         and(
           eq(reservations.id, a.id),
+          eq(reservations.propertyId, propertyId),
           isNull(reservations.arrivalReminderSentAt),
         ),
       )
@@ -983,7 +1015,7 @@ async function dispatchDueArrivalReminders(
         await db
           .update(reservations)
           .set({ arrivalReminderSentAt: null })
-          .where(eq(reservations.id, a.id));
+          .where(and(eq(reservations.id, a.id), eq(reservations.propertyId, propertyId)));
       } catch {
         /* ignore — best-effort */
       }

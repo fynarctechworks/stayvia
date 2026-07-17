@@ -1,4 +1,4 @@
-import { inArray } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import { db } from "../db/client.js";
 import { profiles } from "../db/schema/profiles.js";
 import { notifications, type NotificationType } from "../db/schema/notifications.js";
@@ -8,8 +8,12 @@ import { messaging } from "./messaging.js";
 // Static import — settings.ts pulls only db/schema, no cycle. Dynamic import()
 // fails inside the pkg-bundled sidecar, which silently broke owner alerts.
 import { getSettings } from "./settings.js";
+import { env } from "../config/env.js";
 
 interface DispatchInput {
+  // Tenant the notification belongs to — role expansion only reaches THIS
+  // hotel's staff, and the rows are stamped with it.
+  propertyId: string;
   type: NotificationType;
   title: string;
   body: string;
@@ -26,7 +30,12 @@ export async function dispatchNotification(input: DispatchInput): Promise<void> 
     const rows = await db
       .select({ id: profiles.id })
       .from(profiles)
-      .where(inArray(profiles.role, input.recipientRoles));
+      .where(
+        and(
+          inArray(profiles.role, input.recipientRoles),
+          eq(profiles.propertyId, input.propertyId),
+        ),
+      );
     for (const r of rows) ids.add(r.id);
   }
 
@@ -36,6 +45,7 @@ export async function dispatchNotification(input: DispatchInput): Promise<void> 
   }
 
   const rows = Array.from(ids).map((recipientId) => ({
+    propertyId: input.propertyId,
     recipientId,
     type: input.type,
     title: input.title,
@@ -77,9 +87,22 @@ export async function notifyGuestEmail(input: GuestEmailInput): Promise<void> {
   if (!r.ok) logger.warn({ err: r.error }, "guest email failed");
 }
 
-export async function notifyOwner(text: string): Promise<void> {
+// Per-property hotel display name for guest-facing messages.
+// env.HOTEL_DISPLAY_NAME is only the last-resort fallback when the property's
+// settings row can't be loaded.
+export async function hotelDisplayName(propertyId: string): Promise<string> {
   try {
-    const s = await getSettings();
+    const s = await getSettings(propertyId);
+    if (s.hotelName) return s.hotelName;
+  } catch (err) {
+    logger.warn({ err }, "hotel name lookup failed; using env fallback");
+  }
+  return env.HOTEL_DISPLAY_NAME;
+}
+
+export async function notifyOwner(propertyId: string, text: string): Promise<void> {
+  try {
+    const s = await getSettings(propertyId);
     if (!s.ownerNotifyEnabled || !s.ownerPhone) return;
     const r = await messaging.sendSms({ to: s.ownerPhone, text });
     if (!r.ok) logger.warn({ err: r.error }, "owner SMS failed");

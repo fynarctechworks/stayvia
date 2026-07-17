@@ -33,6 +33,7 @@ export interface RoomConflict {
 //    miss the overlap. Treat them as conflicts when their stay date
 //    falls within the probe window [checkIn, checkOut).
 export async function findRoomConflicts(
+  propertyId: string,
   checkIn: string,
   checkOut: string,
   opts?: { roomIds?: string[]; excludeReservationId?: string },
@@ -52,6 +53,7 @@ export async function findRoomConflicts(
     .innerJoin(guests, eq(guests.id, reservations.guestId))
     .where(
       and(
+        eq(reservations.propertyId, propertyId),
         inArray(reservations.status, BLOCKING_STATUSES),
         opts?.roomIds && opts.roomIds.length > 0
           ? inArray(reservationRooms.roomId, opts.roomIds)
@@ -91,6 +93,7 @@ export async function findRoomConflicts(
 }
 
 export async function findAvailableRooms(
+  propertyId: string,
   checkIn: string,
   checkOut: string,
   opts?: { includeConflicts?: boolean },
@@ -102,7 +105,7 @@ export async function findAvailableRooms(
         "For day-use bookings probe [d, d+1).",
     );
   }
-  const conflictByRoom = await findRoomConflicts(checkIn, checkOut);
+  const conflictByRoom = await findRoomConflicts(propertyId, checkIn, checkOut);
 
   // Physical-status gating:
   //   - maintenance → out of inventory, always excluded.
@@ -125,9 +128,12 @@ export async function findAvailableRooms(
     .select()
     .from(rooms)
     .where(
-      windowIncludesToday
-        ? sql`${rooms.status} NOT IN ('maintenance', 'occupied')`
-        : sql`${rooms.status} <> 'maintenance'`,
+      and(
+        eq(rooms.propertyId, propertyId),
+        windowIncludesToday
+          ? sql`${rooms.status} NOT IN ('maintenance', 'occupied')`
+          : sql`${rooms.status} <> 'maintenance'`,
+      ),
     )
     // Order by floor then room number so the picker reads as a
     // natural floor-by-floor list (101, 102, 201, 202, 301, ...).
@@ -185,6 +191,7 @@ export async function findAvailableRooms(
       .innerJoin(guests, eq(guests.id, reservations.guestId))
       .where(
         and(
+          eq(reservations.propertyId, propertyId),
           inArray(reservationRooms.roomId, candidateIds),
           inArray(reservations.status, BLOCKING_STATUSES),
           gte(reservations.checkInDate, checkOut),
@@ -217,6 +224,7 @@ export async function findAvailableRooms(
 }
 
 export async function isRoomAvailable(
+  propertyId: string,
   roomId: string,
   checkIn: string,
   checkOut: string,
@@ -237,6 +245,7 @@ export async function isRoomAvailable(
   }
   const overlap = and(
     eq(reservationRooms.roomId, roomId),
+    eq(reservations.propertyId, propertyId),
     inArray(reservations.status, BLOCKING_STATUSES),
     // Mirror the findAvailableRooms split — overnight uses daterange,
     // short_stay (day-use) collapses to an empty range and needs an
@@ -259,7 +268,11 @@ export async function isRoomAvailable(
     .limit(1);
   if (rows.length > 0) return false;
 
-  const room = await exec.select().from(rooms).where(eq(rooms.id, roomId)).limit(1);
+  const room = await exec
+    .select()
+    .from(rooms)
+    .where(and(eq(rooms.id, roomId), eq(rooms.propertyId, propertyId)))
+    .limit(1);
   if (!room.length) return false;
   return room[0]!.status !== "maintenance";
 }

@@ -21,7 +21,13 @@ router.get("/staff", requireAuth, async (req, res) => {
       email: profiles.email,
     })
     .from(profiles)
-    .where(and(eq(profiles.isActive, true), sql`${profiles.id} <> ${me}`))
+    .where(
+      and(
+        eq(profiles.isActive, true),
+        eq(profiles.propertyId, req.propertyId),
+        sql`${profiles.id} <> ${me}`,
+      ),
+    )
     .orderBy(asc(profiles.fullName));
   return ok(res, { items: rows });
 });
@@ -65,7 +71,7 @@ router.get("/threads", requireAuth, async (req, res) => {
       lp.last_at,
       coalesce(up.unread, 0) as unread
     from last_per lp
-    join profiles p on p.id = lp.other_id
+    join profiles p on p.id = lp.other_id and p.property_id = ${req.propertyId}
     left join unread_per up on up.other_id = lp.other_id
     order by lp.last_at desc
   `);
@@ -81,6 +87,13 @@ const threadQuery = z.object({
 router.get("/", requireAuth, validate(threadQuery, "query"), async (req, res) => {
   const me = req.user!.id;
   const { with: other, limit } = req.query as unknown as z.infer<typeof threadQuery>;
+
+  const [otherProfile] = await db
+    .select({ id: profiles.id })
+    .from(profiles)
+    .where(and(eq(profiles.id, other), eq(profiles.propertyId, req.propertyId)))
+    .limit(1);
+  if (!otherProfile) return fail(res, 404, "NOT_FOUND", "Staff member not found");
 
   const rows = await db
     .select()
@@ -115,7 +128,11 @@ router.post("/", requireAuth, validate(sendSchema), async (req, res) => {
 
   if (recipientId === me) return fail(res, 400, "SELF", "Cannot message yourself");
 
-  const [exists] = await db.select({ id: profiles.id }).from(profiles).where(eq(profiles.id, recipientId)).limit(1);
+  const [exists] = await db
+    .select({ id: profiles.id })
+    .from(profiles)
+    .where(and(eq(profiles.id, recipientId), eq(profiles.propertyId, req.propertyId)))
+    .limit(1);
   if (!exists) return fail(res, 404, "NOT_FOUND", "Recipient not found");
 
   const [row] = await db
@@ -124,6 +141,7 @@ router.post("/", requireAuth, validate(sendSchema), async (req, res) => {
     .returning();
 
   void dispatchNotification({
+    propertyId: req.propertyId,
     type: "message_received",
     title: `New message from ${req.user!.fullName}`,
     body: body.length > 80 ? `${body.slice(0, 80)}…` : body,

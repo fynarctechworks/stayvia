@@ -36,12 +36,14 @@ router.get("/", requireAuth, requirePermission("view_invoices"), async (req, res
   const per_page = Math.min(100, Math.max(1, Number(req.query.per_page ?? 25)));
 
   const conditions = [];
+  conditions.push(eq(invoices.propertyId, req.propertyId));
   // Invoices belonging to complimentary reservations are hidden from
   // the Invoices page — they live only in the Complimentary report.
   conditions.push(
     sql`NOT EXISTS (
       SELECT 1 FROM ${reservations} rc
       WHERE rc.id = ${invoices.reservationId}
+        AND rc.property_id = ${req.propertyId}
         AND rc.booking_source = 'complimentary')`,
   );
   if (status) conditions.push(eq(invoices.status, status as never));
@@ -61,6 +63,7 @@ router.get("/", requireAuth, requirePermission("view_invoices"), async (req, res
         OR EXISTS (
           SELECT 1 FROM ${reservations} r2
           WHERE r2.id = ${invoices.reservationId}
+            AND r2.property_id = ${req.propertyId}
             AND r2.reservation_number ILIKE ${needle}
         )
       )`,
@@ -90,7 +93,13 @@ router.get("/", requireAuth, requirePermission("view_invoices"), async (req, res
         createdAt: invoices.createdAt,
       })
       .from(invoices)
-      .leftJoin(reservations, eq(reservations.id, invoices.reservationId))
+      .leftJoin(
+        reservations,
+        and(
+          eq(reservations.id, invoices.reservationId),
+          eq(reservations.propertyId, req.propertyId),
+        ),
+      )
       .where(where)
       .orderBy(desc(invoices.createdAt))
       .limit(per_page)
@@ -98,7 +107,13 @@ router.get("/", requireAuth, requirePermission("view_invoices"), async (req, res
     db
       .select({ count: sql<number>`count(*)::int` })
       .from(invoices)
-      .leftJoin(reservations, eq(reservations.id, invoices.reservationId))
+      .leftJoin(
+        reservations,
+        and(
+          eq(reservations.id, invoices.reservationId),
+          eq(reservations.propertyId, req.propertyId),
+        ),
+      )
       .where(where),
   ]);
 
@@ -115,11 +130,13 @@ router.get("/summary", requireAuth, requirePermission("view_invoices"), async (r
   >;
 
   const conditions = [];
+  conditions.push(eq(invoices.propertyId, req.propertyId));
   // Comp invoices are hidden from the Invoices page (see GET / above).
   conditions.push(
     sql`NOT EXISTS (
       SELECT 1 FROM ${reservations} rc
       WHERE rc.id = ${invoices.reservationId}
+        AND rc.property_id = ${req.propertyId}
         AND rc.booking_source = 'complimentary')`,
   );
   if (status) conditions.push(eq(invoices.status, status as never));
@@ -136,6 +153,7 @@ router.get("/summary", requireAuth, requirePermission("view_invoices"), async (r
         OR EXISTS (
           SELECT 1 FROM ${reservations} r2
           WHERE r2.id = ${invoices.reservationId}
+            AND r2.property_id = ${req.propertyId}
             AND r2.reservation_number ILIKE ${needle}
         )
       )`,
@@ -159,7 +177,13 @@ router.get("/summary", requireAuth, requirePermission("view_invoices"), async (r
       owing: sql<string>`COALESCE(SUM(CASE WHEN ${invoices.status} = 'voided' THEN 0 ELSE ${invoices.balanceDue} END), 0)::text`,
     })
     .from(invoices)
-    .leftJoin(reservations, eq(reservations.id, invoices.reservationId))
+    .leftJoin(
+        reservations,
+        and(
+          eq(reservations.id, invoices.reservationId),
+          eq(reservations.propertyId, req.propertyId),
+        ),
+      )
     .where(where);
 
   return ok(res, {
@@ -186,11 +210,13 @@ router.get("/export", requireAuth, requirePermission("view_invoices"), async (re
   >;
 
   const conditions = [];
+  conditions.push(eq(invoices.propertyId, req.propertyId));
   // Comp invoices are hidden from the export too (see GET / above).
   conditions.push(
     sql`NOT EXISTS (
       SELECT 1 FROM ${reservations} rc
       WHERE rc.id = ${invoices.reservationId}
+        AND rc.property_id = ${req.propertyId}
         AND rc.booking_source = 'complimentary')`,
   );
   if (status) conditions.push(eq(invoices.status, status as never));
@@ -207,6 +233,7 @@ router.get("/export", requireAuth, requirePermission("view_invoices"), async (re
         OR EXISTS (
           SELECT 1 FROM ${reservations} r2
           WHERE r2.id = ${invoices.reservationId}
+            AND r2.property_id = ${req.propertyId}
             AND r2.reservation_number ILIKE ${needle}
         )
       )`,
@@ -280,8 +307,17 @@ router.get("/export", requireAuth, requirePermission("view_invoices"), async (re
       voidedByName: voider.fullName,
     })
     .from(invoices)
-    .leftJoin(reservations, eq(reservations.id, invoices.reservationId))
-    .leftJoin(guests, eq(guests.id, invoices.guestId))
+    .leftJoin(
+        reservations,
+        and(
+          eq(reservations.id, invoices.reservationId),
+          eq(reservations.propertyId, req.propertyId),
+        ),
+      )
+    .leftJoin(
+      guests,
+      and(eq(guests.id, invoices.guestId), eq(guests.propertyId, req.propertyId)),
+    )
     .leftJoin(issuer, eq(issuer.id, invoices.issuedBy))
     .leftJoin(voider, eq(voider.id, invoices.voidedBy))
     .where(where)
@@ -518,12 +554,12 @@ router.get("/export", requireAuth, requirePermission("view_invoices"), async (re
 
 router.get("/:id", requireAuth, requirePermission("view_invoices"), async (req, res) => {
   const id = req.params.id!;
-  const inv = await db.select().from(invoices).where(eq(invoices.id, id)).limit(1);
+  const inv = await db.select().from(invoices).where(and(eq(invoices.id, id), eq(invoices.propertyId, req.propertyId))).limit(1);
   if (!inv.length) return fail(res, 404, "NOT_FOUND", "Invoice not found");
   const [items, pays, [resRow]] = await Promise.all([
     db.select().from(invoiceLineItems).where(eq(invoiceLineItems.invoiceId, id)),
-    db.select().from(payments).where(eq(payments.invoiceId, id)).orderBy(desc(payments.paymentDate)),
-    db.select().from(reservations).where(eq(reservations.id, inv[0]!.reservationId)).limit(1),
+    db.select().from(payments).where(and(eq(payments.invoiceId, id), eq(payments.propertyId, req.propertyId))).orderBy(desc(payments.paymentDate)),
+    db.select().from(reservations).where(and(eq(reservations.id, inv[0]!.reservationId), eq(reservations.propertyId, req.propertyId))).limit(1),
   ]);
   return ok(res, {
     ...inv[0],
@@ -539,15 +575,19 @@ router.get("/:id", requireAuth, requirePermission("view_invoices"), async (req, 
 
 router.get("/:id/pdf", requireAuth, requirePermission("view_invoices"), async (req, res) => {
   const id = req.params.id!;
-  const inv = await db.select().from(invoices).where(eq(invoices.id, id)).limit(1);
+  const inv = await db.select().from(invoices).where(and(eq(invoices.id, id), eq(invoices.propertyId, req.propertyId))).limit(1);
   if (!inv.length) return fail(res, 404, "NOT_FOUND", "Invoice not found");
   const [items, pays, [resRow]] = await Promise.all([
     db.select().from(invoiceLineItems).where(eq(invoiceLineItems.invoiceId, id)),
-    db.select().from(payments).where(eq(payments.invoiceId, id)),
-    db.select().from(reservations).where(eq(reservations.id, inv[0]!.reservationId)).limit(1),
+    db.select().from(payments).where(and(eq(payments.invoiceId, id), eq(payments.propertyId, req.propertyId))),
+    db.select().from(reservations).where(and(eq(reservations.id, inv[0]!.reservationId), eq(reservations.propertyId, req.propertyId))).limit(1),
   ]);
-  const settings = await getSettings();
-  const companionCollections = await collectCompanionCollections(inv[0]!.reservationId, id);
+  const settings = await getSettings(req.propertyId);
+  const companionCollections = await collectCompanionCollections(
+    req.propertyId,
+    inv[0]!.reservationId,
+    id,
+  );
   const guestExtra = await loadGuestExtra(inv[0]!.reservationId);
   const pdf = await renderInvoicePdf({
     invoice: inv[0]!,
@@ -600,7 +640,7 @@ router.get(
   requirePermission("view_invoices"),
   async (req, res) => {
     const id = req.params.id!;
-    const inv = await db.select().from(invoices).where(eq(invoices.id, id)).limit(1);
+    const inv = await db.select().from(invoices).where(and(eq(invoices.id, id), eq(invoices.propertyId, req.propertyId))).limit(1);
     if (!inv.length) return fail(res, 404, "NOT_FOUND", "Invoice not found");
     const items = await db
       .select()
@@ -630,13 +670,13 @@ router.get(
   async (req, res) => {
     const id = req.params.id!;
     const roomNumber = req.params.roomNumber!;
-    const inv = await db.select().from(invoices).where(eq(invoices.id, id)).limit(1);
+    const inv = await db.select().from(invoices).where(and(eq(invoices.id, id), eq(invoices.propertyId, req.propertyId))).limit(1);
     if (!inv.length) return fail(res, 404, "NOT_FOUND", "Invoice not found");
     const invoice = inv[0]!;
 
     const [allItems, [resRow]] = await Promise.all([
       db.select().from(invoiceLineItems).where(eq(invoiceLineItems.invoiceId, id)),
-      db.select().from(reservations).where(eq(reservations.id, invoice.reservationId)).limit(1),
+      db.select().from(reservations).where(and(eq(reservations.id, invoice.reservationId), eq(reservations.propertyId, req.propertyId))).limit(1),
     ]);
 
     // This room's lines = its room_charge line(s). Reservation-wide
@@ -679,7 +719,7 @@ router.get(
       balanceDue: "0.00",
     };
 
-    const settings = await getSettings();
+    const settings = await getSettings(req.propertyId);
     const guestExtra = await loadGuestExtra(invoice.reservationId);
     const pdf = await renderInvoicePdf({
       invoice: roomInvoice,
@@ -725,6 +765,7 @@ router.get(
 // invoices so pre-invoice rows aren't filtered out. The footer shows the
 // invoice number when one exists, otherwise the reservation number.
 async function collectCompanionCollections(
+  propertyId: string,
   reservationId: string,
   thisInvoiceId: string,
 ): Promise<
@@ -737,7 +778,7 @@ async function collectCompanionCollections(
   const [thisRes] = await db
     .select({ reservationNumber: reservations.reservationNumber })
     .from(reservations)
-    .where(eq(reservations.id, reservationId))
+    .where(and(eq(reservations.id, reservationId), eq(reservations.propertyId, propertyId)))
     .limit(1);
   const newMarker = thisRes
     ? `Collected at check-out of ${thisRes.reservationNumber}`
@@ -752,10 +793,23 @@ async function collectCompanionCollections(
       otherReservationNumber: reservations.reservationNumber,
     })
     .from(payments)
-    .innerJoin(reservations, eq(reservations.id, payments.reservationId))
-    .leftJoin(invoices, eq(invoices.reservationId, payments.reservationId))
+    .innerJoin(
+      reservations,
+      and(
+        eq(reservations.id, payments.reservationId),
+        eq(reservations.propertyId, propertyId),
+      ),
+    )
+    .leftJoin(
+      invoices,
+      and(
+        eq(invoices.reservationId, payments.reservationId),
+        eq(invoices.propertyId, propertyId),
+      ),
+    )
     .where(
       and(
+        eq(payments.propertyId, propertyId),
         eq(payments.voided, false),
         newMarker
           ? sql`${payments.notes} IN (${legacyMarker}, ${newMarker})`
@@ -825,7 +879,7 @@ router.patch(
       }>;
     };
 
-    const inv = await db.select().from(invoices).where(eq(invoices.id, id)).limit(1);
+    const inv = await db.select().from(invoices).where(and(eq(invoices.id, id), eq(invoices.propertyId, req.propertyId))).limit(1);
     if (!inv.length) return fail(res, 404, "NOT_FOUND", "Invoice not found");
     if (inv[0]!.status === "voided") {
       return fail(res, 400, "VOIDED", "Invoice is voided");
@@ -954,7 +1008,12 @@ router.patch(
         const [resRow] = await tx
           .select()
           .from(reservations)
-          .where(eq(reservations.id, original.reservationId))
+          .where(
+            and(
+              eq(reservations.id, original.reservationId),
+              eq(reservations.propertyId, req.propertyId),
+            ),
+          )
           .limit(1);
         if (resRow) {
           const newIn = (input.checkInDate ?? resRow.checkInDate) as string;
@@ -969,10 +1028,19 @@ router.patch(
         await tx
           .update(reservations)
           .set(resPatch)
-          .where(eq(reservations.id, original.reservationId));
+          .where(
+            and(
+              eq(reservations.id, original.reservationId),
+              eq(reservations.propertyId, req.propertyId),
+            ),
+          );
       }
 
-      const [row] = await tx.update(invoices).set(patch).where(eq(invoices.id, id)).returning();
+      const [row] = await tx
+        .update(invoices)
+        .set(patch)
+        .where(and(eq(invoices.id, id), eq(invoices.propertyId, req.propertyId)))
+        .returning();
       return row!;
     });
 
@@ -991,6 +1059,7 @@ router.patch(
     };
 
     await logActivity({
+      propertyId: req.propertyId,
       action: "invoice_edited",
       entityType: "invoice",
       entityId: id,
@@ -1003,7 +1072,7 @@ router.patch(
         lineItemsReplaced: !!input.lineItems,
       },
     });
-    await invalidateDashboard();
+    await invalidateDashboard(req.propertyId);
     return ok(res, updated);
   },
 );

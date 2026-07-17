@@ -56,7 +56,11 @@ router.get(
     const from = date_from ? propertyDayStart(date_from) : startOfMonth(new Date());
     const to = date_to ? propertyDayEnd(date_to) : new Date();
 
-    const conditions = [gte(activityLog.createdAt, from), lte(activityLog.createdAt, to)];
+    const conditions = [
+      eq(activityLog.propertyId, req.propertyId),
+      gte(activityLog.createdAt, from),
+      lte(activityLog.createdAt, to),
+    ];
 
     const rows = await db
       .select({
@@ -115,6 +119,7 @@ router.get(
 
     // Log the export action itself — auditing the audit access.
     await logActivity({
+      propertyId: req.propertyId,
       action: "audit_export",
       entityType: "activity_log",
       entityId: req.user!.id,

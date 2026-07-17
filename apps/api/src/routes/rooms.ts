@@ -35,7 +35,7 @@ router.get(
       check_out: string;
       include_conflicts?: "1";
     };
-    const available = await findAvailableRooms(check_in, check_out, {
+    const available = await findAvailableRooms(req.propertyId, check_in, check_out, {
       includeConflicts: include_conflicts === "1",
     });
     return ok(res, available);
@@ -44,7 +44,7 @@ router.get(
 
 router.get("/", requireAuth, validate(roomListQuerySchema, "query"), async (req, res) => {
   const { floor, status, type } = req.query as Record<string, string | undefined>;
-  const conditions = [];
+  const conditions = [eq(rooms.propertyId, req.propertyId)];
   if (floor !== undefined) conditions.push(eq(rooms.floor, Number(floor)));
   if (status) conditions.push(eq(rooms.status, status as never));
   if (type) conditions.push(eq(rooms.roomType, type as never));
@@ -52,14 +52,18 @@ router.get("/", requireAuth, validate(roomListQuerySchema, "query"), async (req,
   const data = await db
     .select()
     .from(rooms)
-    .where(conditions.length ? and(...conditions) : undefined)
+    .where(and(...conditions))
     .orderBy(rooms.roomNumber);
   return ok(res, data);
 });
 
 router.get("/:id", requireAuth, async (req, res) => {
   const id = req.params.id!;
-  const found = await db.select().from(rooms).where(eq(rooms.id, id)).limit(1);
+  const found = await db
+    .select()
+    .from(rooms)
+    .where(and(eq(rooms.id, id), eq(rooms.propertyId, req.propertyId)))
+    .limit(1);
   if (!found.length) return fail(res, 404, "NOT_FOUND", "Room not found");
   return ok(res, found[0]);
 });
@@ -77,6 +81,7 @@ router.post("/", requireAuth, requirePermission("edit_rooms"), validate(roomCrea
       })
       .returning();
     await logActivity({
+      propertyId: req.propertyId,
       action: "room_created",
       entityType: "room",
       entityId: created!.id,
@@ -100,10 +105,15 @@ router.put("/:id", requireAuth, requirePermission("edit_rooms"), validate(roomUp
   const update: Record<string, unknown> = { ...input, updatedAt: new Date() };
   if (input.baseRate !== undefined) update.baseRate = String(input.baseRate);
 
-  const [updated] = await db.update(rooms).set(update).where(eq(rooms.id, id)).returning();
+  const [updated] = await db
+    .update(rooms)
+    .set(update)
+    .where(and(eq(rooms.id, id), eq(rooms.propertyId, req.propertyId)))
+    .returning();
   if (!updated) return fail(res, 404, "NOT_FOUND", "Room not found");
 
   await logActivity({
+    propertyId: req.propertyId,
     action: "room_updated",
     entityType: "room",
     entityId: id,
@@ -124,11 +134,12 @@ router.patch(
     const [updated] = await db
       .update(rooms)
       .set({ status: status as never, updatedAt: new Date() })
-      .where(eq(rooms.id, id))
+      .where(and(eq(rooms.id, id), eq(rooms.propertyId, req.propertyId)))
       .returning();
     if (!updated) return fail(res, 404, "NOT_FOUND", "Room not found");
 
     await logActivity({
+      propertyId: req.propertyId,
       action: "room_status_change",
       entityType: "room",
       entityId: id,
@@ -137,7 +148,7 @@ router.patch(
       ipAddress: req.ip,
       metadata: { status, reason },
     });
-    await invalidateDashboard();
+    await invalidateDashboard(req.propertyId);
     return ok(res, updated);
   },
 );
@@ -148,14 +159,21 @@ router.patch(
 // firing the destructive call.
 router.get("/:id/delete-impact", requireAuth, requirePermission("edit_rooms"), async (req, res) => {
   const id = req.params.id!;
-  const [room] = await db.select().from(rooms).where(eq(rooms.id, id)).limit(1);
+  const [room] = await db
+    .select()
+    .from(rooms)
+    .where(and(eq(rooms.id, id), eq(rooms.propertyId, req.propertyId)))
+    .limit(1);
   if (!room) return fail(res, 404, "NOT_FOUND", "Room not found");
 
   // Total historical reservations that have ever held this room.
   const [{ total = 0 } = { total: 0 }] = await db
     .select({ total: sql<number>`count(*)::int` })
     .from(reservationRooms)
-    .where(eq(reservationRooms.roomId, id));
+    .innerJoin(reservations, eq(reservations.id, reservationRooms.reservationId))
+    .where(
+      and(eq(reservationRooms.roomId, id), eq(reservations.propertyId, req.propertyId)),
+    );
 
   // Active reservations (confirmed or checked-in) — these would block deletion.
   const activeRows = await db
@@ -171,6 +189,7 @@ router.get("/:id/delete-impact", requireAuth, requirePermission("edit_rooms"), a
     .where(
       and(
         eq(reservationRooms.roomId, id),
+        eq(reservations.propertyId, req.propertyId),
         inArray(reservations.status, ["confirmed", "checked_in"]),
       ),
     );
@@ -188,7 +207,11 @@ router.get("/:id/delete-impact", requireAuth, requirePermission("edit_rooms"), a
 // active reservation — admin must close those out first.
 router.delete("/:id", requireAuth, requirePermission("edit_rooms"), async (req, res) => {
   const id = req.params.id!;
-  const [room] = await db.select().from(rooms).where(eq(rooms.id, id)).limit(1);
+  const [room] = await db
+    .select()
+    .from(rooms)
+    .where(and(eq(rooms.id, id), eq(rooms.propertyId, req.propertyId)))
+    .limit(1);
   if (!room) return fail(res, 404, "NOT_FOUND", "Room not found");
 
   if (room.status === "occupied") {
@@ -207,6 +230,7 @@ router.delete("/:id", requireAuth, requirePermission("edit_rooms"), async (req, 
     .where(
       and(
         eq(reservationRooms.roomId, id),
+        eq(reservations.propertyId, req.propertyId),
         inArray(reservations.status, ["confirmed", "checked_in"]),
       ),
     );
@@ -227,11 +251,14 @@ router.delete("/:id", requireAuth, requirePermission("edit_rooms"), async (req, 
       .delete(reservationRooms)
       .where(eq(reservationRooms.roomId, id))
       .returning({ id: reservationRooms.id });
-    await tx.delete(rooms).where(eq(rooms.id, id));
+    await tx
+      .delete(rooms)
+      .where(and(eq(rooms.id, id), eq(rooms.propertyId, req.propertyId)));
     return removed.length;
   });
 
   await logActivity({
+    propertyId: req.propertyId,
     action: "room_deleted",
     entityType: "room",
     entityId: id,
@@ -240,7 +267,7 @@ router.delete("/:id", requireAuth, requirePermission("edit_rooms"), async (req, 
     ipAddress: req.ip,
     metadata: { roomNumber: room.roomNumber, detachedHistoricalLinks: detached },
   });
-  await invalidateDashboard();
+  await invalidateDashboard(req.propertyId);
   return ok(res, { id, deleted: true, detachedHistoricalLinks: detached });
 });
 

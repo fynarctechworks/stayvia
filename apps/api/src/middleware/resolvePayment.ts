@@ -4,7 +4,7 @@
 // receipt URLs continue resolving.
 
 import type { NextFunction, Request, Response } from "express";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { db } from "../db/client.js";
 import { payments } from "../db/schema/invoices.js";
 import { fail } from "../lib/response.js";
@@ -55,7 +55,8 @@ export async function resolvePaymentId(
   if (UUID_RE.test(raw)) return next();
 
   if (RECEIPT_NUMBER_RE.test(raw)) {
-    const key = raw.toUpperCase();
+    // Numbers are per-hotel — scope the lookup and the cache by tenant.
+    const key = `${req.propertyId}:${raw.toUpperCase()}`;
     const cached = cacheGet(key);
     if (cached) {
       req.params.id = cached;
@@ -65,7 +66,12 @@ export async function resolvePaymentId(
     const r = await db
       .select({ id: payments.id })
       .from(payments)
-      .where(eq(payments.receiptNumber, key))
+      .where(
+        and(
+          eq(payments.receiptNumber, raw.toUpperCase()),
+          eq(payments.propertyId, req.propertyId),
+        ),
+      )
       .limit(1);
 
     if (!r.length) {

@@ -1,10 +1,41 @@
 import { randomBytes } from "node:crypto";
 import { createRequire } from "node:module";
 import { dirname, join } from "node:path";
+import { asc } from "drizzle-orm";
+import { db } from "../db/client.js";
+import { properties } from "../db/schema/properties.js";
 import { logger } from "./logger.js";
 import { supabaseAdmin } from "./supabase.js";
 
 const BUCKET = "kyc-docs";
+
+// Every object path is namespaced `${propertyId}/…` so two hotels can never
+// collide (same guest at two hotels, or matching per-hotel invoice numbers).
+// Signed-url/delete helpers verify the stored path belongs to the caller's
+// property before acting. Legacy pre-tenancy paths have no UUID prefix — they
+// resolve only for the first hotel ever provisioned (the only property that
+// existed before namespacing), never for other tenants.
+const UUID_SEGMENT_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+let legacyPropertyId: string | null | undefined;
+async function getLegacyPropertyId(): Promise<string | null> {
+  if (legacyPropertyId !== undefined) return legacyPropertyId;
+  const [oldest] = await db
+    .select({ id: properties.id })
+    .from(properties)
+    .orderBy(asc(properties.createdAt))
+    .limit(1);
+  legacyPropertyId = oldest?.id ?? null;
+  return legacyPropertyId;
+}
+
+async function pathBelongsToProperty(propertyId: string, path: string): Promise<boolean> {
+  const first = path.split("/")[0] ?? "";
+  if (UUID_SEGMENT_RE.test(first)) return first === propertyId;
+  // Legacy path from before property namespacing — owned by the oldest hotel.
+  return propertyId === (await getLegacyPropertyId());
+}
 
 // Lazy sharp loader. Cached after the first attempt. Returns null if the native
 // module can't load (so callers degrade gracefully in a stripped offline
@@ -164,6 +195,8 @@ export function storageFolderLabel(
 }
 
 export async function uploadKycPhoto(
+  // Tenant that owns the file — becomes the first path segment.
+  propertyId: string,
   // Storage folder for this guest — pass storageFolderLabel(fullName, guestId)
   // so the files on disk carry the customer's name.
   guestFolder: string,
@@ -189,7 +222,7 @@ export async function uploadKycPhoto(
   // the guest ID + upload time. We now use a 16-byte hex token so even a
   // signed-URL leak doesn't help an attacker enumerate other KYC files.
   const token = randomBytes(16).toString("hex");
-  const path = `${guestFolder}/${side}-${token}.jpg`;
+  const path = `${propertyId}/${guestFolder}/${side}-${token}.jpg`;
   const { error } = await supabaseAdmin.storage
     .from(BUCKET)
     .upload(path, safe.buffer, {
@@ -203,8 +236,13 @@ export async function uploadKycPhoto(
   return path;
 }
 
-export async function signedKycUrl(path: string, expiresInSeconds = 300): Promise<string | null> {
+export async function signedKycUrl(
+  propertyId: string,
+  path: string,
+  expiresInSeconds = 300,
+): Promise<string | null> {
   if (!path) return null;
+  if (!(await pathBelongsToProperty(propertyId, path))) return null;
   const { data, error } = await supabaseAdmin.storage
     .from(BUCKET)
     .createSignedUrl(path, expiresInSeconds);
@@ -212,8 +250,9 @@ export async function signedKycUrl(path: string, expiresInSeconds = 300): Promis
   return data.signedUrl;
 }
 
-export async function deleteKycFile(path: string): Promise<void> {
+export async function deleteKycFile(propertyId: string, path: string): Promise<void> {
   if (!path) return;
+  if (!(await pathBelongsToProperty(propertyId, path))) return;
   await supabaseAdmin.storage.from(BUCKET).remove([path]);
 }
 
@@ -270,6 +309,8 @@ async function ensureExpenseBucket() {
 }
 
 export async function uploadExpenseAttachment(
+  // Tenant that owns the file — becomes the first path segment.
+  propertyId: string,
   // Storage folder for this expense — pass storageFolderLabel(description,
   // expenseId, "expense") so bills on disk carry what they were for.
   expenseFolder: string,
@@ -289,7 +330,7 @@ export async function uploadExpenseAttachment(
           ? "webp"
           : "jpg";
   const token = randomBytes(16).toString("hex");
-  const path = `${expenseFolder}/bill-${token}.${ext}`;
+  const path = `${propertyId}/${expenseFolder}/bill-${token}.${ext}`;
   const { error } = await supabaseAdmin.storage
     .from(EXPENSE_BUCKET)
     .upload(path, file.buffer, {
@@ -303,10 +344,12 @@ export async function uploadExpenseAttachment(
 }
 
 export async function signedExpenseAttachmentUrl(
+  propertyId: string,
   path: string,
   expiresInSeconds = 300,
 ): Promise<string | null> {
   if (!path) return null;
+  if (!(await pathBelongsToProperty(propertyId, path))) return null;
   const { data, error } = await supabaseAdmin.storage
     .from(EXPENSE_BUCKET)
     .createSignedUrl(path, expiresInSeconds);
@@ -314,8 +357,9 @@ export async function signedExpenseAttachmentUrl(
   return data.signedUrl;
 }
 
-export async function deleteExpenseAttachment(path: string): Promise<void> {
+export async function deleteExpenseAttachment(propertyId: string, path: string): Promise<void> {
   if (!path) return;
+  if (!(await pathBelongsToProperty(propertyId, path))) return;
   await supabaseAdmin.storage.from(EXPENSE_BUCKET).remove([path]);
 }
 
@@ -373,19 +417,22 @@ export function documentLabel(
 }
 
 export async function uploadPublicPdf(
+  propertyId: string,
   pathInBucket: string,
   pdf: Buffer,
   // Customer tag ("Ajay-9347868290") appended to the filename. When absent,
   // a random token keeps the (publicly-served) path unguessable.
   label?: string,
 ): Promise<string | null> {
-  return uploadPublicFile(pathInBucket, pdf, "application/pdf", label);
+  return uploadPublicFile(propertyId, pathInBucket, pdf, "application/pdf", label);
 }
 
 // Generic public-bucket uploader. Used for invoice/receipt PDFs as well
 // as room gallery images (Phase 1 amenities work). Same bucket, same
-// public-URL pattern — the caller decides the content type.
+// public-URL pattern — the caller decides the content type. The property
+// prefix is prepended in-function so every caller inherits the namespacing.
 export async function uploadPublicFile(
+  propertyId: string,
   pathInBucket: string,
   body: Buffer,
   contentType: string,
@@ -395,10 +442,10 @@ export async function uploadPublicFile(
     // Named documents get the customer tag (stable path — regenerations
     // overwrite); unnamed ones keep a random token so public paths stay
     // unguessable.
-    const obfuscatedPath = withSuffix(
+    const obfuscatedPath = `${propertyId}/${withSuffix(
       pathInBucket,
       label && label.length > 0 ? label : randomBytes(8).toString("hex"),
-    );
+    )}`;
     await ensureDocsBucket();
     const { error } = await supabaseAdmin.storage
       .from(DOCS_BUCKET)

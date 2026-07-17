@@ -3,7 +3,7 @@
 // the cache lifetime is bounded only by TTL eviction.
 
 import type { NextFunction, Request, Response } from "express";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { db } from "../db/client.js";
 import { invoices } from "../db/schema/invoices.js";
 import { fail } from "../lib/response.js";
@@ -55,7 +55,8 @@ export async function resolveInvoiceId(
   if (UUID_RE.test(raw)) return next();
 
   if (INVOICE_NUMBER_RE.test(raw)) {
-    const key = raw.toUpperCase();
+    // Numbers are per-hotel — scope the lookup and the cache by tenant.
+    const key = `${req.propertyId}:${raw.toUpperCase()}`;
     const cached = cacheGet(key);
     if (cached) {
       req.params.id = cached;
@@ -65,7 +66,12 @@ export async function resolveInvoiceId(
     const r = await db
       .select({ id: invoices.id })
       .from(invoices)
-      .where(eq(invoices.invoiceNumber, key))
+      .where(
+        and(
+          eq(invoices.invoiceNumber, raw.toUpperCase()),
+          eq(invoices.propertyId, req.propertyId),
+        ),
+      )
       .limit(1);
 
     if (!r.length) {

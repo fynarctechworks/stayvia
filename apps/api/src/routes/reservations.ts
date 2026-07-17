@@ -58,7 +58,7 @@ import { hashOtp } from "../lib/otp.js";
 import { renderInvoicePdf, renderReceiptPdf } from "../lib/pdf.js";
 import { generateReceiptNumber } from "../lib/receipt.js";
 import { documentLabel, signedKycUrl, uploadPublicPdf } from "../lib/storage.js";
-import { dispatchNotification, notifyGuestSms, notifyOwner } from "../lib/notify.js";
+import { dispatchNotification, hotelDisplayName, notifyGuestSms, notifyOwner } from "../lib/notify.js";
 import { renderTemplate } from "../lib/templates.js";
 import { env } from "../config/env.js";
 import { invalidateDashboard } from "../lib/redis.js";
@@ -130,8 +130,11 @@ router.param("id", resolveReservationId as never);
 // invoice/receipt rendering paths so the displayed room-type names match
 // what staff typed in Settings → Room Types, including correct casing for
 // types like "Non AC Single Bed Rooms" where the slug doesn't title-case.
-async function buildRoomTypeLabelMap(): Promise<RoomTypeLabelMap> {
-  const rows = await db.select({ slug: roomTypes.slug, label: roomTypes.label }).from(roomTypes);
+async function buildRoomTypeLabelMap(propertyId: string): Promise<RoomTypeLabelMap> {
+  const rows = await db
+    .select({ slug: roomTypes.slug, label: roomTypes.label })
+    .from(roomTypes)
+    .where(eq(roomTypes.propertyId, propertyId));
   return new Map(rows.map((r) => [r.slug, r.label]));
 }
 
@@ -165,6 +168,8 @@ router.get(
       per_page: number;
     };
     const conditions = [];
+    // Phase 2 tenancy: every list row belongs to the caller's property.
+    conditions.push(eq(reservations.propertyId, req.propertyId));
     if (status) conditions.push(eq(reservations.status, status as never));
     if (date) {
       conditions.push(lte(reservations.checkInDate, date));
@@ -243,7 +248,7 @@ router.get(
 
     // Sign all storage keys in parallel. Null keys produce null URLs.
     const photoUrls = await Promise.all(
-      rows.map((r) => (r.guestPhotoKey ? signedKycUrl(r.guestPhotoKey) : Promise.resolve(null))),
+      rows.map((r) => (r.guestPhotoKey ? signedKycUrl(req.propertyId, r.guestPhotoKey) : Promise.resolve(null))),
     );
 
     return list(
@@ -262,7 +267,11 @@ router.get(
 
 router.get("/:id", requireAuth, requirePermission("view_reservations"), async (req, res) => {
   const id = req.params.id!;
-  const r = await db.select().from(reservations).where(eq(reservations.id, id)).limit(1);
+  const r = await db
+      .select()
+      .from(reservations)
+      .where(and(eq(reservations.id, id), eq(reservations.propertyId, req.propertyId)))
+      .limit(1);
   if (!r.length) return fail(res, 404, "NOT_FOUND", "Reservation not found");
 
   const [resRooms, charges, guest] = await Promise.all([
@@ -402,6 +411,7 @@ router.get("/:id", requireAuth, requirePermission("view_reservations"), async (r
           .where(
             and(
               inArray(reservationRooms.roomId, myRoomIds),
+              eq(reservations.propertyId, req.propertyId),
               eq(reservations.status, "checked_in"),
               lte(reservations.checkOutDate, r[0]!.checkInDate),
               ne(reservations.id, id),
@@ -435,15 +445,17 @@ router.get("/:id", requireAuth, requirePermission("view_reservations"), async (r
     .where(eq(reservationCoGuests.reservationId, id))
     .orderBy(asc(reservationCoGuests.position));
 
-  const s = await getSettings();
+  const s = await getSettings(req.propertyId);
 
-  const guestPhotoUrl = guest[0]?.guestPhoto ? await signedKycUrl(guest[0].guestPhoto) : null;
+  const guestPhotoUrl = guest[0]?.guestPhoto
+    ? await signedKycUrl(req.propertyId, guest[0].guestPhoto)
+    : null;
 
   return ok(res, {
     ...r[0],
     guest: guest[0] ? { ...guest[0], photoUrl: guestPhotoUrl } : guest[0],
     rooms: await (async () => {
-      const m = await buildRoomTypeLabelMap();
+      const m = await buildRoomTypeLabelMap(req.propertyId);
       return resRooms.map((x) => {
         const occ = occupantById.get(x.rr.guestId);
         return {
@@ -552,6 +564,11 @@ router.post(
   async (req, res) => {
     const input = req.body as import("@stayvia/shared").ReservationCreateInput;
 
+    // Phase 2: every new reservation + its payments are scoped to the
+    // caller's property. Read once and threaded through the handler
+    // (queries, tx inserts, and the fire-and-forget notification block).
+    const propertyId = req.propertyId;
+
     // Verify the OTP up-front. We intentionally do this BEFORE any
     // availability / pricing / lock work so a bad/missing OTP wastes no
     // DB time. The matching OTP row is selected for consumption later
@@ -565,7 +582,7 @@ router.post(
       const [otpGuest] = await db
         .select({ phone: guests.phone })
         .from(guests)
-        .where(eq(guests.id, input.guestId))
+        .where(and(eq(guests.id, input.guestId), eq(guests.propertyId, propertyId)))
         .limit(1);
       const [otpRow] = await db
         .select()
@@ -574,7 +591,14 @@ router.post(
           and(
             or(
               eq(otps.guestId, input.guestId),
-              and(eq(otps.target, otpGuest?.phone ?? ""), isNull(otps.guestId)),
+              // Phone-anchored OTPs are property-scoped — two hotels
+              // checking in the same phone must not consume each
+              // other's codes.
+              and(
+                eq(otps.target, otpGuest?.phone ?? ""),
+                isNull(otps.guestId),
+                eq(otps.propertyId, propertyId),
+              ),
             ),
             isNull(otps.reservationId),
             isNull(otps.consumedAt),
@@ -598,7 +622,7 @@ router.post(
       // off. We read the setting server-side rather than trusting the
       // client's skipOtp flag, so a caller can't skip OTP the operator
       // required just by sending skipOtp:true.
-      const { otpRequiredForCheckin } = await getSettings();
+      const { otpRequiredForCheckin } = await getSettings(req.propertyId);
       if (otpRequiredForCheckin) {
         return fail(res, 400, "OTP_REQUIRED", "OTP verification required before booking");
       }
@@ -613,7 +637,7 @@ router.post(
         blacklistReason: guests.blacklistReason,
       })
       .from(guests)
-      .where(eq(guests.id, input.guestId))
+      .where(and(eq(guests.id, input.guestId), eq(guests.propertyId, propertyId)))
       .limit(1);
     if (!guestRow) {
       return fail(res, 404, "GUEST_NOT_FOUND", "Guest not found");
@@ -629,11 +653,22 @@ router.post(
 
     const roomIds = input.rooms.map((r) => r.roomId);
 
-    // Phase 2: every new reservation + its payments are scoped to the
-    // caller's property. Read once and threaded through the tx.
-    const propertyId = req.propertyId;
+    // Cross-table body references must belong to this property. Rooms are
+    // implicitly verified by the property-scoped isRoomAvailable probe in
+    // the tx below (a cross-tenant roomId reads as unavailable); co-guests
+    // need an explicit check before they're linked.
+    if (input.coGuestIds && input.coGuestIds.length > 0) {
+      const uniqueCoIds = Array.from(new Set(input.coGuestIds));
+      const coRows = await db
+        .select({ id: guests.id })
+        .from(guests)
+        .where(and(inArray(guests.id, uniqueCoIds), eq(guests.propertyId, propertyId)));
+      if (coRows.length !== uniqueCoIds.length) {
+        return fail(res, 404, "GUEST_NOT_FOUND", "One or more co-guests not found");
+      }
+    }
 
-    const settings = await getSettings();
+    const settings = await getSettings(req.propertyId);
     const stayType = input.stayType ?? "overnight";
     const isShortStay = stayType === "short_stay";
 
@@ -749,6 +784,7 @@ router.post(
           : input.checkOutDate;
         for (const roomId of roomIds) {
           const ok = await isRoomAvailable(
+            propertyId,
             roomId,
             input.checkInDate,
             probeOut,
@@ -954,6 +990,7 @@ router.post(
     const createdReservation = created;
 
     await logActivity({
+      propertyId: req.propertyId,
       action: "reservation_created",
       entityType: "reservation",
       entityId: createdReservation.id,
@@ -979,6 +1016,7 @@ router.post(
         const bookedRooms = await getReservationRoomNumbers(createdReservation.id);
         const roomSuffix = bookedRooms ? ` · Room ${bookedRooms}` : "";
         await dispatchNotification({
+          propertyId: req.propertyId,
           type: "reservation_created",
           title: "New booking",
           body: `${createdReservation.reservationNumber} for ${g?.fullName ?? "guest"}${roomSuffix} (${createdReservation.checkInDate} to ${createdReservation.checkOutDate})`,
@@ -1003,7 +1041,7 @@ router.post(
               .orderBy(desc(payments.createdAt))
               .limit(1);
             if (latestPayment) {
-              const settingsForPdf = await getSettings();
+              const settingsForPdf = await getSettings(propertyId);
               const pdf = await renderReceiptPdf({
                 payment: latestPayment,
                 reservation: createdReservation,
@@ -1012,6 +1050,7 @@ router.post(
                 settings: settingsForPdf,
               });
               const url = await uploadPublicPdf(
+                propertyId,
                 `receipts/${latestPayment.receiptNumber ?? latestPayment.id}.pdf`,
                 pdf,
                 documentLabel(g!.fullName, g!.phone),
@@ -1025,10 +1064,10 @@ router.post(
             );
           }
 
-          const settingsForMsg = await getSettings();
+          const settingsForMsg = await getSettings(propertyId);
           const receiptBlock = receiptLink ? `\n\nReceipt: ${receiptLink}` : "";
           const baseVars = {
-            hotel: env.HOTEL_DISPLAY_NAME,
+            hotel: await hotelDisplayName(req.propertyId),
             hotel_phone: settingsForMsg.hotelPhone ?? "",
             guest_name: g?.fullName ?? "guest",
             guest_phone: g?.phone ?? "",
@@ -1044,18 +1083,18 @@ router.post(
           };
 
           if (g?.phone) {
-            const t = await renderTemplate("booking_advance_guest_sms", baseVars);
+            const t = await renderTemplate(req.propertyId, "booking_advance_guest_sms", baseVars);
             if (t.enabled) await notifyGuestSms({ to: g.phone, text: t.body });
           }
-          const ownerT = await renderTemplate("booking_advance_owner_sms", baseVars);
-          if (ownerT.enabled) await notifyOwner(ownerT.body);
+          const ownerT = await renderTemplate(req.propertyId, "booking_advance_owner_sms", baseVars);
+          if (ownerT.enabled) await notifyOwner(req.propertyId, ownerT.body);
         }
       } catch (err) {
         logger.warn({ err, reservationId: createdReservation.id }, "post-create notification failed");
       }
     })();
 
-    await invalidateDashboard();
+    await invalidateDashboard(req.propertyId);
     return ok(res, createdReservation, 201);
   },
 );
@@ -1069,7 +1108,11 @@ router.get(
   requirePermission("view_reservations"),
   async (req, res) => {
     const id = req.params.id!;
-    const r = await db.select().from(reservations).where(eq(reservations.id, id)).limit(1);
+    const r = await db
+      .select()
+      .from(reservations)
+      .where(and(eq(reservations.id, id), eq(reservations.propertyId, req.propertyId)))
+      .limit(1);
     if (!r.length) return fail(res, 404, "NOT_FOUND", "Reservation not found");
     const current = r[0]!;
     if (current.status !== "confirmed") {
@@ -1099,7 +1142,7 @@ router.get(
     // so staff sees the full picture.
     const conflictingRoomIds: string[] = [];
     for (const a of assigned) {
-      const ok2 = await isRoomAvailable(a.roomId, today, current.checkInDate, id);
+      const ok2 = await isRoomAvailable(req.propertyId, a.roomId, today, current.checkInDate, id);
       if (!ok2) conflictingRoomIds.push(a.roomId);
     }
 
@@ -1177,7 +1220,11 @@ router.post(
   requirePermission("view_reservations"),
   async (req, res) => {
     const id = req.params.id!;
-    const r = await db.select().from(reservations).where(eq(reservations.id, id)).limit(1);
+    const r = await db
+      .select()
+      .from(reservations)
+      .where(and(eq(reservations.id, id), eq(reservations.propertyId, req.propertyId)))
+      .limit(1);
     if (!r.length) return fail(res, 404, "NOT_FOUND", "Reservation not found");
     const current = r[0]!;
     if (current.status !== "confirmed") {
@@ -1225,6 +1272,7 @@ router.post(
         // (today → original checkInDate). Exclude this reservation itself.
         for (const a of assigned) {
           const ok2 = await isRoomAvailable(
+            req.propertyId,
             a.roomId,
             today,
             current.checkInDate,
@@ -1299,6 +1347,7 @@ router.post(
     }
 
     await logActivity({
+      propertyId: req.propertyId,
       action: "early_check_in",
       entityType: "reservation",
       entityId: id,
@@ -1307,7 +1356,7 @@ router.post(
       ipAddress: req.ip,
       metadata: { originalCheckIn: current.checkInDate, newCheckIn: today },
     });
-    await invalidateDashboard();
+    await invalidateDashboard(req.propertyId);
 
     const [updated] = await db.select().from(reservations).where(eq(reservations.id, id)).limit(1);
     return ok(res, updated);
@@ -1324,7 +1373,11 @@ router.post(
     const id = req.params.id!;
     const input = req.body as import("@stayvia/shared").CheckInInput;
 
-    const r = await db.select().from(reservations).where(eq(reservations.id, id)).limit(1);
+    const r = await db
+      .select()
+      .from(reservations)
+      .where(and(eq(reservations.id, id), eq(reservations.propertyId, req.propertyId)))
+      .limit(1);
     if (!r.length) return fail(res, 404, "NOT_FOUND", "Reservation not found");
     if (r[0]!.status !== "confirmed") {
       return fail(res, 409, "INVALID_STATUS", `Cannot check in a ${r[0]!.status} reservation`);
@@ -1375,7 +1428,7 @@ router.post(
     // We read the setting server-side (not a client flag) so it can't be
     // bypassed. The purpose="checkin" scope stays so this never touches
     // auth/password OTP.
-    const { otpRequiredForCheckin } = await getSettings();
+    const { otpRequiredForCheckin } = await getSettings(req.propertyId);
     if (otpRequiredForCheckin) {
       const otpRow = await db
         .select({ id: otps.id })
@@ -1471,6 +1524,7 @@ router.post(
     });
 
     await logActivity({
+      propertyId: req.propertyId,
       action: "check_in",
       entityType: "reservation",
       entityId: id,
@@ -1502,7 +1556,7 @@ router.post(
         const advancePaid = fresh?.advancePaid ?? r[0]!.advancePaid;
         const balance = fresh?.balanceDue ?? r[0]!.balanceDue;
 
-        const settings = await getSettings();
+        const settings = await getSettings(req.propertyId);
 
         // Always render the check-in receipt PDF — paid or not. The
         // payment row was inserted above regardless of advance amount, so
@@ -1524,6 +1578,7 @@ router.post(
               settings,
             });
             const url = await uploadPublicPdf(
+              req.propertyId,
               `receipts/${latestPayment.receiptNumber ?? latestPayment.id}.pdf`,
               pdf,
               documentLabel(g!.fullName, g!.phone),
@@ -1541,7 +1596,7 @@ router.post(
         const receiptBlock = receiptLink ? `\n\nView receipt: ${receiptLink}` : "";
 
         const baseVars = {
-          hotel: env.HOTEL_DISPLAY_NAME,
+          hotel: await hotelDisplayName(req.propertyId),
           hotel_phone: settings.hotelPhone ?? "",
           wifi_ssid: settings.wifiSsid ?? "",
           wifi_password: settings.wifiPassword ?? "",
@@ -1560,6 +1615,7 @@ router.post(
           receipt_block: receiptBlock,
         };
         await dispatchNotification({
+          propertyId: req.propertyId,
           type: "guest_checked_in",
           title: "Guest checked in",
           body: `${g?.fullName ?? "Guest"} checked in (${r[0]!.reservationNumber}${roomNumbers ? ` · Room ${roomNumbers}` : ""})`,
@@ -1568,17 +1624,17 @@ router.post(
           recipientRoles: ["admin", "frontdesk", "housekeeping"],
         });
         if (g?.phone) {
-          const t = await renderTemplate("checkin_guest_sms", baseVars);
+          const t = await renderTemplate(req.propertyId, "checkin_guest_sms", baseVars);
           if (t.enabled) await notifyGuestSms({ to: g.phone, text: t.body });
         }
-        const ownerT = await renderTemplate("checkin_owner_sms", baseVars);
-        if (ownerT.enabled) await notifyOwner(ownerT.body);
+        const ownerT = await renderTemplate(req.propertyId, "checkin_owner_sms", baseVars);
+        if (ownerT.enabled) await notifyOwner(req.propertyId, ownerT.body);
       } catch (err) {
         logger.warn({ err, reservationId: id }, "post-check-in notification failed");
       }
     })();
 
-    await invalidateDashboard();
+    await invalidateDashboard(req.propertyId);
     return ok(res, { success: true });
   },
 );
@@ -1640,6 +1696,7 @@ async function closeOnlyCheckout(args: {
   });
 
   await logActivity({
+    propertyId: req.propertyId,
     action: "reservation_closed",
     entityType: "reservation",
     entityId: id,
@@ -1647,7 +1704,7 @@ async function closeOnlyCheckout(args: {
     performedBy: req.user!.id,
     ipAddress: req.ip,
   });
-  await invalidateDashboard();
+  await invalidateDashboard(req.propertyId);
   return ok(res, { success: true, closedOnly: true });
 }
 
@@ -1977,7 +2034,7 @@ async function handlePerRoomCheckout(args: {
     try {
       // Complimentary bookings: no checkout notification / WhatsApp.
       if (r.bookingSource === "complimentary") return;
-      const settingsCo = await getSettings();
+      const settingsCo = await getSettings(req.propertyId);
       // Phone for the PDF filename tag ("Name-Phone") — invoices carry only
       // the guest's name, so resolve the phone once for the whole loop.
       const [gCo] = await db
@@ -2020,7 +2077,7 @@ async function handlePerRoomCheckout(args: {
             },
             guestExtra: await loadGuestExtra(r.id),
           });
-          const url = await uploadPublicPdf(`invoices/${issued.invoiceNumber}.pdf`, pdf, documentLabel(fullInv.guestName, gCoPhone));
+          const url = await uploadPublicPdf(req.propertyId, `invoices/${issued.invoiceNumber}.pdf`, pdf, documentLabel(fullInv.guestName, gCoPhone));
           if (url) invoiceLinks.push(url);
         } catch (err) {
           logger.warn(
@@ -2034,6 +2091,7 @@ async function handlePerRoomCheckout(args: {
       const coRoomSuffix = checkedOutRooms ? ` · Room ${checkedOutRooms}` : "";
       const summaryNumbers = issuedInvoices.map((x) => x.invoiceNumber).join(", ");
       await dispatchNotification({
+        propertyId: req.propertyId,
         type: "guest_checked_out",
         title: "Guest checked out",
         body: `${guest.fullName} (${r.reservationNumber}${coRoomSuffix}). Invoices: ${summaryNumbers}.`,
@@ -2047,7 +2105,7 @@ async function handlePerRoomCheckout(args: {
       });
 
       const baseVars = {
-        hotel: env.HOTEL_DISPLAY_NAME,
+        hotel: await hotelDisplayName(req.propertyId),
         hotel_phone: settingsCo.hotelPhone ?? "",
         guest_name: guest.fullName,
         guest_phone: guest.phone ?? "",
@@ -2059,17 +2117,18 @@ async function handlePerRoomCheckout(args: {
         total: String(totalGrand),
       };
       if (guest.phone) {
-        const t = await renderTemplate("checkout_guest_sms", baseVars);
+        const t = await renderTemplate(req.propertyId, "checkout_guest_sms", baseVars);
         if (t.enabled) await notifyGuestSms({ to: guest.phone, text: t.body });
       }
-      const ownerT = await renderTemplate("checkout_owner_sms", baseVars);
-      if (ownerT.enabled) await notifyOwner(ownerT.body);
+      const ownerT = await renderTemplate(req.propertyId, "checkout_owner_sms", baseVars);
+      if (ownerT.enabled) await notifyOwner(req.propertyId, ownerT.body);
     } catch (err) {
       logger.warn({ err, reservationId: id }, "per-room post-check-out work failed");
     }
   })();
 
   await logActivity({
+    propertyId: req.propertyId,
     action: "check_out",
     entityType: "reservation",
     entityId: id,
@@ -2084,7 +2143,7 @@ async function handlePerRoomCheckout(args: {
       refundMode: hasOverpaid ? input.refundMode : null,
     },
   });
-  await invalidateDashboard();
+  await invalidateDashboard(req.propertyId);
   return ok(res, { invoices: issuedInvoices });
 }
 
@@ -2098,13 +2157,17 @@ router.post(
     const id = req.params.id!;
     const input = req.body as import("@stayvia/shared").CheckOutInput;
 
-    const r = await db.select().from(reservations).where(eq(reservations.id, id)).limit(1);
+    const r = await db
+      .select()
+      .from(reservations)
+      .where(and(eq(reservations.id, id), eq(reservations.propertyId, req.propertyId)))
+      .limit(1);
     if (!r.length) return fail(res, 404, "NOT_FOUND", "Reservation not found");
     if (r[0]!.status !== "checked_in") {
       return fail(res, 409, "INVALID_STATUS", `Cannot check out a ${r[0]!.status} reservation`);
     }
 
-    const settings = await getSettings();
+    const settings = await getSettings(req.propertyId);
     const guest = (await db.select().from(guests).where(eq(guests.id, r[0]!.guestId)).limit(1))[0]!;
     const resRooms = await db
       .select({ rr: reservationRooms, room: rooms })
@@ -2115,7 +2178,7 @@ router.post(
       .select()
       .from(additionalCharges)
       .where(eq(additionalCharges.reservationId, id));
-    const labelMap = await buildRoomTypeLabelMap();
+    const labelMap = await buildRoomTypeLabelMap(req.propertyId);
 
     // Per-room invoicing branch. Default behaviour for multi-room
     // checkouts — each remaining un-invoiced room gets its own tax
@@ -2491,13 +2554,18 @@ router.post(
           const [fullInv] = await db
             .select()
             .from(invoices)
-            .where(eq(invoices.invoiceNumber, invNumber))
+            .where(
+              and(
+                eq(invoices.invoiceNumber, invNumber),
+                eq(invoices.propertyId, req.propertyId),
+              ),
+            )
             .limit(1);
           if (fullInv) {
             const [items, pays, settings] = await Promise.all([
               db.select().from(invoiceLineItems).where(eq(invoiceLineItems.invoiceId, fullInv.id)),
               db.select().from(payments).where(eq(payments.invoiceId, fullInv.id)),
-              getSettings(),
+              getSettings(req.propertyId),
             ]);
             const pdf = await renderInvoicePdf({
               invoice: fullInv,
@@ -2522,16 +2590,16 @@ router.post(
               },
               guestExtra: await loadGuestExtra(r[0]!.id),
             });
-            const url = await uploadPublicPdf(`invoices/${invNumber}.pdf`, pdf, documentLabel(g?.fullName ?? fullInv.guestName, g?.phone));
+            const url = await uploadPublicPdf(req.propertyId, `invoices/${invNumber}.pdf`, pdf, documentLabel(g?.fullName ?? fullInv.guestName, g?.phone));
             if (url) invoiceLink = url;
           }
         } catch (err) {
           logger.warn({ err, invoiceNumber: invNumber }, "invoice PDF render/upload failed");
         }
 
-        const settingsCo = await getSettings();
+        const settingsCo = await getSettings(req.propertyId);
         const baseVars = {
-          hotel: env.HOTEL_DISPLAY_NAME,
+          hotel: await hotelDisplayName(req.propertyId),
           hotel_phone: settingsCo.hotelPhone ?? "",
           guest_name: g?.fullName ?? "guest",
           guest_phone: g?.phone ?? "",
@@ -2546,6 +2614,7 @@ router.post(
         const checkedOutRooms = await getReservationRoomNumbers(id);
         const coRoomSuffix = checkedOutRooms ? ` · Room ${checkedOutRooms}` : "";
         await dispatchNotification({
+          propertyId: req.propertyId,
           type: "guest_checked_out",
           title: "Guest checked out",
           body: `${g?.fullName ?? "Guest"} (${r[0]!.reservationNumber}${coRoomSuffix}). Invoice ${invNumber}.`,
@@ -2554,11 +2623,11 @@ router.post(
           recipientRoles: ["admin", "frontdesk", "housekeeping"],
         });
         if (g?.phone) {
-          const t = await renderTemplate("checkout_guest_sms", baseVars);
+          const t = await renderTemplate(req.propertyId, "checkout_guest_sms", baseVars);
           if (t.enabled) await notifyGuestSms({ to: g.phone, text: t.body });
         }
-        const ownerT = await renderTemplate("checkout_owner_sms", baseVars);
-        if (ownerT.enabled) await notifyOwner(ownerT.body);
+        const ownerT = await renderTemplate(req.propertyId, "checkout_owner_sms", baseVars);
+        if (ownerT.enabled) await notifyOwner(req.propertyId, ownerT.body);
 
         // Phase 5 — review automation. We schedule a follow-up review
         // prompt 4 hours after checkout (long enough for the guest to
@@ -2578,7 +2647,7 @@ router.post(
           setTimeout(() => {
             void (async () => {
               try {
-                const t = await renderTemplate("review_prompt_guest_sms", reviewVars);
+                const t = await renderTemplate(req.propertyId, "review_prompt_guest_sms", reviewVars);
                 if (t.enabled && g.phone) {
                   await notifyGuestSms({ to: g.phone, text: t.body });
                 }
@@ -2597,6 +2666,7 @@ router.post(
     })();
 
     await logActivity({
+      propertyId: req.propertyId,
       action: "check_out",
       entityType: "reservation",
       entityId: id,
@@ -2610,7 +2680,7 @@ router.post(
         refundMode: hasOverpaid ? input.refundMode : null,
       },
     });
-    await invalidateDashboard();
+    await invalidateDashboard(req.propertyId);
     return ok(res, { invoice: created });
   },
 );
@@ -2640,7 +2710,11 @@ router.post(
     const id = req.params.id!;
     const { reason, approver } = req.body as { reason: string; approver?: string | null };
 
-    const r = await db.select().from(reservations).where(eq(reservations.id, id)).limit(1);
+    const r = await db
+      .select()
+      .from(reservations)
+      .where(and(eq(reservations.id, id), eq(reservations.propertyId, req.propertyId)))
+      .limit(1);
     if (!r.length) return fail(res, 404, "NOT_FOUND", "Reservation not found");
     const current = r[0]!;
 
@@ -2692,9 +2766,15 @@ router.post(
     // Going comp means going silent retroactively too.
     await db
       .delete(notifications)
-      .where(sql`${notifications.payload}->>'reservationId' = ${id}`);
+      .where(
+        and(
+          eq(notifications.propertyId, req.propertyId),
+          sql`${notifications.payload}->>'reservationId' = ${id}`,
+        ),
+      );
 
     await logActivity({
+      propertyId: req.propertyId,
       action: "reservation_made_complimentary",
       entityType: "reservation",
       entityId: id,
@@ -2709,7 +2789,7 @@ router.post(
         grandTotal: current.grandTotal,
       },
     });
-    await invalidateDashboard();
+    await invalidateDashboard(req.propertyId);
 
     const [updated] = await db
       .select()
@@ -2733,7 +2813,11 @@ router.post(
       cancellationFee?: number;
     };
     const cancellationReason = input.cancellationReason;
-    const r = await db.select().from(reservations).where(eq(reservations.id, id)).limit(1);
+    const r = await db
+      .select()
+      .from(reservations)
+      .where(and(eq(reservations.id, id), eq(reservations.propertyId, req.propertyId)))
+      .limit(1);
     if (!r.length) return fail(res, 404, "NOT_FOUND", "Reservation not found");
     if (!["confirmed", "checked_in"].includes(r[0]!.status)) {
       return fail(res, 409, "INVALID_STATUS", `Cannot cancel ${r[0]!.status}`);
@@ -2947,6 +3031,7 @@ router.post(
       descBits.push(`${voidedPaymentCount} payment(s) voided`);
     }
     await logActivity({
+      propertyId: req.propertyId,
       action: "reservation_cancelled",
       entityType: "reservation",
       entityId: id,
@@ -2975,6 +3060,7 @@ router.post(
           .limit(1);
         const moneyBits = descBits.slice(1);
         await dispatchNotification({
+          propertyId: req.propertyId,
           type: "reservation_cancelled",
           title: "Reservation cancelled",
           body: `${r[0]!.reservationNumber} · ${cancelGuest?.fullName ?? "Guest"}${cancelledRooms ? ` · Room ${cancelledRooms}` : ""} — ${cancellationReason}${moneyBits.length ? ` · ${moneyBits.join(" · ")}` : ""}`,
@@ -2986,7 +3072,7 @@ router.post(
         logger.warn({ err, reservationId: id }, "cancel notification failed");
       }
     }
-    await invalidateDashboard();
+    await invalidateDashboard(req.propertyId);
     return ok(res, {
       success: true,
       cancellationFee,
@@ -3015,7 +3101,11 @@ router.post(
   async (req, res) => {
     const id = req.params.id!;
     const { note } = req.body as { note: string };
-    const r = await db.select().from(reservations).where(eq(reservations.id, id)).limit(1);
+    const r = await db
+      .select()
+      .from(reservations)
+      .where(and(eq(reservations.id, id), eq(reservations.propertyId, req.propertyId)))
+      .limit(1);
     if (!r.length) return fail(res, 404, "NOT_FOUND", "Reservation not found");
     if (r[0]!.status !== "confirmed") {
       return fail(
@@ -3072,6 +3162,7 @@ router.post(
     });
 
     await logActivity({
+      propertyId: req.propertyId,
       action: "reservation_no_show",
       entityType: "reservation",
       entityId: id,
@@ -3094,6 +3185,7 @@ router.post(
           .where(eq(guests.id, r[0]!.guestId))
           .limit(1);
         await dispatchNotification({
+          propertyId: req.propertyId,
           type: "reservation_cancelled",
           title: "No-show",
           body: `${r[0]!.reservationNumber} · ${nsGuest?.fullName ?? "Guest"}${nsRooms ? ` · Room ${nsRooms}` : ""} — ${note}${forfeitedAdvance > 0 ? ` · ₹${forfeitedAdvance.toFixed(2)} advance forfeited` : ""}`,
@@ -3105,7 +3197,7 @@ router.post(
         logger.warn({ err, reservationId: id }, "no-show notification failed");
       }
     }
-    await invalidateDashboard();
+    await invalidateDashboard(req.propertyId);
     return ok(res, { success: true, forfeitedAdvance });
   },
 );
@@ -3119,7 +3211,11 @@ router.post(
     const id = req.params.id!;
     const { newRoomId } = req.body as { newRoomId: string };
 
-    const r = await db.select().from(reservations).where(eq(reservations.id, id)).limit(1);
+    const r = await db
+      .select()
+      .from(reservations)
+      .where(and(eq(reservations.id, id), eq(reservations.propertyId, req.propertyId)))
+      .limit(1);
     if (!r.length) return fail(res, 404, "NOT_FOUND", "Reservation not found");
     if (!["confirmed", "checked_in"].includes(r[0]!.status)) {
       return fail(res, 409, "INVALID_STATUS", `Cannot swap room on ${r[0]!.status}`);
@@ -3135,7 +3231,7 @@ router.post(
             .toISOString()
             .slice(0, 10)
         : r[0]!.checkOutDate;
-    const available = await isRoomAvailable(newRoomId, r[0]!.checkInDate, probeOut, id);
+    const available = await isRoomAvailable(req.propertyId, newRoomId, r[0]!.checkInDate, probeOut, id);
     if (!available) return fail(res, 409, "ROOM_UNAVAILABLE", "New room is not available");
 
     const oldRows = await db
@@ -3167,6 +3263,7 @@ router.post(
     });
 
     await logActivity({
+      propertyId: req.propertyId,
       action: "room_swap",
       entityType: "reservation",
       entityId: id,
@@ -3175,7 +3272,7 @@ router.post(
       ipAddress: req.ip,
       metadata: { oldRoomId, newRoomId },
     });
-    await invalidateDashboard();
+    await invalidateDashboard(req.propertyId);
     return ok(res, { success: true });
   },
 );
@@ -3196,7 +3293,11 @@ router.post(
     const id = req.params.id!;
     const input = req.body as z.infer<typeof swapRoomSegmentSchema>;
 
-    const r = await db.select().from(reservations).where(eq(reservations.id, id)).limit(1);
+    const r = await db
+      .select()
+      .from(reservations)
+      .where(and(eq(reservations.id, id), eq(reservations.propertyId, req.propertyId)))
+      .limit(1);
     if (!r.length) return fail(res, 404, "NOT_FOUND", "Reservation not found");
     const reservation = r[0]!;
     if (reservation.status !== "checked_in") {
@@ -3271,6 +3372,7 @@ router.post(
             .slice(0, 10)
         : reservation.checkOutDate;
       const available = await isRoomAvailable(
+        req.propertyId,
         input.toRoomId,
         probeIn,
         probeOut,
@@ -3410,6 +3512,7 @@ router.post(
 
       // The new room must be free for [effectiveDate, segTo).
       const available = await isRoomAvailable(
+        req.propertyId,
         input.toRoomId,
         effectiveDate,
         segTo,
@@ -3527,6 +3630,7 @@ router.post(
     }
 
     await logActivity({
+      propertyId: req.propertyId,
       action: "room_swap_segment",
       entityType: "reservation",
       entityId: id,
@@ -3542,7 +3646,7 @@ router.post(
         markOldRoomStatus: input.markOldRoomStatus,
       },
     });
-    await invalidateDashboard();
+    await invalidateDashboard(req.propertyId);
     return ok(res, { success: true, swapId });
   },
 );
@@ -3556,6 +3660,28 @@ router.post(
   async (req, res) => {
     const id = req.params.id!;
     const input = req.body as import("@stayvia/shared").AdditionalChargeInput;
+
+    // Tenant guard: the charge may only be added to a reservation in the
+    // caller's property.
+    const [resv] = await db
+      .select({ id: reservations.id })
+      .from(reservations)
+      .where(and(eq(reservations.id, id), eq(reservations.propertyId, req.propertyId)))
+      .limit(1);
+    if (!resv) return fail(res, 404, "NOT_FOUND", "Reservation not found");
+
+    // Per-room attribution must point at a room actually on this
+    // reservation — a foreign roomId would silently drop the charge from
+    // every checkout billing scope.
+    if (input.roomId) {
+      const [link] = await db
+        .select({ roomId: reservationRooms.roomId })
+        .from(reservationRooms)
+        .where(and(eq(reservationRooms.reservationId, id), eq(reservationRooms.roomId, input.roomId)))
+        .limit(1);
+      if (!link) return fail(res, 404, "ROOM_NOT_FOUND", "Room not in this reservation");
+    }
+
     const amount = +(input.quantity * input.rate).toFixed(2);
     const [created] = await db
       .insert(additionalCharges)
@@ -3574,6 +3700,7 @@ router.post(
 
     await recalcReservation(id);
     await logActivity({
+      propertyId: req.propertyId,
       action: "charge_added",
       entityType: "reservation",
       entityId: id,
@@ -3581,7 +3708,7 @@ router.post(
       performedBy: req.user!.id,
       ipAddress: req.ip,
     });
-    await invalidateDashboard();
+    await invalidateDashboard(req.propertyId);
     return ok(res, created, 201);
   },
 );
@@ -3595,7 +3722,11 @@ router.post(
     const id = req.params.id!;
     const input = req.body as { newCheckOutDate: string; ratePerNight?: number };
 
-    const r = await db.select().from(reservations).where(eq(reservations.id, id)).limit(1);
+    const r = await db
+      .select()
+      .from(reservations)
+      .where(and(eq(reservations.id, id), eq(reservations.propertyId, req.propertyId)))
+      .limit(1);
     if (!r[0]) return fail(res, 404, "NOT_FOUND", "Reservation not found");
     const current = r[0];
     if (current.status !== "confirmed" && current.status !== "checked_in") {
@@ -3619,7 +3750,7 @@ router.post(
       .where(eq(reservationRooms.reservationId, id));
 
     for (const rm of assigned) {
-      const ok = await isRoomAvailable(rm.roomId, current.checkOutDate, input.newCheckOutDate, id);
+      const ok = await isRoomAvailable(req.propertyId, rm.roomId, current.checkOutDate, input.newCheckOutDate, id);
       if (!ok) {
         return fail(res, 409, "ROOM_UNAVAILABLE", "Room is not available for the extended period", {
           roomId: rm.roomId,
@@ -3771,6 +3902,7 @@ router.post(
       .limit(1);
 
     await logActivity({
+      propertyId: req.propertyId,
       action: "reservation_extended",
       entityType: "reservation",
       entityId: id,
@@ -3787,7 +3919,7 @@ router.post(
         extensionChargeId,
       },
     });
-    await invalidateDashboard();
+    await invalidateDashboard(req.propertyId);
     return ok(res, updated);
   },
 );
@@ -3823,7 +3955,7 @@ router.post(
     const [current] = await db
       .select()
       .from(reservations)
-      .where(eq(reservations.id, id))
+      .where(and(eq(reservations.id, id), eq(reservations.propertyId, req.propertyId)))
       .limit(1);
     if (!current) return fail(res, 404, "NOT_FOUND", "Reservation not found");
     if (current.status !== "confirmed" && current.status !== "checked_in") {
@@ -3908,6 +4040,7 @@ router.post(
     // reservation; the conflict probe runs against [oldCheckOut, newCheckOut).
     for (const rm of picked) {
       const ok = await isRoomAvailable(
+        req.propertyId,
         rm.roomId,
         current.checkOutDate,
         input.newCheckOutDate,
@@ -4050,6 +4183,7 @@ router.post(
     // Audit log on both — staff can trace which split created which
     // pair, and the source's history shows where the rooms went.
     await logActivity({
+      propertyId: req.propertyId,
       action: "reservation_extended_split",
       entityType: "reservation",
       entityId: id,
@@ -4069,6 +4203,7 @@ router.post(
       },
     });
     await logActivity({
+      propertyId: req.propertyId,
       action: "reservation_created_from_split",
       entityType: "reservation",
       entityId: newReservationId,
@@ -4081,7 +4216,7 @@ router.post(
       },
     });
 
-    await invalidateDashboard();
+    await invalidateDashboard(req.propertyId);
     return ok(res, {
       source: refreshedSource,
       created: refreshedNew,
@@ -4105,7 +4240,7 @@ router.get(
     const [current] = await db
       .select()
       .from(reservations)
-      .where(eq(reservations.id, id))
+      .where(and(eq(reservations.id, id), eq(reservations.propertyId, req.propertyId)))
       .limit(1);
     if (!current) return fail(res, 404, "NOT_FOUND", "Reservation not found");
     if (current.stayType === "short_stay") {
@@ -4128,7 +4263,7 @@ router.get(
 
     // Conflicts over the extension window only — the current stay is
     // unchanged. Exclude this reservation so its own rows don't count.
-    const conflictByRoom = await findRoomConflicts(current.checkOutDate, newCheckOutDate, {
+    const conflictByRoom = await findRoomConflicts(req.propertyId, current.checkOutDate, newCheckOutDate, {
       excludeReservationId: id,
     });
 
@@ -4158,7 +4293,7 @@ router.get(
     // Rooms free for the extension window that could take a blocked
     // room's guest. Excludes rooms already on this reservation.
     const assignedIds = new Set(assigned.map((x) => x.room.id));
-    const free = await findAvailableRooms(current.checkOutDate, newCheckOutDate);
+    const free = await findAvailableRooms(req.propertyId, current.checkOutDate, newCheckOutDate);
     const alternatives = free
       .filter((r) => !assignedIds.has(r.id) && !r.conflict)
       .map((r) => ({
@@ -4201,7 +4336,7 @@ router.post(
     const [current] = await db
       .select()
       .from(reservations)
-      .where(eq(reservations.id, id))
+      .where(and(eq(reservations.id, id), eq(reservations.propertyId, req.propertyId)))
       .limit(1);
     if (!current) return fail(res, 404, "NOT_FOUND", "Reservation not found");
     if (current.status !== "confirmed" && current.status !== "checked_in") {
@@ -4255,7 +4390,10 @@ router.post(
         );
       }
     }
-    const targetRooms = await db.select().from(rooms).where(inArray(rooms.id, toIds));
+    const targetRooms = await db
+      .select()
+      .from(rooms)
+      .where(and(inArray(rooms.id, toIds), eq(rooms.propertyId, req.propertyId)));
     const targetById = new Map(targetRooms.map((r) => [r.id, r]));
     for (const mv of input.moves) {
       const target = targetById.get(mv.toRoomId);
@@ -4265,6 +4403,7 @@ router.post(
         });
       }
       const okAvail = await isRoomAvailable(
+        req.propertyId,
         mv.toRoomId,
         current.checkOutDate,
         input.newCheckOutDate,
@@ -4384,6 +4523,7 @@ router.post(
       .limit(1);
 
     await logActivity({
+      propertyId: req.propertyId,
       action: "reservation_continued_room_change",
       entityType: "reservation",
       entityId: id,
@@ -4401,7 +4541,7 @@ router.post(
       },
     });
 
-    await invalidateDashboard();
+    await invalidateDashboard(req.propertyId);
     return ok(res, { created: refreshedNew });
   },
 );
@@ -4415,7 +4555,11 @@ router.post(
     const id = req.params.id!;
     const input = req.body as { hours: number; fee: number; notes?: string | null };
 
-    const r = await db.select().from(reservations).where(eq(reservations.id, id)).limit(1);
+    const r = await db
+      .select()
+      .from(reservations)
+      .where(and(eq(reservations.id, id), eq(reservations.propertyId, req.propertyId)))
+      .limit(1);
     if (!r[0]) return fail(res, 404, "NOT_FOUND", "Reservation not found");
     if (r[0].status !== "confirmed" && r[0].status !== "checked_in") {
       return fail(res, 400, "INVALID_STATE", "Only active reservations can have late checkout");
@@ -4474,6 +4618,7 @@ router.post(
     }
 
     await logActivity({
+      propertyId: req.propertyId,
       action: "late_checkout",
       entityType: "reservation",
       entityId: id,
@@ -4500,7 +4645,11 @@ router.post(
       startDate?: string;
     };
 
-    const r = await db.select().from(reservations).where(eq(reservations.id, id)).limit(1);
+    const r = await db
+      .select()
+      .from(reservations)
+      .where(and(eq(reservations.id, id), eq(reservations.propertyId, req.propertyId)))
+      .limit(1);
     if (!r[0]) return fail(res, 404, "NOT_FOUND", "Reservation not found");
     const current = r[0];
     if (current.status !== "confirmed" && current.status !== "checked_in") {
@@ -4538,7 +4687,7 @@ router.post(
           "yyyy-MM-dd",
         )
       : current.checkOutDate;
-    const ok2 = await isRoomAvailable(input.roomId, startDate, probeEnd, id);
+    const ok2 = await isRoomAvailable(req.propertyId, input.roomId, startDate, probeEnd, id);
     if (!ok2) {
       return fail(res, 409, "ROOM_UNAVAILABLE", "Room is not available for the selected period", {
         roomId: input.roomId,
@@ -4618,6 +4767,7 @@ router.post(
     });
 
     await logActivity({
+      propertyId: req.propertyId,
       action: "room_added",
       entityType: "reservation",
       entityId: id,
@@ -4626,7 +4776,7 @@ router.post(
       ipAddress: req.ip,
       metadata: { roomId: input.roomId, startDate, ratePerNight: input.ratePerNight },
     });
-    await invalidateDashboard();
+    await invalidateDashboard(req.propertyId);
     return ok(res, { success: true, addedSubtotal: addedRoomAmount, newGrandTotal: grandTotal }, 201);
   },
 );
@@ -4641,6 +4791,9 @@ async function getReservationRoomNumbers(reservationId: string): Promise<string>
   return rows.map((r) => r.roomNumber).join(", ");
 }
 
+// Internal helper — every caller passes an id that has already been
+// tenant-guarded (or that it just created inside the caller's property),
+// so this fetch stays keyed by id alone.
 async function recalcReservation(id: string) {
   const r = await db.select().from(reservations).where(eq(reservations.id, id)).limit(1);
   if (!r[0]) return null;
@@ -4725,6 +4878,13 @@ router.patch(
     const { id, roomId } = req.params as { id: string; roomId: string };
     const { ratePerNight } = req.body as { ratePerNight: number };
 
+    const [resv] = await db
+      .select({ id: reservations.id })
+      .from(reservations)
+      .where(and(eq(reservations.id, id), eq(reservations.propertyId, req.propertyId)))
+      .limit(1);
+    if (!resv) return fail(res, 404, "NOT_FOUND", "Reservation not found");
+
     if (await hasInvoice(id)) {
       return fail(res, 400, "INVOICE_EXISTS", "Cannot edit rates after invoice is generated. Void invoice first.");
     }
@@ -4738,6 +4898,7 @@ router.patch(
 
     const totals = await recalcReservation(id);
     await logActivity({
+      propertyId: req.propertyId,
       action: "rate_edited",
       entityType: "reservation",
       entityId: id,
@@ -4746,7 +4907,7 @@ router.patch(
       ipAddress: req.ip,
       metadata: { roomId, ratePerNight },
     });
-    await invalidateDashboard();
+    await invalidateDashboard(req.propertyId);
     return ok(res, { success: true, ...totals });
   },
 );
@@ -4765,14 +4926,23 @@ router.patch(
       gstRate?: number;
     };
 
+    const [resv] = await db
+      .select({ id: reservations.id })
+      .from(reservations)
+      .where(and(eq(reservations.id, id), eq(reservations.propertyId, req.propertyId)))
+      .limit(1);
+    if (!resv) return fail(res, 404, "NOT_FOUND", "Reservation not found");
+
     if (await hasInvoice(id)) {
       return fail(res, 400, "INVOICE_EXISTS", "Cannot edit charges after invoice is generated");
     }
 
+    // The charge must belong to THIS reservation — a bare chargeId from
+    // another booking (or another hotel) must 404, not get edited.
     const existing = await db
       .select()
       .from(additionalCharges)
-      .where(eq(additionalCharges.id, chargeId))
+      .where(and(eq(additionalCharges.id, chargeId), eq(additionalCharges.reservationId, id)))
       .limit(1);
     if (!existing.length) return fail(res, 404, "NOT_FOUND", "Charge not found");
 
@@ -4786,10 +4956,14 @@ router.patch(
     if (input.rate !== undefined) patch.rate = String(input.rate);
     if (input.gstRate !== undefined) patch.gstRate = String(input.gstRate);
 
-    await db.update(additionalCharges).set(patch).where(eq(additionalCharges.id, chargeId));
+    await db
+      .update(additionalCharges)
+      .set(patch)
+      .where(and(eq(additionalCharges.id, chargeId), eq(additionalCharges.reservationId, id)));
     const totals = await recalcReservation(id);
 
     await logActivity({
+      propertyId: req.propertyId,
       action: "charge_edited",
       entityType: "reservation",
       entityId: id,
@@ -4808,17 +4982,26 @@ router.delete(
   requirePermission("view_reservations"),
   async (req, res) => {
     const { id, chargeId } = req.params as { id: string; chargeId: string };
+
+    const [resv] = await db
+      .select({ id: reservations.id })
+      .from(reservations)
+      .where(and(eq(reservations.id, id), eq(reservations.propertyId, req.propertyId)))
+      .limit(1);
+    if (!resv) return fail(res, 404, "NOT_FOUND", "Reservation not found");
+
     if (await hasInvoice(id)) {
       return fail(res, 400, "INVOICE_EXISTS", "Cannot delete charges after invoice is generated");
     }
     const [deleted] = await db
       .delete(additionalCharges)
-      .where(eq(additionalCharges.id, chargeId))
+      .where(and(eq(additionalCharges.id, chargeId), eq(additionalCharges.reservationId, id)))
       .returning();
     if (!deleted) return fail(res, 404, "NOT_FOUND", "Charge not found");
     const totals = await recalcReservation(id);
 
     await logActivity({
+      propertyId: req.propertyId,
       action: "charge_deleted",
       entityType: "reservation",
       entityId: id,
@@ -4841,15 +5024,18 @@ router.patch(
       checkInDate: string;
       checkOutDate: string;
     };
-    if (await hasInvoice(id)) {
-      return fail(res, 400, "INVOICE_EXISTS", "Cannot edit dates after invoice is generated");
-    }
-
+    // Tenant check first — probing invoices before proving ownership would
+    // leak "has invoice" for other hotels' reservation ids.
     const [stayRow] = await db
       .select({ stayType: reservations.stayType })
       .from(reservations)
-      .where(eq(reservations.id, id))
+      .where(and(eq(reservations.id, id), eq(reservations.propertyId, req.propertyId)))
       .limit(1);
+    if (!stayRow) return fail(res, 404, "NOT_FOUND", "Reservation not found");
+
+    if (await hasInvoice(id)) {
+      return fail(res, 400, "INVOICE_EXISTS", "Cannot edit dates after invoice is generated");
+    }
     if (stayRow?.stayType === "short_stay" && checkInDate !== checkOutDate) {
       return fail(
         res,
@@ -4873,7 +5059,7 @@ router.patch(
             .slice(0, 10)
         : checkOutDate;
     for (const rm of assigned) {
-      const ok2 = await isRoomAvailable(rm.roomId, checkInDate, probeOut, id);
+      const ok2 = await isRoomAvailable(req.propertyId, rm.roomId, checkInDate, probeOut, id);
       if (!ok2) {
         return fail(res, 409, "ROOM_UNAVAILABLE", "One or more rooms unavailable for the new dates", {
           roomId: rm.roomId,
@@ -4888,6 +5074,7 @@ router.patch(
     const totals = await recalcReservation(id);
 
     await logActivity({
+      propertyId: req.propertyId,
       action: "dates_edited",
       entityType: "reservation",
       entityId: id,
@@ -4895,13 +5082,19 @@ router.patch(
       performedBy: req.user!.id,
       ipAddress: req.ip,
     });
-    await invalidateDashboard();
+    await invalidateDashboard(req.propertyId);
     return ok(res, { success: true, ...totals });
   },
 );
 
 router.get("/:id/charges", requireAuth, requirePermission("view_reservations"), async (req, res) => {
   const id = req.params.id!;
+  const [resv] = await db
+    .select({ id: reservations.id })
+    .from(reservations)
+    .where(and(eq(reservations.id, id), eq(reservations.propertyId, req.propertyId)))
+    .limit(1);
+  if (!resv) return fail(res, 404, "NOT_FOUND", "Reservation not found");
   const rows = await db
     .select()
     .from(additionalCharges)
@@ -4916,10 +5109,14 @@ router.get(
   requirePermission("view_reservations"),
   async (req, res) => {
     const id = req.params.id!;
-    const r = await db.select().from(reservations).where(eq(reservations.id, id)).limit(1);
+    const r = await db
+      .select()
+      .from(reservations)
+      .where(and(eq(reservations.id, id), eq(reservations.propertyId, req.propertyId)))
+      .limit(1);
     if (!r.length) return fail(res, 404, "NOT_FOUND", "Reservation not found");
 
-    const settings = await getSettings();
+    const settings = await getSettings(req.propertyId);
     const guest = (await db.select().from(guests).where(eq(guests.id, r[0]!.guestId)).limit(1))[0]!;
     const resRooms = await db
       .select({ rr: reservationRooms, room: rooms })
@@ -4930,7 +5127,7 @@ router.get(
       .select()
       .from(additionalCharges)
       .where(eq(additionalCharges.reservationId, id));
-    const labelMap = await buildRoomTypeLabelMap();
+    const labelMap = await buildRoomTypeLabelMap(req.propertyId);
 
     const nights = Number(r[0]!.numNights);
     const isShortStayPreview = r[0]!.stayType === "short_stay";
@@ -5247,7 +5444,11 @@ router.post(
     const id = req.params.id!;
     const input = req.body as z.infer<typeof advancePaymentSchema>;
 
-    const r = await db.select().from(reservations).where(eq(reservations.id, id)).limit(1);
+    const r = await db
+      .select()
+      .from(reservations)
+      .where(and(eq(reservations.id, id), eq(reservations.propertyId, req.propertyId)))
+      .limit(1);
     if (!r.length) return fail(res, 404, "NOT_FOUND", "Reservation not found");
     if (r[0]!.status === "cancelled") {
       return fail(res, 409, "CANCELLED", "Reservation is cancelled");
@@ -5315,6 +5516,7 @@ router.post(
     });
 
     await logActivity({
+      propertyId: req.propertyId,
       action: "payment_recorded",
       entityType: "reservation",
       entityId: id,
@@ -5322,7 +5524,7 @@ router.post(
       performedBy: req.user!.id,
       ipAddress: req.ip,
     });
-    await invalidateDashboard();
+    await invalidateDashboard(req.propertyId);
     return ok(res, created, 201);
   },
 );
@@ -5336,7 +5538,11 @@ router.get(
   requirePermission("view_reservations"),
   async (req, res) => {
     const id = req.params.id!;
-    const [r] = await db.select().from(reservations).where(eq(reservations.id, id)).limit(1);
+    const [r] = await db
+      .select()
+      .from(reservations)
+      .where(and(eq(reservations.id, id), eq(reservations.propertyId, req.propertyId)))
+      .limit(1);
     if (!r) return fail(res, 404, "NOT_FOUND", "Reservation not found");
 
     const balance = await getGuestBalance(r.guestId);
@@ -5379,7 +5585,11 @@ router.post(
 
     try {
       result = await db.transaction(async (tx) => {
-        const [r] = await tx.select().from(reservations).where(eq(reservations.id, id)).limit(1);
+        const [r] = await tx
+          .select()
+          .from(reservations)
+          .where(and(eq(reservations.id, id), eq(reservations.propertyId, req.propertyId)))
+          .limit(1);
         if (!r) {
           conflictRef.value = { code: "NOT_FOUND", message: "Reservation not found" };
           throw new Error("ABORT");
@@ -5457,6 +5667,7 @@ router.post(
     }
 
     await logActivity({
+      propertyId: req.propertyId,
       action: "wallet_credit_applied",
       entityType: "reservation",
       entityId: id,
@@ -5465,7 +5676,7 @@ router.post(
       ipAddress: req.ip,
       metadata: { applied: result.applied, remainingBalance: result.remainingBalance },
     });
-    await invalidateDashboard();
+    await invalidateDashboard(req.propertyId);
     return ok(res, result);
   },
 );
@@ -5497,7 +5708,7 @@ router.post(
     const [resv] = await db
       .select({ id: reservations.id, status: reservations.status })
       .from(reservations)
-      .where(eq(reservations.id, id))
+      .where(and(eq(reservations.id, id), eq(reservations.propertyId, req.propertyId)))
       .limit(1);
     if (!resv) return fail(res, 404, "NOT_FOUND", "Reservation not found");
     if (resv.status === "cancelled") {
@@ -5507,7 +5718,7 @@ router.post(
     const [g] = await db
       .select({ id: guests.id, fullName: guests.fullName })
       .from(guests)
-      .where(eq(guests.id, guestId))
+      .where(and(eq(guests.id, guestId), eq(guests.propertyId, req.propertyId)))
       .limit(1);
     if (!g) return fail(res, 404, "GUEST_NOT_FOUND", "Guest not found");
 
@@ -5519,6 +5730,7 @@ router.post(
     if (!updated) return fail(res, 404, "ROOM_NOT_FOUND", "Room not in this reservation");
 
     await logActivity({
+      propertyId: req.propertyId,
       action: "reservation_room_guest_assigned",
       entityType: "reservation_room",
       entityId: updated.id,
@@ -5542,7 +5754,11 @@ router.get(
   requirePermission("check_out"),
   async (req, res) => {
     const { id, roomId } = req.params as { id: string; roomId: string };
-    const [resv] = await db.select().from(reservations).where(eq(reservations.id, id)).limit(1);
+    const [resv] = await db
+      .select()
+      .from(reservations)
+      .where(and(eq(reservations.id, id), eq(reservations.propertyId, req.propertyId)))
+      .limit(1);
     if (!resv) return fail(res, 404, "NOT_FOUND", "Reservation not found");
     const [allResRooms, allCharges] = await Promise.all([
       db
@@ -5557,7 +5773,7 @@ router.get(
     ]);
     const scopedRooms = allResRooms.filter((x) => x.room.id === roomId);
     if (!scopedRooms.length) return fail(res, 404, "ROOM_NOT_FOUND", "Room not in this reservation");
-    const labelMap = await buildRoomTypeLabelMap();
+    const labelMap = await buildRoomTypeLabelMap(req.propertyId);
 
     // If this room is already linked to an invoice (per-room or combined),
     // the bill is THAT invoice's remaining balance — not a fresh re-quote.
@@ -5771,11 +5987,11 @@ async function autoConsolidatePerRoomInvoices(
       .innerJoin(rooms, eq(rooms.id, reservationRooms.roomId))
       .where(eq(reservationRooms.reservationId, reservationId)),
     tx.select().from(additionalCharges).where(eq(additionalCharges.reservationId, reservationId)),
-    getSettings(),
+    getSettings(resv.propertyId),
   ]);
   const scopeRooms = allResRooms.filter((x) => x.rr.status !== "cancelled");
   if (scopeRooms.length < 2) return null;
-  const labelMap = await buildRoomTypeLabelMap();
+  const labelMap = await buildRoomTypeLabelMap(resv.propertyId);
   const [booker] = await tx
     .select()
     .from(guests)
@@ -5884,7 +6100,7 @@ router.post(
     const [resv] = await db
       .select()
       .from(reservations)
-      .where(eq(reservations.id, id))
+      .where(and(eq(reservations.id, id), eq(reservations.propertyId, req.propertyId)))
       .limit(1);
     if (!resv) return fail(res, 404, "NOT_FOUND", "Reservation not found");
 
@@ -5914,10 +6130,10 @@ router.post(
         .innerJoin(rooms, eq(rooms.id, reservationRooms.roomId))
         .where(eq(reservationRooms.reservationId, id)),
       db.select().from(additionalCharges).where(eq(additionalCharges.reservationId, id)),
-      getSettings(),
+      getSettings(req.propertyId),
     ]);
     const scopedRooms = allResRooms.filter((x) => x.room.id === roomId);
-    const labelMap = await buildRoomTypeLabelMap();
+    const labelMap = await buildRoomTypeLabelMap(req.propertyId);
     const remainingUnInvoicedRoomIds = allResRooms
       .filter((x) => !x.rr.invoiceId)
       .map((x) => x.room.id);
@@ -6182,6 +6398,7 @@ router.post(
     });
 
     await logActivity({
+      propertyId: req.propertyId,
       action: "reservation_room_check_out",
       entityType: "reservation_room",
       entityId: rr.id,
@@ -6196,7 +6413,7 @@ router.post(
         paymentMethod: input.paymentMethod,
       },
     });
-    await invalidateDashboard();
+    await invalidateDashboard(req.propertyId);
     return ok(res, {
       roomId,
       status: "checked_out" as const,
@@ -6256,7 +6473,7 @@ router.post(
     const [resv] = await db
       .select()
       .from(reservations)
-      .where(eq(reservations.id, id))
+      .where(and(eq(reservations.id, id), eq(reservations.propertyId, req.propertyId)))
       .limit(1);
     if (!resv) return fail(res, 404, "NOT_FOUND", "Reservation not found");
     if (resv.status === "cancelled") {
@@ -6274,7 +6491,7 @@ router.post(
         .select()
         .from(additionalCharges)
         .where(eq(additionalCharges.reservationId, id)),
-      getSettings(),
+      getSettings(req.propertyId),
     ]);
 
     // Determine in-scope rooms.
@@ -6340,7 +6557,7 @@ router.post(
       remainingUnInvoicedRoomIds: trulyRemaining,
     });
 
-    const labelMap = await buildRoomTypeLabelMap();
+    const labelMap = await buildRoomTypeLabelMap(req.propertyId);
     const built = buildInvoice({
       reservation: {
         stayType: resv.stayType,
@@ -6493,6 +6710,7 @@ router.post(
     });
 
     await logActivity({
+      propertyId: req.propertyId,
       action: "invoice_issued",
       entityType: "invoice",
       entityId: created.id,
@@ -6507,7 +6725,7 @@ router.post(
         paymentMethod: input.payment?.paymentMethod,
       },
     });
-    await invalidateDashboard();
+    await invalidateDashboard(req.propertyId);
     return ok(res, created);
   },
 );
@@ -6556,7 +6774,7 @@ router.post(
     const [resv] = await db
       .select()
       .from(reservations)
-      .where(eq(reservations.id, id))
+      .where(and(eq(reservations.id, id), eq(reservations.propertyId, req.propertyId)))
       .limit(1);
     if (!resv) return fail(res, 404, "NOT_FOUND", "Reservation not found");
 
@@ -6727,9 +6945,9 @@ router.post(
         .select()
         .from(additionalCharges)
         .where(eq(additionalCharges.reservationId, id)),
-      getSettings(),
+      getSettings(req.propertyId),
     ]);
-    const labelMap = await buildRoomTypeLabelMap();
+    const labelMap = await buildRoomTypeLabelMap(req.propertyId);
 
     // Use the booker as the bill-to for the new combined invoice; for
     // per-room we use each room's occupant (matching the original
@@ -7026,6 +7244,7 @@ router.post(
     });
 
     await logActivity({
+      propertyId: req.propertyId,
       action: "reservation_invoice_convert",
       entityType: "reservation",
       entityId: id,
@@ -7041,7 +7260,7 @@ router.post(
         newInvoiceNumbers,
       },
     });
-    await invalidateDashboard();
+    await invalidateDashboard(req.propertyId);
     return ok(res, {
       mode: input.mode,
       method: useCreditNotes ? "credit_note" : "void",
