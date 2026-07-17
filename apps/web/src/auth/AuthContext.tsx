@@ -1,5 +1,6 @@
 import type { Session } from "@supabase/supabase-js";
-import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
+import { useQueryClient } from "@tanstack/react-query";
+import { createContext, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { api } from "@/lib/api";
 import { UI_PREVIEW } from "@/lib/mock-data";
 import { supabase } from "@/lib/supabase";
@@ -57,6 +58,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // True when the user has passed password auth but still owes a TOTP
   // challenge. While true, guards keep them out of the app.
   const [mfaPending, setMfaPending] = useState(false);
+  const queryClient = useQueryClient();
+  // Last authenticated user id seen by the auth listener. When it changes
+  // (sign-out or a different account signing in on a shared front-desk
+  // machine) every cached query is dropped — react-query would otherwise
+  // keep serving the previous hotel's dashboard/guests from cache.
+  const lastUserIdRef = useRef<string | null>(null);
 
   useEffect(() => {
     if (UI_PREVIEW) return;
@@ -83,6 +90,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     });
 
     const { data: sub } = supabase.auth.onAuthStateChange((_e, s) => {
+      const uid = s?.user.id ?? null;
+      if (lastUserIdRef.current !== uid) {
+        if (lastUserIdRef.current !== null) queryClient.clear();
+        lastUserIdRef.current = uid;
+      }
       setSession((prev) => (prev?.user.id === s?.user.id ? prev : s));
       if (!s) {
         setProfile(null);
@@ -91,6 +103,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
     });
     return () => sub.subscription.unsubscribe();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const userId = session?.user.id;
