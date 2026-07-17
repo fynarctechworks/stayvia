@@ -1,5 +1,6 @@
 import { numeric, pgTable, text, timestamp, uuid, index } from "drizzle-orm/pg-core";
 import { guests } from "./guests.js";
+import { properties } from "./properties.js";
 
 export const LEDGER_ENTRY_TYPES = [
   "credit_issued",
@@ -13,6 +14,9 @@ export const guestLedger = pgTable(
   "guest_ledger",
   {
     id: uuid("id").primaryKey().defaultRandom(),
+    propertyId: uuid("property_id")
+      .notNull()
+      .references(() => properties.id),
     guestId: uuid("guest_id")
       .notNull()
       .references(() => guests.id, { onDelete: "cascade" }),
@@ -28,6 +32,7 @@ export const guestLedger = pgTable(
   (t) => ({
     guestIdx: index("idx_guest_ledger_guest").on(t.guestId),
     createdIdx: index("idx_guest_ledger_created").on(t.createdAt),
+    propertyIdx: index("idx_guest_ledger_property").on(t.propertyId),
   }),
 );
 

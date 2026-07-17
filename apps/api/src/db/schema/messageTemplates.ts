@@ -1,4 +1,5 @@
-import { boolean, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
+import { boolean, index, pgTable, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
+import { properties } from "./properties.js";
 
 export const TEMPLATE_KEYS = [
   "checkin_guest_sms",
@@ -17,15 +18,26 @@ export const TEMPLATE_KEYS = [
 ] as const;
 export type TemplateKey = (typeof TEMPLATE_KEYS)[number];
 
-export const messageTemplates = pgTable("message_templates", {
-  id: uuid("id").primaryKey().defaultRandom(),
-  key: text("key").notNull().unique(),
-  subject: text("subject"),
-  body: text("body").notNull(),
-  enabled: boolean("enabled").notNull().default(true),
-  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
-});
+export const messageTemplates = pgTable(
+  "message_templates",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    propertyId: uuid("property_id")
+      .notNull()
+      .references(() => properties.id),
+    // Unique per hotel (was global) — each hotel edits its own copies.
+    key: text("key").notNull(),
+    subject: text("subject"),
+    body: text("body").notNull(),
+    enabled: boolean("enabled").notNull().default(true),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({
+    propertyKeyUnique: uniqueIndex("uq_message_templates_property_key").on(t.propertyId, t.key),
+    propertyIdx: index("idx_message_templates_property").on(t.propertyId),
+  }),
+);
 
 export type MessageTemplate = typeof messageTemplates.$inferSelect;
 export type NewMessageTemplate = typeof messageTemplates.$inferInsert;

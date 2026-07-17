@@ -161,6 +161,9 @@ export async function getAllTemplatesForUI(): Promise<
 export async function upsertTemplate(
   key: TemplateKey,
   patch: { subject?: string | null; body?: string; enabled?: boolean },
+  // Templates are per hotel — the row created/updated belongs to the
+  // caller's tenant. TODO(phase-2.4): scope reads (loadCache/render) too.
+  propertyId: string,
 ): Promise<void> {
   // Try update first
   const existing = await db.select().from(messageTemplates).where(eq(messageTemplates.key, key)).limit(1);
@@ -177,6 +180,7 @@ export async function upsertTemplate(
   } else {
     const def = TEMPLATE_DEFAULTS[key];
     await db.insert(messageTemplates).values({
+      propertyId,
       key,
       subject: patch.subject ?? def.subject ?? null,
       body: patch.body ?? def.body,

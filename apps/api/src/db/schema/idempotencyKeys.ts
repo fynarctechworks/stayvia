@@ -1,4 +1,5 @@
-import { index, integer, pgTable, text, timestamp } from "drizzle-orm/pg-core";
+import { index, integer, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
+import { properties } from "./properties.js";
 
 // Records of recently-completed idempotent requests. When a client retries
 // a mutating call with the same Idempotency-Key header, we return the
@@ -22,6 +23,9 @@ export const idempotencyKeys = pgTable(
     requestHash: text("request_hash").notNull(),
     statusCode: integer("status_code").notNull(),
     responseBody: text("response_body").notNull(),
+    // Stamped from the request tenant (nullable — pre-tenancy rows and
+    // unauthenticated replays have none).
+    propertyId: uuid("property_id").references(() => properties.id),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
   },

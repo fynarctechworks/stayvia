@@ -708,7 +708,7 @@ function renderInvoiceHtml(data: {
       ? "CREDIT NOTE"
       : L.invoiceTitle;
   const reversalRef = isCreditNote
-    ? ((invoice.notes ?? "").match(/reversing\s+(SLDT-INV-\d+)/i)?.[1] ?? null)
+    ? ((invoice.notes ?? "").match(/reversing\s+((?:SLDT-)?INV-\d+)/i)?.[1] ?? null)
     : null;
 
   const itemRows = lineItems

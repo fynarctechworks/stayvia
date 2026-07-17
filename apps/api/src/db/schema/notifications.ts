@@ -1,5 +1,6 @@
 import { index, jsonb, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
 import { profiles } from "./profiles.js";
+import { properties } from "./properties.js";
 
 export const NOTIFICATION_TYPES = [
   "reservation_created",
@@ -18,6 +19,8 @@ export const notifications = pgTable(
   "notifications",
   {
     id: uuid("id").primaryKey().defaultRandom(),
+    // Auditing convenience — the recipient profile already pins the hotel.
+    propertyId: uuid("property_id").references(() => properties.id),
     recipientId: uuid("recipient_id")
       .notNull()
       .references(() => profiles.id, { onDelete: "cascade" }),

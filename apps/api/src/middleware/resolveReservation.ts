@@ -17,7 +17,9 @@ import { db } from "../db/client.js";
 import { reservations } from "../db/schema/reservations.js";
 import { fail } from "../lib/response.js";
 
-const RES_NUMBER_RE = /^SLDT-RES-\d+$/i;
+// New numbers are RES-#### (per hotel); the optional SLDT- prefix keeps
+// legacy links from the single-property era resolving.
+const RES_NUMBER_RE = /^(SLDT-)?RES-\d+$/i;
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 

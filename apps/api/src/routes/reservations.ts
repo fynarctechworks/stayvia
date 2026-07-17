@@ -41,9 +41,6 @@ import {
   isRoomAvailable,
   lockKey,
   lockRoom,
-  nextCreditNoteSequence,
-  nextDailySequence,
-  nextInvoiceSequence,
   type RoomConflict,
 } from "../lib/availability.js";
 import { getGuestBalance } from "../lib/ledger.js";
@@ -57,7 +54,7 @@ import { calcGstBreakdown, getGstRate } from "../lib/gst.js";
 import { loadGuestExtra } from "../lib/guestExtra.js";
 import { buildInvoice, selectChargesForScope } from "../lib/invoiceBuilder.js";
 import { PAYMENT_METHODS } from "../db/schema/enums.js";
-import { creditNoteNumber, invoiceNumber, reservationNumber } from "../lib/numbers.js";
+import { creditNoteNumber, invoiceNumber, nextDocNumber, reservationNumber } from "../lib/numbers.js";
 import { hashOtp } from "../lib/otp.js";
 import { renderInvoicePdf, renderReceiptPdf } from "../lib/pdf.js";
 import { generateReceiptNumber } from "../lib/receipt.js";
@@ -783,7 +780,7 @@ router.post(
 
         const balanceDue = +(grandTotal - input.advancePaid - walletApplied).toFixed(2);
 
-        const seq = await nextDailySequence(`SLDT-RES-%`, tx);
+        const seq = await nextDocNumber(tx, propertyId, "reservation");
         const resNumber = reservationNumber(seq);
 
         // For short_stay, fold the chosen band label (e.g. "Day use · 6 hours")
@@ -845,6 +842,7 @@ router.post(
         // commits atomically with the reservation.
         if (walletApplied > 0) {
           await tx.insert(guestLedger).values({
+            propertyId,
             guestId: input.guestId,
             entryType: "credit_used",
             amount: String(walletApplied.toFixed(2)),
@@ -894,7 +892,7 @@ router.post(
         // carry a different note so reports can distinguish them. The
         // receipt-number sequence is shared with paid receipts.
         {
-          const rcpNum = await generateReceiptNumber(tx);
+          const rcpNum = await generateReceiptNumber(tx, propertyId);
           const amount = input.advancePaid > 0 ? input.advancePaid : 0;
           const method =
             input.advancePaid > 0 && input.advancePaymentMethod
@@ -1455,7 +1453,7 @@ router.post(
       // the placeholder row.
       const advance = input.advancePayment ?? 0;
       if (advance > 0) {
-        const rcpNum = await generateReceiptNumber(tx);
+        const rcpNum = await generateReceiptNumber(tx, r[0]!.propertyId);
         const method = input.paymentMethod ?? "cash";
         await tx.insert(payments).values({
           receiptNumber: rcpNum,
@@ -1817,7 +1815,7 @@ async function handlePerRoomCheckout(args: {
   await db.transaction(async (tx) => {
     for (let i = 0; i < builts.length; i++) {
       const { rrm, built } = builts[i]!;
-      const invoiceSeq = await nextInvoiceSequence(`SLDT-INV-%`, tx);
+      const invoiceSeq = await nextDocNumber(tx, r.propertyId, "invoice");
       const invNum = invoiceNumber(settings.invoicePrefix, invoiceSeq);
 
       const cgstRate = +(built.roomGstRate / 2).toFixed(2);
@@ -1887,7 +1885,7 @@ async function handlePerRoomCheckout(args: {
         .where(eq(reservationRooms.id, rrm.rr.id));
 
       if (paymentOnThisInv > 0.009 && input.paymentMethod) {
-        const rcpNum = await generateReceiptNumber(tx);
+        const rcpNum = await generateReceiptNumber(tx, r.propertyId);
         await tx.insert(payments).values({
           receiptNumber: rcpNum,
           propertyId: r.propertyId,
@@ -1912,6 +1910,7 @@ async function handlePerRoomCheckout(args: {
     // shows on the invoice — not just an activity-log note.
     if (hasOverpaid && input.refundMode === "credit") {
       await tx.insert(guestLedger).values({
+        propertyId: r.propertyId,
         guestId: r.guestId,
         entryType: "credit_issued",
         amount: String(overpaidAmount.toFixed(2)),
@@ -1923,7 +1922,7 @@ async function handlePerRoomCheckout(args: {
         createdBy: req.user!.id,
       });
     } else if (hasOverpaid && input.refundMode === "cash") {
-      const rcpNum = await generateReceiptNumber(tx);
+      const rcpNum = await generateReceiptNumber(tx, r.propertyId);
       await tx.insert(payments).values({
         receiptNumber: rcpNum,
         propertyId: r.propertyId,
@@ -2344,7 +2343,7 @@ router.post(
 
     let invNumber = "";
     const created = await db.transaction(async (tx) => {
-      const invoiceSeq = await nextInvoiceSequence(`SLDT-INV-%`, tx);
+      const invoiceSeq = await nextDocNumber(tx, r[0]!.propertyId, "invoice");
       invNumber = invoiceNumber(settings.invoicePrefix, invoiceSeq);
       const [inv] = await tx
         .insert(invoices)
@@ -2406,7 +2405,7 @@ router.post(
         .where(and(eq(payments.reservationId, id), sql`${payments.invoiceId} IS NULL`));
 
       if (finalPayment > 0 && input.paymentMethod) {
-        const rcpNum = await generateReceiptNumber(tx);
+        const rcpNum = await generateReceiptNumber(tx, r[0]!.propertyId);
         await tx.insert(payments).values({
           receiptNumber: rcpNum,
           propertyId: r[0]!.propertyId,
@@ -2422,6 +2421,7 @@ router.post(
 
       if (hasOverpaid && input.refundMode === "credit") {
         await tx.insert(guestLedger).values({
+          propertyId: r[0]!.propertyId,
           guestId: r[0]!.guestId,
           entryType: "credit_issued",
           amount: String(overpaidAmount.toFixed(2)),
@@ -2819,6 +2819,7 @@ router.post(
         if (refundable > 0.009) {
           await lockKey(tx, `guest-wallet:${r[0]!.guestId}`);
           await tx.insert(guestLedger).values({
+            propertyId: r[0]!.propertyId,
             guestId: r[0]!.guestId,
             entryType: "credit_issued",
             amount: String(refundable.toFixed(2)),
@@ -2835,7 +2836,7 @@ router.post(
         // payment row tagged with the chosen channel so reports can
         // break refund channels down correctly.
         if (refundable > 0.009) {
-          const rcpNum = await generateReceiptNumber(tx);
+          const rcpNum = await generateReceiptNumber(tx, r[0]!.propertyId);
           await tx.insert(payments).values({
             receiptNumber: rcpNum,
             propertyId: r[0]!.propertyId,
@@ -2860,6 +2861,7 @@ router.post(
       if (walletCreditRestored > 0.009) {
         await lockKey(tx, `guest-wallet:${r[0]!.guestId}`);
         await tx.insert(guestLedger).values({
+          propertyId: r[0]!.propertyId,
           guestId: r[0]!.guestId,
           entryType: "credit_issued",
           amount: String(walletCreditRestored.toFixed(2)),
@@ -3332,6 +3334,7 @@ router.post(
         if (input.markOldRoomStatus === "maintenance" && input.maintenanceIssue) {
           const mi = input.maintenanceIssue;
           await tx.insert(maintenanceIssues).values({
+            propertyId: reservation.propertyId,
             roomId: seg.roomId,
             category: mi.category,
             severity: mi.severity,
@@ -3474,6 +3477,7 @@ router.post(
         if (input.markOldRoomStatus === "maintenance" && input.maintenanceIssue) {
           const mi = input.maintenanceIssue;
           await tx.insert(maintenanceIssues).values({
+            propertyId: reservation.propertyId,
             roomId: seg.roomId,
             category: mi.category,
             severity: mi.severity,
@@ -3926,7 +3930,7 @@ router.post(
     let newReservationId = "";
     let newReservationNumber = "";
     await db.transaction(async (tx) => {
-      const seq = await nextDailySequence(`SLDT-RES-%`, tx);
+      const seq = await nextDocNumber(tx, current.propertyId, "reservation");
       newReservationNumber = reservationNumber(seq);
 
       // Snapshot a starter row. totals/grandTotal/balance get rewritten
@@ -4325,7 +4329,7 @@ router.post(
         throw new Error("OTP was already used — request a new code");
       }
 
-      const seq = await nextDailySequence(`SLDT-RES-%`, tx);
+      const seq = await nextDocNumber(tx, current.propertyId, "reservation");
       newReservationNumber = reservationNumber(seq);
       const [created] = await tx
         .insert(reservations)
@@ -5272,7 +5276,7 @@ router.post(
     }
 
     const created = await db.transaction(async (tx) => {
-      const rcpNum = await generateReceiptNumber(tx);
+      const rcpNum = await generateReceiptNumber(tx, r[0]!.propertyId);
       const [pay] = await tx
         .insert(payments)
         .values({
@@ -5420,6 +5424,7 @@ router.post(
           .where(eq(reservations.id, r.id));
 
         await tx.insert(guestLedger).values({
+          propertyId: r.propertyId,
           guestId: r.guestId,
           entryType: "credit_used",
           amount: String(capped.toFixed(2)),
@@ -5799,7 +5804,7 @@ async function autoConsolidatePerRoomInvoices(
   });
   const cgstRate = +(built.roomGstRate / 2).toFixed(2);
   const sgstRate = +(built.roomGstRate / 2).toFixed(2);
-  const invoiceSeq = await nextInvoiceSequence(`SLDT-INV-%`, tx);
+  const invoiceSeq = await nextDocNumber(tx, resv.propertyId, "invoice");
   const invNumber = invoiceNumber(settings.invoicePrefix, invoiceSeq);
   const replaced = roomScoped.map((i) => i.invoiceNumber).join(", ");
   const [combined] = await tx
@@ -6045,7 +6050,7 @@ router.post(
       //    the actual payments-row attribution happens later via
       //    attachOrphanPaymentsAndRecompute.
       if (willIssueInvoice) {
-        const invoiceSeq = await nextInvoiceSequence(`SLDT-INV-%`, tx);
+        const invoiceSeq = await nextDocNumber(tx, resv.propertyId, "invoice");
         const invNumber = invoiceNumber(settings.invoicePrefix, invoiceSeq);
         const collectedOnThisInv = +(advanceShare + realPaid).toFixed(2);
         const balanceOnThisInv = +(grandTotal - collectedOnThisInv).toFixed(2);
@@ -6092,7 +6097,7 @@ router.post(
       // 2. Record the payment (always, when amount > 0). Tied to the
       //    newly-issued invoice OR the pre-existing one on the room.
       if (payAmount > 0.009 && input.paymentMethod) {
-        const rcpNum = await generateReceiptNumber(tx);
+        const rcpNum = await generateReceiptNumber(tx, resv.propertyId);
         await tx.insert(payments).values({
           receiptNumber: rcpNum,
           propertyId: resv.propertyId,
@@ -6395,7 +6400,7 @@ router.post(
           : "issued";
 
     const created = await db.transaction(async (tx) => {
-      const invoiceSeq = await nextInvoiceSequence(`SLDT-INV-%`, tx);
+      const invoiceSeq = await nextDocNumber(tx, resv.propertyId, "invoice");
       invNumber = invoiceNumber(settings.invoicePrefix, invoiceSeq);
       const [inv] = await tx
         .insert(invoices)
@@ -6450,7 +6455,7 @@ router.post(
         );
 
       if (paymentAmount > 0.009 && input.payment) {
-        const rcpNum = await generateReceiptNumber(tx);
+        const rcpNum = await generateReceiptNumber(tx, resv.propertyId);
         await tx.insert(payments).values({
           receiptNumber: rcpNum,
           propertyId: resv.propertyId,
@@ -6786,7 +6791,7 @@ router.post(
         });
         const cgstRate = +(built.roomGstRate / 2).toFixed(2);
         const sgstRate = +(built.roomGstRate / 2).toFixed(2);
-        const invoiceSeq = await nextInvoiceSequence(`SLDT-INV-%`, tx);
+        const invoiceSeq = await nextDocNumber(tx, resv.propertyId, "invoice");
         const invNumber = invoiceNumber(settings.invoicePrefix, invoiceSeq);
         const [inv] = await tx
           .insert(invoices)
@@ -6867,7 +6872,7 @@ router.post(
             .where(eq(guests.id, x.rr.guestId))
             .limit(1);
           const billedTo = occupant ?? booker;
-          const invoiceSeq = await nextInvoiceSequence(`SLDT-INV-%`, tx);
+          const invoiceSeq = await nextDocNumber(tx, resv.propertyId, "invoice");
           const invNumber = invoiceNumber(
             settings.invoicePrefix,
             invoiceSeq,
@@ -6941,7 +6946,7 @@ router.post(
         // return. The payment already detached in step 1 reattaches to
         // the new invoices below.
         for (const old of liveInvoices) {
-          const cnSeq = await nextCreditNoteSequence(tx);
+          const cnSeq = await nextDocNumber(tx, old.propertyId, "credit_note");
           const cnNumber = creditNoteNumber(cnSeq);
           const [cnRow] = await tx
             .insert(invoices)

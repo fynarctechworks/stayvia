@@ -1,6 +1,7 @@
 import { sql } from "drizzle-orm";
 import {
   boolean,
+  index,
   integer,
   jsonb,
   numeric,
@@ -8,8 +9,10 @@ import {
   text,
   time,
   timestamp,
+  uniqueIndex,
   uuid,
 } from "drizzle-orm/pg-core";
+import { properties } from "./properties.js";
 
 export type ShortStayBand = {
   label: string;
@@ -19,6 +22,11 @@ export type ShortStayBand = {
 
 export const settings = pgTable("settings", {
   id: uuid("id").primaryKey().defaultRandom(),
+  // Exactly one settings row per hotel, created at provisioning.
+  propertyId: uuid("property_id")
+    .notNull()
+    .unique()
+    .references(() => properties.id),
   hotelName: text("hotel_name").notNull(),
   hotelAddress: text("hotel_address").notNull(),
   // Optional precise location pin. Captured via "Use current location" in
@@ -101,30 +109,41 @@ export const settings = pgTable("settings", {
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
-export const roomTypes = pgTable("room_types", {
-  id: uuid("id").primaryKey().defaultRandom(),
-  slug: text("slug").notNull().unique(),
-  label: text("label").notNull(),
-  defaultRate: numeric("default_rate", { precision: 10, scale: 2 }).notNull(),
-  maxOccupancy: numeric("max_occupancy").notNull().default("2"),
-  // Per-night charge for each extra person (extra bed) over a room's
-  // base max_occupancy, for rooms of this type. 0 (the default) means
-  // extra beds are not offered — the booking form hides the stepper.
-  extraPersonRate: numeric("extra_person_rate", { precision: 10, scale: 2 })
-    .notNull()
-    .default("0"),
-  description: text("description"),
-  isActive: boolean("is_active").notNull().default(true),
-  // Day-use bands shown on the reservation form when stay_type='short_stay'.
-  // Each row is {label, hours, rate}; the user can also enter a custom
-  // duration that is priced pro-rata from the closest band.
-  shortStayBands: jsonb("short_stay_bands")
-    .$type<ShortStayBand[]>()
-    .notNull()
-    .default(sql`'[]'::jsonb`),
-  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
-});
+export const roomTypes = pgTable(
+  "room_types",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    propertyId: uuid("property_id")
+      .notNull()
+      .references(() => properties.id),
+    // Unique per hotel (was global) — hotel B can also have "deluxe".
+    slug: text("slug").notNull(),
+    label: text("label").notNull(),
+    defaultRate: numeric("default_rate", { precision: 10, scale: 2 }).notNull(),
+    maxOccupancy: numeric("max_occupancy").notNull().default("2"),
+    // Per-night charge for each extra person (extra bed) over a room's
+    // base max_occupancy, for rooms of this type. 0 (the default) means
+    // extra beds are not offered — the booking form hides the stepper.
+    extraPersonRate: numeric("extra_person_rate", { precision: 10, scale: 2 })
+      .notNull()
+      .default("0"),
+    description: text("description"),
+    isActive: boolean("is_active").notNull().default(true),
+    // Day-use bands shown on the reservation form when stay_type='short_stay'.
+    // Each row is {label, hours, rate}; the user can also enter a custom
+    // duration that is priced pro-rata from the closest band.
+    shortStayBands: jsonb("short_stay_bands")
+      .$type<ShortStayBand[]>()
+      .notNull()
+      .default(sql`'[]'::jsonb`),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({
+    propertySlugUnique: uniqueIndex("uq_room_types_property_slug").on(t.propertyId, t.slug),
+    propertyIdx: index("idx_room_types_property").on(t.propertyId),
+  }),
+);
 
 export type Settings = typeof settings.$inferSelect;
 export type NewSettings = typeof settings.$inferInsert;

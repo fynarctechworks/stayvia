@@ -416,7 +416,7 @@ export async function attachOrphanPaymentsAndRecompute(
 
     for (let i = 1; i < plan.length; i++) {
       const slice = plan[i]!;
-      const rcpNum = await generateReceiptNumber(tx);
+      const rcpNum = await generateReceiptNumber(tx, op.propertyId);
       const splitNote = baseNote
         ? `${baseNote} · part ${i + 1}/${total} (split from ${op.receiptNumber})`
         : `Part ${i + 1}/${total} (split from ${op.receiptNumber})`;

@@ -7,6 +7,7 @@ import {
   pgTable,
   text,
   timestamp,
+  uniqueIndex,
   uuid,
 } from "drizzle-orm/pg-core";
 import { BOOKING_SOURCES, RESERVATION_STATUSES } from "./enums.js";
@@ -19,9 +20,8 @@ export const reservations = pgTable(
   "reservations",
   {
     id: uuid("id").primaryKey().defaultRandom(),
-    reservationNumber: text("reservation_number").notNull().unique(),
-    // Phase 2: reservations live under a property. Back-filled to
-    // PRIMARY by migration 0013.
+    // Unique per hotel (was global) — see uq_reservations_property_number.
+    reservationNumber: text("reservation_number").notNull(),
     propertyId: uuid("property_id")
       .notNull()
       .references(() => properties.id),
@@ -98,6 +98,10 @@ export const reservations = pgTable(
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => ({
+    propertyNumberUnique: uniqueIndex("uq_reservations_property_number").on(
+      t.propertyId,
+      t.reservationNumber,
+    ),
     checkOutAfterIn: check(
       "res_checkout_after_checkin",
       sql`(${t.stayType} = 'short_stay' AND ${t.checkOutDate} >= ${t.checkInDate})

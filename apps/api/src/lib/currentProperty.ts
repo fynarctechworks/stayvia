@@ -1,45 +1,45 @@
 // Resolve "which property is this request acting on".
 //
-// Today: every request acts on the PRIMARY property (single-tenant).
-// Tomorrow: the user's profile may declare a default property, or the
-// request may carry a `X-Property-Id` header chosen by a property
-// switcher in the UI. Either way, code that needs to INSERT a
-// property_id should call resolveCurrentPropertyId(req) instead of
-// hard-coding anything.
+// TODO(phase-2.3): replace with req.propertyId set by requireAuth from the
+// authenticated profile's property_id — then delete this module and its
+// call sites. Until then, this dev convenience resolves the FIRST (and, in
+// a freshly-provisioned dev database, only) property row. It intentionally
+// throws when more than one hotel exists so a multi-tenant deployment can
+// never silently attribute writes to the wrong hotel.
 
 import type { Request } from "express";
-import { eq } from "drizzle-orm";
+import { asc } from "drizzle-orm";
 import { db } from "../db/client.js";
-import { properties, PRIMARY_PROPERTY_CODE } from "../db/schema/properties.js";
+import { properties } from "../db/schema/properties.js";
 import { logger } from "./logger.js";
 
-// 60-second cache. The bootstrap property's id never changes, so this
-// is effectively a one-time lookup per process; the TTL is a defensive
-// upper bound in case a future migration reseeds the table.
+// 60-second cache — a single-hotel dev DB doesn't change under us; the
+// TTL bounds staleness if the table is reseeded.
 let cached: { id: string; expiresAt: number } | null = null;
 
 export async function resolveCurrentPropertyId(_req?: Request): Promise<string> {
-  // Future: read `_req.user.defaultPropertyId` or `req.header("x-property-id")`
-  // here, validate it against the caller's allowed properties, and
-  // return that. For now we always return PRIMARY.
   if (cached && cached.expiresAt > Date.now()) return cached.id;
 
-  const [row] = await db
+  const rows = await db
     .select({ id: properties.id })
     .from(properties)
-    .where(eq(properties.code, PRIMARY_PROPERTY_CODE))
-    .limit(1);
+    .orderBy(asc(properties.createdAt))
+    .limit(2);
 
-  if (!row) {
-    logger.error(
-      { code: PRIMARY_PROPERTY_CODE },
-      "PRIMARY property row missing — migration 0013 must run before any property-scoped insert",
+  if (rows.length === 0) {
+    logger.error("No properties row — run db:seed (provisionProperty) before property-scoped writes");
+    throw new Error("No property provisioned. Run the seed first.");
+  }
+  if (rows.length > 1) {
+    // Multiple hotels: the tenant MUST come from the authenticated
+    // profile (phase 2.3). Failing loudly beats guessing.
+    throw new Error(
+      "Multiple properties exist — resolveCurrentPropertyId cannot pick one. Tenant resolution via req.propertyId required.",
     );
-    throw new Error("PRIMARY property not found. Apply migration 0013.");
   }
 
-  cached = { id: row.id, expiresAt: Date.now() + 60_000 };
-  return row.id;
+  cached = { id: rows[0]!.id, expiresAt: Date.now() + 60_000 };
+  return rows[0]!.id;
 }
 
 export function clearPropertyCache() {

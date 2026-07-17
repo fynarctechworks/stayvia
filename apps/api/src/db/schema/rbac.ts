@@ -1,12 +1,15 @@
+import { sql } from "drizzle-orm";
 import {
   boolean,
   pgTable,
   primaryKey,
   text,
   timestamp,
+  uniqueIndex,
   uuid,
 } from "drizzle-orm/pg-core";
 import { profiles } from "./profiles.js";
+import { properties } from "./properties.js";
 
 // Catalog of permission keys. Code-managed (seeded), not user-creatable.
 export const permissions = pgTable("permissions", {
@@ -17,17 +20,33 @@ export const permissions = pgTable("permissions", {
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
-// Roles. System roles (admin/frontdesk/housekeeping) are seeded with isSystem=true.
-// Custom roles can be created by admins; system roles cannot be deleted.
-export const roles = pgTable("roles", {
-  id: uuid("id").primaryKey().defaultRandom(),
-  key: text("key").notNull().unique(),
-  label: text("label").notNull(),
-  description: text("description"),
-  isSystem: boolean("is_system").notNull().default(false),
-  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
-});
+// Roles. System roles (admin/frontdesk/housekeeping) are seeded with isSystem=true
+// and propertyId=NULL (shared across all hotels). Custom roles are created by
+// admins and belong to their hotel (propertyId set). Key uniqueness is scoped
+// accordingly: one partial unique for the NULL-property system namespace, one
+// per hotel.
+export const roles = pgTable(
+  "roles",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    key: text("key").notNull(),
+    label: text("label").notNull(),
+    description: text("description"),
+    isSystem: boolean("is_system").notNull().default(false),
+    // NULL = shared system role; NOT NULL = hotel-owned custom role.
+    propertyId: uuid("property_id").references(() => properties.id),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({
+    systemKeyUnique: uniqueIndex("uq_roles_system_key")
+      .on(t.key)
+      .where(sql`${t.propertyId} IS NULL`),
+    propertyKeyUnique: uniqueIndex("uq_roles_property_key")
+      .on(t.propertyId, t.key)
+      .where(sql`${t.propertyId} IS NOT NULL`),
+  }),
+);
 
 // Many-to-many: which permissions each role has.
 // Admin role has a special "*" row indicating "all permissions" (god mode).

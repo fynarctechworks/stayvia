@@ -11,7 +11,9 @@ import { fail } from "../lib/response.js";
 
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-const RECEIPT_NUMBER_RE = /^SLDT-RCP-\d+$/i;
+// New numbers are RCP-#### (per hotel); the optional SLDT- prefix keeps
+// legacy links from the single-property era resolving.
+const RECEIPT_NUMBER_RE = /^(SLDT-)?RCP-\d+$/i;
 
 const CACHE_MAX = 100;
 const CACHE_TTL_MS = 5 * 60 * 1000;

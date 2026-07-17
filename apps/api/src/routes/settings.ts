@@ -15,6 +15,7 @@ import { reservationRooms } from "../db/schema/reservations.js";
 import { rooms } from "../db/schema/rooms.js";
 import { roomTypes, settings } from "../db/schema/settings.js";
 import { logActivity } from "../lib/activity.js";
+import { resolveCurrentPropertyId } from "../lib/currentProperty.js";
 import { publishSettingsInvalidation } from "../lib/redis.js";
 import { fail, ok } from "../lib/response.js";
 import { invalidateSettings } from "../lib/settings.js";
@@ -182,6 +183,7 @@ router.post(
     const [row] = await db
       .insert(roomTypes)
       .values({
+        propertyId: await resolveCurrentPropertyId(req),
         slug: input.slug,
         label: input.label,
         defaultRate: String(input.defaultRate),
@@ -363,7 +365,7 @@ router.put("/templates/:key", requireAuth, requirePermission("manage_templates")
   if (input.body !== undefined && input.body.trim() === "") {
     return fail(res, 400, "EMPTY_BODY", "Body cannot be empty");
   }
-  await upsertTemplate(key as keyof typeof TEMPLATE_DEFAULTS, input);
+  await upsertTemplate(key as keyof typeof TEMPLATE_DEFAULTS, input, await resolveCurrentPropertyId(req));
   await logActivity({
     action: "template_updated",
     entityType: "template",
@@ -381,11 +383,15 @@ router.post("/templates/:key/reset", requireAuth, requirePermission("manage_temp
     return fail(res, 400, "INVALID_KEY", "Unknown template key");
   }
   const def = TEMPLATE_DEFAULTS[key as keyof typeof TEMPLATE_DEFAULTS];
-  await upsertTemplate(key as keyof typeof TEMPLATE_DEFAULTS, {
-    subject: def.subject ?? null,
-    body: def.body,
-    enabled: true,
-  });
+  await upsertTemplate(
+    key as keyof typeof TEMPLATE_DEFAULTS,
+    {
+      subject: def.subject ?? null,
+      body: def.body,
+      enabled: true,
+    },
+    await resolveCurrentPropertyId(req),
+  );
   return ok(res, { ok: true });
 });
 

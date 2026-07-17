@@ -40,7 +40,7 @@ router.post(
     if (inv[0]!.status === "voided") return fail(res, 409, "VOIDED", "Invoice is voided");
 
     const result = await db.transaction(async (tx) => {
-      const rcpNum = await generateReceiptNumber(tx);
+      const rcpNum = await generateReceiptNumber(tx, inv[0]!.propertyId);
       const [pay] = await tx
         .insert(payments)
         .values({
@@ -396,7 +396,7 @@ function extractCheckoutSourceReservation(
     /Collected at check-out of ([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})/i,
   );
   if (uuidMatch) return { kind: "id", value: uuidMatch[1]! };
-  const numberMatch = notes.match(/Collected at check-out of (SLDT-RES-\d+)/i);
+  const numberMatch = notes.match(/Collected at check-out of ((?:SLDT-)?RES-\d+)/i);
   if (numberMatch) return { kind: "number", value: numberMatch[1]! };
   return null;
 }

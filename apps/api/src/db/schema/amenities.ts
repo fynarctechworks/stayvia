@@ -21,6 +21,7 @@ import {
   uuid,
 } from "drizzle-orm/pg-core";
 import { profiles } from "./profiles.js";
+import { properties } from "./properties.js";
 import { rooms } from "./rooms.js";
 
 export const amenities = pgTable("amenities", {
@@ -31,6 +32,8 @@ export const amenities = pgTable("amenities", {
   category: text("category").notNull().default("general"),
   isActive: boolean("is_active").notNull().default(true),
   sortOrder: integer("sort_order").notNull().default(100),
+  // NULL = platform-shared catalog row; NOT NULL = hotel-custom amenity.
+  propertyId: uuid("property_id").references(() => properties.id),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 

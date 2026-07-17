@@ -22,9 +22,8 @@ export const guests = pgTable(
   "guests",
   {
     id: uuid("id").primaryKey().defaultRandom(),
-    // Phase 2: guest profiles are per-property. A guest who stays at
-    // two properties has two rows (intentional — keeps property data
-    // walls clean). Back-filled to PRIMARY by migration 0013.
+    // Guest profiles are per-hotel. A guest who stays at two hotels has
+    // two rows (intentional — keeps tenant data walls clean, DPDP).
     propertyId: uuid("property_id")
       .notNull()
       .references(() => properties.id),
@@ -71,7 +70,14 @@ export const guests = pgTable(
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => ({
-    phoneUnique: uniqueIndex("idx_guests_phone_unique").on(t.phone),
+    // Guest dedup is per hotel (was global): phone, email, id-proof.
+    propertyPhoneUnique: uniqueIndex("uq_guests_property_phone").on(t.propertyId, t.phone),
+    propertyEmailUnique: uniqueIndex("uq_guests_property_email")
+      .on(t.propertyId, sql`lower(${t.email})`)
+      .where(sql`${t.email} IS NOT NULL AND ${t.email} <> ''`),
+    propertyIdProofUnique: uniqueIndex("uq_guests_property_idproof")
+      .on(t.propertyId, t.idProofType, t.idProofLast4)
+      .where(sql`${t.idProofLast4} IS NOT NULL AND ${t.idProofLast4} <> ''`),
     fullNameSearch: index("idx_guests_full_name").using(
       "gin",
       sql`to_tsvector('english', ${t.fullName})`,

@@ -15,5 +15,7 @@ export * from "./guestLedger.js";
 export * from "./idempotencyKeys.js";
 export * from "./amenities.js";
 export * from "./properties.js";
+export * from "./propertyCounters.js";
+export * from "./subscriptions.js";
 export * from "./expenses.js";
 export * from "./maintenance.js";

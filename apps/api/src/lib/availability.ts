@@ -272,50 +272,9 @@ export async function lockKey(exec: Exec, key: string): Promise<void> {
   await exec.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${key})::bigint)`);
 }
 
-// Sequence allocators. Phase 1 replaced the prior MAX(...)+advisory-lock
-// approach with real Postgres sequences (migration 0011). nextval() is
-// transaction-safe, contention-free, and gap-tolerant (a rolled-back tx
-// consumes the number, but for SLDT-RES/INV/RCP that's auditor-acceptable
-// and arguably *desirable* — gaps make a deleted reservation visible).
-//
-// The `like` parameter is now ignored at the DB level but kept in the
-// signature so callers don't have to change. If we ever introduce a
-// second numbering domain (e.g. SLDT-CN- for credit notes) we'll add a
-// new sequence rather than parameterising the LIKE.
-export async function nextDailySequence(
-  _like: string,
-  exec: Exec = db,
-): Promise<number> {
-  const result = await exec.execute<{ nextval: string | number }>(
-    sql`SELECT nextval('sldt_reservation_seq') AS nextval`,
-  );
-  const row = result[0] as { nextval: string | number } | undefined;
-  return Number(row?.nextval ?? 0);
-}
-
-export async function nextInvoiceSequence(_like: string, exec: Exec = db): Promise<number> {
-  const result = await exec.execute<{ nextval: string | number }>(
-    sql`SELECT nextval('sldt_invoice_seq') AS nextval`,
-  );
-  const row = result[0] as { nextval: string | number } | undefined;
-  return Number(row?.nextval ?? 0);
-}
-
-export async function nextReceiptSequence(_like: string, exec: Exec = db): Promise<number> {
-  const result = await exec.execute<{ nextval: string | number }>(
-    sql`SELECT nextval('sldt_receipt_seq') AS nextval`,
-  );
-  const row = result[0] as { nextval: string | number } | undefined;
-  return Number(row?.nextval ?? 0);
-}
-
-export async function nextCreditNoteSequence(exec: Exec = db): Promise<number> {
-  const result = await exec.execute<{ nextval: string | number }>(
-    sql`SELECT nextval('sldt_credit_note_seq') AS nextval`,
-  );
-  const row = result[0] as { nextval: string | number } | undefined;
-  return Number(row?.nextval ?? 0);
-}
+// Document-number allocation moved to lib/numbers.ts (nextDocNumber):
+// per-hotel counters in property_counters replaced the legacy global
+// Postgres sequences.
 
 // Per-room advisory lock for double-booking prevention. Hold inside a tx
 // across the availability check and the insert.

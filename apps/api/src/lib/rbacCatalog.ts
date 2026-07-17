@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 
-import { eq } from "drizzle-orm";
+import { and, eq, isNull } from "drizzle-orm";
 
 import { db } from "../db/client.js";
 import { permissions, rolePermissions, roles } from "../db/schema/rbac.js";
@@ -24,27 +24,31 @@ export async function seedRbacCatalog(): Promise<string | null> {
   await db.insert(permissions).values(permRows).onConflictDoNothing();
 
   // 2. System roles (admin/frontdesk/housekeeping), and remember the admin id.
+  //    System roles live in the shared NULL-property namespace; key
+  //    uniqueness there is a partial index, which ON CONFLICT (key) can't
+  //    target, so this is a check-then-insert (idempotent enough for a
+  //    seed path that isn't racing itself).
   let adminRoleId: string | null = null;
   for (const def of Object.values(SYSTEM_ROLES)) {
-    const roleId = randomUUID();
-    await db
-      .insert(roles)
-      .values({
-        id: roleId,
+    const [existing] = await db
+      .select({ id: roles.id })
+      .from(roles)
+      .where(and(eq(roles.key, def.key), isNull(roles.propertyId)))
+      .limit(1);
+
+    let rid: string;
+    if (existing) {
+      rid = existing.id;
+    } else {
+      rid = randomUUID();
+      await db.insert(roles).values({
+        id: rid,
         key: def.key,
         label: def.label,
         description: def.description,
         isSystem: true,
-      })
-      .onConflictDoNothing({ target: roles.key });
-
-    // Resolve the actual id (ours if freshly inserted, else the existing one).
-    const [row] = await db
-      .select({ id: roles.id })
-      .from(roles)
-      .where(eq(roles.key, def.key))
-      .limit(1);
-    const rid = row?.id ?? roleId;
+      });
+    }
     if (def.key === "admin") adminRoleId = rid;
 
     // 3. role_permissions for this role.

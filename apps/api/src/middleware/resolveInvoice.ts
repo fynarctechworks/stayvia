@@ -10,10 +10,10 @@ import { fail } from "../lib/response.js";
 
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-// Matches both ordinary invoices (SLDT-INV-####) and credit notes
-// (SLDT-CN-####) — both live in the invoices table and are previewed
-// through the same PDF route.
-const INVOICE_NUMBER_RE = /^SLDT-(INV|CN)-\d+$/i;
+// Matches both ordinary invoices (INV-####) and credit notes (CN-####) —
+// both live in the invoices table and are previewed through the same PDF
+// route. The optional SLDT- prefix keeps legacy-era links resolving.
+const INVOICE_NUMBER_RE = /^(SLDT-)?(INV|CN)-\d+$/i;
 
 const CACHE_MAX = 100;
 const CACHE_TTL_MS = 5 * 60 * 1000;

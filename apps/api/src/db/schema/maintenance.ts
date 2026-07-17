@@ -8,6 +8,7 @@ import {
   uuid,
 } from "drizzle-orm/pg-core";
 import { profiles } from "./profiles.js";
+import { properties } from "./properties.js";
 import { rooms } from "./rooms.js";
 
 export const MAINTENANCE_CATEGORIES = [
@@ -39,7 +40,9 @@ export const maintenanceIssues = pgTable(
   "maintenance_issues",
   {
     id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
-    propertyId: uuid("property_id"),
+    propertyId: uuid("property_id")
+      .notNull()
+      .references(() => properties.id, { onDelete: "cascade" }),
     roomId: uuid("room_id")
       .notNull()
       .references(() => rooms.id, { onDelete: "cascade" }),
@@ -79,6 +82,7 @@ export const maintenanceIssues = pgTable(
   (t) => ({
     roomReported: index("idx_maint_room_reported").on(t.roomId, t.reportedAt),
     statusSeverity: index("idx_maint_status_severity").on(t.status, t.severity),
+    propertyOpen: index("idx_maint_property_open").on(t.propertyId),
   }),
 );
 

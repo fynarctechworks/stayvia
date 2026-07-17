@@ -1,4 +1,5 @@
 import { index, integer, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
+import { properties } from "./properties.js";
 
 export const OTP_PURPOSES = ["checkin", "guest_verify", "password_change"] as const;
 export type OtpPurpose = (typeof OTP_PURPOSES)[number];
@@ -10,6 +11,8 @@ export const otps = pgTable(
   "otps",
   {
     id: uuid("id").primaryKey().defaultRandom(),
+    // Stamped on send from the request tenant (nullable for legacy sends).
+    propertyId: uuid("property_id").references(() => properties.id),
     purpose: text("purpose", { enum: OTP_PURPOSES }).notNull(),
     channel: text("channel", { enum: OTP_CHANNELS }).notNull(),
     target: text("target").notNull(),
