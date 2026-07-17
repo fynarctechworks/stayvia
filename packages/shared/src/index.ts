@@ -5,3 +5,4 @@ export * from "./schemas/reservation.js";
 export * from "./schemas/settings.js";
 export * from "./schemas/expense.js";
 export * from "./schemas/maintenance.js";
+export * from "./schemas/signup.js";

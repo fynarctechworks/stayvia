@@ -7,8 +7,6 @@ import { supabaseAdmin } from "../lib/supabase.js";
 import { db } from "./client.js";
 import { profiles, properties, subscriptions } from "./schema/index.js";
 
-const TRIAL_DAYS = 14;
-
 async function main() {
   // Block accidental seeding of a remote (prod) DB from a dev machine.
   // @ts-expect-error — plain JS guard helper, no type declaration needed.
@@ -75,16 +73,18 @@ async function main() {
     console.log("✓ admin profile + role assignment ready");
   }
 
-  // 4. Trialing subscription (idempotent via the property unique).
+  // 4. Trialing subscription (idempotent via the property unique). Same
+  //    shape the public signup route inserts.
   await db
     .insert(subscriptions)
     .values({
       propertyId,
+      plan: "standard",
       status: "trialing",
-      trialEndsAt: new Date(Date.now() + TRIAL_DAYS * 24 * 60 * 60 * 1000),
+      trialEndsAt: new Date(Date.now() + env.TRIAL_DAYS * 24 * 60 * 60 * 1000),
     })
     .onConflictDoNothing({ target: subscriptions.propertyId });
-  console.log(`✓ trialing subscription (${TRIAL_DAYS} days)`);
+  console.log(`✓ trialing subscription (${env.TRIAL_DAYS} days)`);
 
   console.log("\nSeed complete. Rooms, room types, templates, guests, reservations start empty.");
   console.log(`Admin login: ${env.SEED_ADMIN_EMAIL} / ${env.SEED_ADMIN_PASSWORD}`);

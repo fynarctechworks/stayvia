@@ -98,6 +98,10 @@ const envSchema = z.object({
   // detect missing keys and degrade gracefully.
   RAZORPAY_KEY_ID: z.string().optional().transform((v) => (v === "" ? undefined : v)),
   RAZORPAY_KEY_SECRET: z.string().optional().transform((v) => (v === "" ? undefined : v)),
+  RAZORPAY_PLAN_ID: z.string().optional().transform((v) => (v === "" ? undefined : v)),
+  RAZORPAY_WEBHOOK_SECRET: z.string().optional().transform((v) => (v === "" ? undefined : v)),
+  // Free-trial length granted at signup. Seed + public signup both read this.
+  TRIAL_DAYS: z.coerce.number().int().min(1).max(365).default(14),
   RESEND_API_KEY: z.string().optional().transform((v) => (v === "" ? undefined : v)),
   RESEND_FROM: z.string().optional().transform((v) => (v === "" ? undefined : v)),
   // Google review link the post-checkout WhatsApp deep-links to. When

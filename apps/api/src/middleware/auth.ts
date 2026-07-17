@@ -28,6 +28,10 @@ declare module "express-serve-static-core" {
 }
 
 export async function requireAuth(req: Request, res: Response, next: NextFunction) {
+  // Already authenticated earlier in this request (the v1-level
+  // subscription gate runs requireAuth before the routers do) — skip the
+  // second Supabase round-trip; req.user/req.propertyId are stamped.
+  if (req.user) return next();
   const header = req.header("authorization") ?? req.header("Authorization");
   if (!header?.startsWith("Bearer ")) {
     return fail(res, 401, "UNAUTHENTICATED", "Missing or malformed Authorization header");

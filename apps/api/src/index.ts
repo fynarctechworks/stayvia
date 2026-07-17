@@ -15,6 +15,7 @@ import activityRoutes from "./routes/activity.js";
 import amenitiesRoutes from "./routes/amenities.js";
 import auditRoutes from "./routes/audit.js";
 import authRoutes from "./routes/auth.js";
+import billingRoutes, { razorpayWebhook } from "./routes/billing.js";
 import calendarRoutes from "./routes/calendar.js";
 import creditsRoutes from "./routes/credits.js";
 import dashboardRoutes from "./routes/dashboard.js";
@@ -29,12 +30,15 @@ import notificationRoutes from "./routes/notifications.js";
 import otpRoutes from "./routes/otp.js";
 import paymentRoutes from "./routes/payments.js";
 import propertiesRoutes from "./routes/properties.js";
+import publicRoutes from "./routes/public.js";
 import rbacRoutes from "./routes/rbac.js";
 import reportRoutes from "./routes/reports.js";
 import reservationRoutes from "./routes/reservations.js";
 import roomRoutes from "./routes/rooms.js";
 import searchRoutes from "./routes/search.js";
 import { settingsRouter, staffRouter } from "./routes/settings.js";
+import { requireAuth } from "./middleware/auth.js";
+import { requireActiveSubscription } from "./middleware/subscription.js";
 
 const app = express();
 
@@ -107,6 +111,17 @@ app.use(
     credentials: true,
   }),
 );
+// Razorpay webhook — mounted BEFORE express.json because signature
+// verification needs the exact raw bytes; express.json would consume the
+// stream and hand the route a parsed object. No auth: the HMAC over the
+// body (RAZORPAY_WEBHOOK_SECRET) is the authentication.
+app.post(
+  "/api/v1/billing/webhook",
+  express.raw({ type: "application/json", limit: "128kb" }),
+  (req, res, next) => {
+    razorpayWebhook(req, res).catch(next);
+  },
+);
 // Global JSON body limit. No JSON route in this app realistically needs
 // more than a handful of KB — see the schemas in packages/shared. Keeping
 // this tight blunts memory-exhaustion attacks. Multipart uploads use
@@ -120,10 +135,32 @@ const v1 = express.Router();
 
 v1.use("/auth/login", loginLimiter);
 v1.use("/auth", authRoutes);
+// Public signup — unauthenticated by design; carries its own strict
+// limiter (signupLimiter, 5/hour/IP) inside the route file.
+v1.use("/public", publicRoutes);
 
 v1.use((req, _res, next) => {
   if (["GET", "HEAD"].includes(req.method)) return readLimiter(req, _res, next);
   return writeLimiter(req, _res, next);
+});
+
+// Billing is reachable with a lapsed subscription — it's how a hotel pays
+// its way back in — so it mounts BEFORE the subscription gate. (The
+// webhook is mounted separately at app level, before express.json.)
+v1.use("/billing", billingRoutes);
+
+// Subscription gate for every business router below. Exempt (mounted
+// above): /auth, /public, /billing — plus GET /properties/me, which the
+// shell needs to render hotel identity on the locked billing screen.
+// requireAuth runs here once and stamps req.user/req.propertyId; the
+// per-route requireAuth calls inside the routers become no-ops via their
+// already-authenticated fast path.
+v1.use((req, res, next) => {
+  if (req.method === "GET" && req.path === "/properties/me") return next();
+  requireAuth(req, res, (err?: unknown) => {
+    if (err) return next(err);
+    requireActiveSubscription(req, res, next).catch(next);
+  }).catch(next);
 });
 
 v1.use("/rooms", roomRoutes);
