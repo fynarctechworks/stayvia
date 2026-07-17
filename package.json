@@ -1,0 +1,35 @@
+{
+  "name": "hoteldesk",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev:web": "npm run dev --workspace=@hoteldesk/web",
+    "dev:api": "npm run dev --workspace=@hoteldesk/api",
+    "build:web": "npm run build --workspace=@hoteldesk/web",
+    "build:api": "npm run build --workspace=@hoteldesk/api",
+    "db:generate": "npm run db:generate --workspace=@hoteldesk/api",
+    "db:push": "npm run db:push --workspace=@hoteldesk/api",
+    "db:seed": "npm run db:seed --workspace=@hoteldesk/api",
+    "lint": "eslint apps packages",
+    "lint:strict": "eslint apps packages --max-warnings 0",
+    "test:e2e": "playwright test",
+    "test:e2e:ui": "playwright test --ui",
+    "test:e2e:debug": "playwright test --debug",
+    "test:e2e:app": "playwright test --config playwright-app.config.ts"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.61.1",
+    "eslint": "^9.39.4",
+    "eslint-plugin-react-hooks": "^5.2.0",
+    "globals": "^17.6.0",
+    "typescript-eslint": "^8.60.1"
+  }
+}

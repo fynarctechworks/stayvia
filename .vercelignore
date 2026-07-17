@@ -1,0 +1,21 @@
+# Local artifacts that should never be on Vercel
+node_modules
+**/node_modules
+**/.env
+**/.env.local
+**/.env.*.local
+**/dist
+**/build
+**/.turbo
+**/.vite
+**/coverage
+**/*.tsbuildinfo
+**/.DS_Store
+
+# IDE & local-only
+.vscode/
+.idea/
+.claude/
+
+# Repo docs (Vercel doesn't need them)
+CONTEXT.md

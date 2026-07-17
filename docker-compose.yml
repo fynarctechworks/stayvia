@@ -1,0 +1,84 @@
+# Local dev stack. Starts Postgres + Redis + API + web.
+#
+# Usage:
+#   docker compose up --build
+#
+# Notes:
+# - Supabase Auth is NOT included here. Sign-in still needs a real Supabase
+#   project (set the VITE_SUPABASE_* values in apps/web/.env.local for the
+#   web service to pick up at build time). For pure backend testing, hit
+#   the API directly with a mock JWT.
+# - The compose Postgres is throwaway. For schema parity with Supabase,
+#   run apps/api/scripts/migrate.mjs after the container is up.
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: hoteldesk
+      POSTGRES_PASSWORD: hoteldesk
+      POSTGRES_DB: hoteldesk
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U hoteldesk -d hoteldesk"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  api:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      NODE_ENV: development
+      PORT: 3000
+      DATABASE_URL: postgresql://hoteldesk:hoteldesk@postgres:5432/hoteldesk
+      REDIS_URL: redis://redis:6379
+      FRONTEND_URL: http://localhost:5173
+      # Supabase values — keep in apps/api/.env (compose loads them below).
+    env_file:
+      - apps/api/.env
+    ports:
+      - "3000:3000"
+
+  web:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+      args:
+        VITE_API_URL: http://localhost:3000/api/v1
+        VITE_SUPABASE_URL: ${VITE_SUPABASE_URL:-}
+        VITE_SUPABASE_ANON_KEY: ${VITE_SUPABASE_ANON_KEY:-}
+        VITE_UI_PREVIEW: "false"
+    restart: unless-stopped
+    depends_on:
+      - api
+    ports:
+      - "5173:80"
+
+volumes:
+  pgdata:
+  redisdata:

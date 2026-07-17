@@ -1,0 +1,29 @@
+node_modules
+dist
+build
+# Env files: every .env* is ignored (they hold real secrets) EXCEPT the
+# committed *.example templates and the root .env.example.
+.env
+.env.*
+!.env.example
+!.env.*.example
+*.log
+.DS_Store
+.vercel
+coverage
+.vite
+*.tsbuildinfo
+.claude/
+# Claude Code MCP server config — machine-local tooling, not for the repo.
+.mcp.json
+dist-desktop/
+apps/web/src-tauri/resources/
+
+# Playwright E2E
+/test-results/
+/playwright-report/
+/blob-report/
+/playwright/.cache/
+/e2e/.runtime/
+/e2e-app/.runtime/
+/playwright-report-app/

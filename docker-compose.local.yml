@@ -1,0 +1,98 @@
+# Fully-local development stack for Docker Desktop.
+#
+#   docker compose -f docker-compose.local.yml up --build
+#
+# What this gives you, 100% offline, ZERO contact with production:
+#   - redis           : local Redis (TCP) for the ioredis pub/sub clients
+#   - redis-rest       : serverless-redis-http — exposes the Upstash REST
+#                        API in front of the local Redis, so the
+#                        @upstash/redis client works locally too
+#   - api             : the Hoteldesk API, NODE_ENV=local
+#   - web             : the Vite SPA, built against the local API
+#
+# Postgres + Auth are NOT here — they are provided by the Supabase CLI
+# local stack (`supabase start`), which runs its own Postgres + GoTrue
+# (auth) + Studio in Docker on localhost:54321 / 54322. The api connects
+# to those via apps/api/.env.local.
+#
+# Networking note (Docker Desktop / Windows): containers reach the
+# Supabase CLI stack and each other via host.docker.internal, which
+# Docker Desktop maps to the host. That's why .env.local uses
+# host.docker.internal rather than localhost for DATABASE_URL / SUPABASE_URL.
+#
+# Safe teardown:
+#   docker compose -f docker-compose.local.yml down       # stop, keep data
+#   docker compose -f docker-compose.local.yml down -v    # also wipe LOCAL redis
+# Neither command can touch Supabase prod — prod is a remote cloud service.
+
+services:
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    # Host port 6380 to avoid clashing with the qr_order_dev stack, which
+    # already binds 6379. Containers still talk to it on 6379 inside the
+    # compose network (redis://redis:6379), so the API config is unchanged.
+    ports:
+      - "6380:6379"
+    volumes:
+      - local_redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  # Upstash REST shim. The app's caching layer talks the Upstash REST
+  # protocol; this proxy speaks it and forwards to the local Redis above.
+  redis-rest:
+    image: hiett/serverless-redis-http:latest
+    restart: unless-stopped
+    depends_on:
+      redis:
+        condition: service_healthy
+    environment:
+      SRH_MODE: env
+      SRH_TOKEN: local_dev_token
+      SRH_CONNECTION_STRING: redis://redis:6379
+    ports:
+      - "8079:80"
+
+  api:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    restart: unless-stopped
+    depends_on:
+      redis:
+        condition: service_healthy
+    # NODE_ENV=local makes the API's env loader pick apps/api/.env.local
+    # (see apps/api/src/config/env.ts layering: .env.local.local ->
+    # .env.local -> .env). PORT is read from the env file.
+    environment:
+      NODE_ENV: local
+    env_file:
+      - apps/api/.env.local
+    # Lets the api container reach the Supabase CLI stack on the host.
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    ports:
+      - "3001:3001"
+
+  web:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+      args:
+        VITE_API_URL: http://localhost:3001/api/v1
+        VITE_SUPABASE_URL: http://localhost:54321
+        # Filled from `supabase start` output — see LOCAL-DEV.md.
+        VITE_SUPABASE_ANON_KEY: ${VITE_SUPABASE_ANON_KEY:-}
+        VITE_UI_PREVIEW: "false"
+    restart: unless-stopped
+    depends_on:
+      - api
+    ports:
+      - "5180:80"
+
+volumes:
+  local_redisdata:

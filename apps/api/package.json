@@ -1,0 +1,69 @@
+{
+  "name": "@hoteldesk/api",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "dist/index.js",
+  "bin": "dist/index.js",
+  "scripts": {
+    "predev": "node scripts/free-port.mjs",
+    "dev": "nodemon --watch src --ext ts --exec \"tsx src/index.ts\"",
+    "build": "node scripts/gen-baseline-ts.mjs && tsc -p tsconfig.json",
+    "start": "node dist/index.js",
+    "db:generate": "drizzle-kit generate",
+    "db:push": "drizzle-kit push",
+    "db:studio": "drizzle-kit studio",
+    "db:migrate": "node scripts/migrate.mjs",
+    "db:seed": "tsx src/db/seed.ts",
+    "test": "vitest run",
+    "lint": "eslint src"
+  },
+  "dependencies": {
+    "@hoteldesk/shared": "*",
+    "@supabase/supabase-js": "^2.45.0",
+    "@upstash/redis": "^1.34.0",
+    "cors": "^2.8.5",
+    "date-fns": "^4.1.0",
+    "dotenv": "^16.4.5",
+    "drizzle-orm": "^0.36.0",
+    "express": "^4.21.0",
+    "express-rate-limit": "^7.4.0",
+    "helmet": "^8.0.0",
+    "ioredis": "^5.4.1",
+    "multer": "^2.0.0",
+    "pino": "^9.5.0",
+    "pino-http": "^10.3.0",
+    "postgres": "^3.4.4",
+    "puppeteer": "^23.6.0",
+    "sharp": "^0.34.5",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@types/cors": "^2.8.17",
+    "@types/express": "^4.17.21",
+    "@types/multer": "^1.4.12",
+    "@types/node": "^22.7.4",
+    "@yao-pkg/pkg": "^6.21.0",
+    "drizzle-kit": "^0.28.0",
+    "nodemon": "^3.1.7",
+    "pino-pretty": "^13.1.3",
+    "tsx": "^4.19.1",
+    "typescript": "^5.6.2",
+    "vitest": "^2.1.2"
+  },
+  "pkg": {
+    "//": "Config for building the offline desktop sidecar api.exe. sharp's native binaries, puppeteer's Chromium, and drizzle's .cjs entry points can't be embedded in the pkg snapshot — they're marked external (deployAssets) and shipped alongside the exe under the resource dir, resolved at runtime via process.execPath. See scripts/build-sidecar.mjs.",
+    "scripts": [
+      "dist/**/*.js"
+    ],
+    "assets": [
+      "../../node_modules/drizzle-orm/**/*.cjs",
+      "../../node_modules/drizzle-orm/**/*.js",
+      "migrations/**/*.sql"
+    ],
+    "targets": [
+      "node22-win-x64"
+    ],
+    "outputPath": "../../dist-desktop"
+  }
+}

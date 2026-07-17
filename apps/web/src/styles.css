@@ -1,0 +1,222 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+  body {
+    @apply bg-bg text-textPrimary font-sans text-sm;
+    /* Prevent iOS Safari from zooming inputs on focus is handled per
+       .input below by forcing >=16px font-size on small viewports.
+       Touch-feedback color is removed because we use our own active
+       styles. */
+    -webkit-text-size-adjust: 100%;
+    -webkit-tap-highlight-color: transparent;
+  }
+}
+
+@layer components {
+  .card {
+    @apply bg-surface border border-borderc rounded-md p-4 shadow-[0_1px_3px_rgba(0,0,0,0.06)];
+  }
+  /* Supabase signature: near-black text on the emerald fill (the button
+     reads as a "lit" surface with dark type), never white. */
+  .btn-primary {
+    @apply bg-brand text-textPrimary px-4 h-10 rounded-sm font-medium tracking-wide transition-colors hover:bg-brand-deep disabled:opacity-50 disabled:hover:bg-brand;
+  }
+  .btn-secondary {
+    @apply bg-surface text-textPrimary border border-borderc px-4 h-10 rounded-sm font-medium transition-colors hover:bg-bg hover:border-[#c7c7c7];
+  }
+  .btn-danger {
+    @apply bg-danger text-cream px-4 h-10 rounded-sm font-medium transition-colors hover:opacity-90;
+  }
+  .input {
+    /* min-h instead of fixed h so mobile keyboards don't squish the
+       row when content reflows. 16px text on mobile (text-base) avoids
+       iOS auto-zoom on focus; sm: shrinks to 14px on desktop where the
+       behaviour doesn't exist. */
+    @apply min-h-10 w-full border border-borderc bg-surface rounded-sm px-3 py-2 text-base sm:text-sm text-textPrimary outline-none transition-colors focus:border-brand focus:ring-2 focus:ring-brand/20 placeholder:text-textSecondary;
+  }
+  /* Hide the native up/down spinner on number inputs so fields like
+     Adults / Children / rates are plain type-only entries (the arrows
+     are easy to mis-click and scroll-to-change is confusing). */
+  .input[type="number"] {
+    -moz-appearance: textfield;
+    appearance: textfield;
+  }
+  .input[type="number"]::-webkit-outer-spin-button,
+  .input[type="number"]::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+  }
+  .label {
+    @apply text-[11px] font-semibold text-textSecondary uppercase tracking-[0.12em];
+  }
+  .table-base {
+    @apply w-full text-sm;
+  }
+  /* A .card that *directly contains* a wide .table-base gets horizontal
+     scrolling on small viewports. Scoped to .card (not a bare :has())
+     so it can never match html/body/#root and collapse the scroll
+     root. Saves wrapping every table call site with .table-scroll. */
+  .card:has(> .table-base) {
+    @apply overflow-x-auto;
+  }
+  .table-base th {
+    @apply text-left font-semibold text-textSecondary text-[11px] uppercase tracking-[0.12em] px-3 py-2.5 border-b border-borderc bg-bg align-middle whitespace-nowrap;
+  }
+  .table-base td {
+    @apply px-3 py-2.5 border-b border-borderc align-middle;
+  }
+  .table-base tbody tr:nth-child(even) {
+    @apply bg-bg;
+  }
+  .table-base tbody tr:hover {
+    @apply bg-brand-soft;
+  }
+}
+
+@layer utilities {
+  /* Hide the scrollbar visually while keeping scroll behavior. Used on
+     the sidebar nav so the chrome doesn't show even when items overflow
+     the viewport. Cross-browser: Firefox uses scrollbar-width, WebKit
+     uses the ::-webkit-scrollbar pseudo. */
+  .no-scrollbar {
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+
+  /* iOS safe-area helpers. Use on fixed UI that touches the screen
+     edges so it clears the notch + home indicator. */
+  .pt-safe { padding-top: env(safe-area-inset-top); }
+  .pb-safe { padding-bottom: env(safe-area-inset-bottom); }
+  .pl-safe { padding-left: env(safe-area-inset-left); }
+  .pr-safe { padding-right: env(safe-area-inset-right); }
+
+  /* Bottom padding that clears the phone bottom tab bar (56px) PLUS the
+     home-indicator safe area. Applied to the main content column so the
+     last row is never hidden behind the fixed BottomNav. */
+  .pb-bottomnav { padding-bottom: calc(3.5rem + env(safe-area-inset-bottom) + 0.75rem); }
+
+  /* Drop on a wrapping div around a wide table so it can scroll
+     horizontally on small viewports without breaking layout. The
+     -mx-3 cancels page padding so the scroll edge meets the screen,
+     and the rounded border survives. */
+  .table-scroll {
+    @apply overflow-x-auto -mx-3 px-3 sm:mx-0 sm:px-0;
+  }
+
+  /* Attention-pulse for "needs action now" cards (e.g. overdue
+     check-outs). We ONLY animate the box-shadow ring — the element's
+     own background + text stay fully solid/opaque at every frame, so
+     the bar is always readable. (The earlier version animated
+     background-color too, which overrode the solid bg and made the
+     whole bar look washed out at the dim phase.) Respects
+     prefers-reduced-motion. */
+  @keyframes overdue-pulse {
+    0%,
+    100% {
+      box-shadow: 0 0 0 0 rgba(220, 38, 38, 0.55);
+    }
+    50% {
+      box-shadow: 0 0 0 7px rgba(220, 38, 38, 0);
+    }
+  }
+  .animate-overdue-pulse {
+    animation: overdue-pulse 1.6s ease-in-out infinite;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .animate-overdue-pulse {
+      animation: none;
+    }
+  }
+
+  /* Checkout-alert breathing pulse (legacy). Subtle box-shadow ring used
+     by the time-late pill — kept for that pill so the per-row count keeps
+     its breathing effect. */
+  @keyframes checkout-pulse {
+    0%,
+    100% {
+      box-shadow: 0 0 0 0 rgba(220, 38, 38, 0.45);
+    }
+    50% {
+      box-shadow: 0 0 0 6px rgba(220, 38, 38, 0);
+    }
+  }
+  .animate-checkout-pulse {
+    animation: checkout-pulse 2s ease-in-out infinite;
+  }
+
+  /* Hard background blink for imminent + overdue rows. Bright red ⇄
+     deeper red every second. Fast enough to feel urgent, slow enough
+     to avoid photosensitivity issues (WCAG suggests <3 flashes/second).
+     Border + text colour are forced too so contrast stays readable at
+     both peaks. */
+  @keyframes checkout-blink {
+    0%,
+    100% {
+      background-color: #dc2626; /* danger */
+      border-color: #dc2626;
+    }
+    50% {
+      background-color: #991b1b; /* deeper red */
+      border-color: #991b1b;
+    }
+  }
+  .animate-checkout-blink {
+    animation: checkout-blink 1s steps(2, end) infinite;
+    color: #ffffff;
+  }
+
+  @keyframes loader-spin-cw {
+    to {
+      transform: rotate(360deg);
+    }
+  }
+  @keyframes loader-spin-ccw {
+    to {
+      transform: rotate(-360deg);
+    }
+  }
+  @keyframes loader-pulse {
+    0%,
+    100% {
+      opacity: 0.4;
+      transform: scale(0.85);
+    }
+    50% {
+      opacity: 1;
+      transform: scale(1);
+    }
+  }
+  @keyframes loader-shimmer {
+    0% {
+      background-position: -200% 0;
+    }
+    100% {
+      background-position: 200% 0;
+    }
+  }
+  .loader-shimmer-text {
+    background: linear-gradient(
+      90deg,
+      #666 0%,
+      #666 40%,
+      #24b47e 50%,
+      #666 60%,
+      #666 100%
+    );
+    background-size: 200% 100%;
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    animation: loader-shimmer 2s linear infinite;
+  }
+}
