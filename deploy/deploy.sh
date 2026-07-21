@@ -44,38 +44,33 @@ else
 fi
 
 echo "==> 2/6  Building fresh API image (no cache)"
+# Stamp the image with the commit it was built from so step 6 can verify
+# identity rather than grepping for a string from one particular commit.
+export GIT_SHA="$(git rev-parse HEAD)"
 docker compose -f "$COMPOSE_FILE" build --no-cache api
 
 echo "==> 3/6  Applying pending migrations"
-DATABASE_URL=$(docker compose -f "$COMPOSE_FILE" run --rm --no-deps --entrypoint sh api -c 'printenv DATABASE_URL')
-if [ -z "$DATABASE_URL" ]; then
-  echo "    ERROR: DATABASE_URL not present in the API image's env. Check apps/api/.env.production."
-  exit 1
-fi
-# Idempotent migration runner: any .sql in apps/api/migrations/ that fails on
-# the standard "already exists" cases is treated as already applied. Anything
-# else aborts the deploy.
-for f in $(ls -1 apps/api/migrations/*.sql | sort); do
-  name=$(basename "$f")
-  echo "    -> $name"
-  if ! docker run --rm -i \
-       -v "$REPO_DIR/apps/api/migrations:/m:ro" \
-       -e DATABASE_URL="$DATABASE_URL" \
-       postgres:16 \
-       psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f "/m/$name" >/dev/null 2>&1; then
-    # Re-run without ON_ERROR_STOP so the operator can see warnings/notices;
-    # only abort if the rerun fails too.
-    if ! docker run --rm -i \
-         -v "$REPO_DIR/apps/api/migrations:/m:ro" \
-         -e DATABASE_URL="$DATABASE_URL" \
-         postgres:16 \
-         psql "$DATABASE_URL" -f "/m/$name" >/dev/null 2>&1; then
-      echo "       MIGRATION FAILED: $name (see logs above)"
-      exit 1
-    fi
-    echo "       (re-applied / idempotent)"
-  fi
-done
+# Ledger-aware runner (apps/api/scripts/migrate.mjs). It consults the
+# schema_migrations table, skips what is already applied, wraps each new file
+# in its own transaction, and exits non-zero on the first genuine failure —
+# which `set -e` turns into an aborted deploy with the old container still up.
+#
+# This replaces a blind psql replay of every .sql on every deploy. That loop
+# could not distinguish "already applied" from "broken", and its retry ran
+# WITHOUT -v ON_ERROR_STOP=1, so psql exited 0 even when every statement in the
+# file errored. A genuinely broken migration was printed as
+# "(re-applied / idempotent)" and the deploy carried on onto a half-migrated
+# production database, with both psql calls silenced by >/dev/null 2>&1.
+#
+# DATABASE_URL is deliberately NOT passed on a command line here: `compose run`
+# inherits the service's env_file, so the credential never lands in argv where
+# `ps auxww` would expose it to the other apps sharing this VPS.
+#
+# ALLOW_REMOTE_DB=1 is the guard's explicit opt-in (see scripts/guard-db-target.mjs).
+# This IS the production database and targeting it from this script is intended.
+docker compose -f "$COMPOSE_FILE" run --rm --no-deps \
+  -e ALLOW_REMOTE_DB=1 \
+  api node apps/api/scripts/migrate.mjs
 
 echo "==> 4/6  Force-recreating API container"
 docker compose -f "$COMPOSE_FILE" up -d --force-recreate --no-deps api
@@ -95,18 +90,28 @@ for i in $(seq 1 30); do
 done
 
 echo "==> 6/6  Verifying deployed code matches source"
-# Spot-check: the new housekeeping validator must allow dirty -> available.
-# If the running container still has the old multi-hop ladder, the deploy
-# silently reused a stale image — abort loudly.
-DEPLOYED=$(docker exec "$CONTAINER_NAME" sh -c \
-  "grep -A 8 'validTransitions' /app/apps/api/dist/routes/housekeeping.js | head -15" || true)
-if echo "$DEPLOYED" | grep -q '"clean"'; then
-  echo "    ERROR: deployed container still has the old transition map."
-  echo "    Container is stale despite the rebuild — something is very wrong."
-  echo "$DEPLOYED"
+# Identity check: the image is stamped with GIT_SHA at build time and /health
+# reports it back, so this compares "what is running" against "what the repo is
+# at". This replaces a grep for the literal string "clean" near the
+# housekeeping validTransitions map — a check pinned to one commit's source
+# that passes today only by accident, and that would hard-fail a perfectly
+# good deploy the moment any future edit put "clean" within 8 lines of that
+# map (a `cleaning` status, a renamed variable, even a comment). It also ran
+# two steps after the new container was already serving traffic, so its
+# "abort" could never actually roll anything back.
+EXPECTED_SHA="$(git rev-parse HEAD)"
+DEPLOYED_SHA="$(curl -s "$HEALTH_URL" | sed -n 's/.*"version":"\([^"]*\)".*/\1/p')"
+if [ -z "$DEPLOYED_SHA" ] || [ "$DEPLOYED_SHA" = "unknown" ]; then
+  echo "    WARNING: /health reported no commit. The image predates GIT_SHA stamping;"
+  echo "             the next --no-cache build will enable this check."
+elif [ "$DEPLOYED_SHA" != "$EXPECTED_SHA" ]; then
+  echo "    ERROR: container reports commit $DEPLOYED_SHA"
+  echo "           but this checkout is at $EXPECTED_SHA."
+  echo "    The deploy reused a stale image."
   exit 1
+else
+  echo "    OK — running $DEPLOYED_SHA"
 fi
-echo "    OK — new transition map is live."
 
 echo ""
 echo "Deploy complete. Commit: $(git rev-parse --short HEAD)"

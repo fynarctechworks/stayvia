@@ -71,7 +71,10 @@ cd apps/api
 NODE_ENV=local DATABASE_URL=postgresql://postgres:postgres@localhost:54322/postgres node scripts/migrate.mjs
 NODE_ENV=local DATABASE_URL=postgresql://postgres:postgres@localhost:54322/postgres SUPABASE_URL=http://localhost:54321 npx tsx src/db/seed.ts
 ```
-Log in at http://localhost:5180 with `admin@hoteldesk.local` / `ChangeMe123!`.
+Log in at http://localhost:5180 with the seed admin credentials — taken from
+`SEED_ADMIN_EMAIL` / `SEED_ADMIN_PASSWORD` in the api env (defaults:
+`admin@stayvia.local` / `ChangeMe123!`). The seed script prints the exact
+credentials when it finishes.
 
 ---
 

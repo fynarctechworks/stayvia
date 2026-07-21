@@ -10,10 +10,11 @@
   "scripts": {
     "dev:web": "npm run dev --workspace=@stayvia/web",
     "dev:api": "npm run dev --workspace=@stayvia/api",
+    "dev:marketing": "npm run dev --workspace=@stayvia/marketing",
     "build:web": "npm run build --workspace=@stayvia/web",
     "build:api": "npm run build --workspace=@stayvia/api",
+    "build:marketing": "npm run build --workspace=@stayvia/marketing",
     "db:generate": "npm run db:generate --workspace=@stayvia/api",
-    "db:push": "npm run db:push --workspace=@stayvia/api",
     "db:seed": "npm run db:seed --workspace=@stayvia/api",
     "lint": "eslint apps packages",
     "lint:strict": "eslint apps packages --max-warnings 0",
@@ -25,6 +26,7 @@
     "node": ">=20"
   },
   "devDependencies": {
+    "@material-symbols/svg-400": "^0.45.8",
     "@playwright/test": "^1.61.1",
     "eslint": "^9.39.4",
     "eslint-plugin-react-hooks": "^5.2.0",

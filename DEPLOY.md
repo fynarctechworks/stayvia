@@ -58,7 +58,7 @@ key that encrypted data already in the DB, or KYC fields become unreadable.
 
 ### `apps/web/.env.production`
 Already set: `VITE_API_URL=https://api.sldt.infynarc.com/api/v1`, Supabase URL
-+ anon key, `VITE_UI_PREVIEW=false`. Nothing to change.
++ anon key. Nothing to change.
 
 > The web build on Vercel does **not** read this local file — see step 4 for
 > setting the same keys in the Vercel dashboard. This local file is only used
@@ -257,9 +257,8 @@ scope **Production**, set:
 | Key                       | Value                                          |
 |---------------------------|------------------------------------------------|
 | `VITE_API_URL`            | `https://api.sldt.infynarc.com/api/v1`         |
-| `VITE_SUPABASE_URL`       | `https://wujndnaasfyzxpmaatcj.supabase.co`     |
+| `VITE_SUPABASE_URL`       | `https://nhnliwdmirupkbvmuitn.supabase.co`     |
 | `VITE_SUPABASE_ANON_KEY`  | (the anon key from `apps/web/.env.production`)  |
-| `VITE_UI_PREVIEW`         | `false`                                        |
 
 After adding/changing env vars, **redeploy** so the build picks them up
 (Deployments → ⋯ → Redeploy, or push a commit).

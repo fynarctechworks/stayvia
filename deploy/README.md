@@ -49,7 +49,9 @@ cp .env.example apps/api/.env
 $EDITOR apps/api/.env   # fill in all secrets. See root .env.example
 
 # schema + seed (first deploy only)
-npm -w @stayvia/api run db:push
+# ALLOW_REMOTE_DB=1 is the deliberate opt-in required to target a non-local
+# database (see apps/api/scripts/guard-db-target.mjs).
+ALLOW_REMOTE_DB=1 npm -w @stayvia/api run db:migrate
 npm -w @stayvia/api run db:seed
 
 # start under PM2
@@ -89,8 +91,8 @@ git pull
 npm install
 npm -w @stayvia/shared run build
 npm -w @stayvia/api run build
-# schema migrations (if any)
-npm -w @stayvia/api run db:push
+# schema migrations (if any) — ledger-aware, skips what is already applied
+ALLOW_REMOTE_DB=1 npm -w @stayvia/api run db:migrate
 pm2 reload stayvia-api
 ```
 

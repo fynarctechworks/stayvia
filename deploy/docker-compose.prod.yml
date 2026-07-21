@@ -34,6 +34,10 @@ services:
     build:
       context: ..
       dockerfile: apps/api/Dockerfile
+      args:
+        # Stamped by deploy.sh so /health can report the running commit and
+        # step 6 can verify the container is not a stale image.
+        GIT_SHA: ${GIT_SHA:-unknown}
     image: stayvia-api:latest
     container_name: stayvia-api
     restart: unless-stopped

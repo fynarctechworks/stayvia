@@ -87,7 +87,6 @@ services:
         VITE_SUPABASE_URL: http://localhost:54321
         # Filled from `supabase start` output — see LOCAL-DEV.md.
         VITE_SUPABASE_ANON_KEY: ${VITE_SUPABASE_ANON_KEY:-}
-        VITE_UI_PREVIEW: "false"
     restart: unless-stopped
     depends_on:
       - api

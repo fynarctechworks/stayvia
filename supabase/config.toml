@@ -299,9 +299,13 @@ auth_token = "env(SUPABASE_AUTH_SMS_TWILIO_AUTH_TOKEN)"
 max_enrolled_factors = 10
 
 # Control MFA via App Authenticator (TOTP)
+# Enabled so the Settings > Two-Factor Authentication card works on the local
+# stack. NOTE: on a hosted Supabase project TOTP MFA requires the Pro plan and
+# must also be enabled in Dashboard > Authentication > MFA — otherwise
+# mfa.enroll() returns "MFA enroll is disabled for TOTP" in production too.
 [auth.mfa.totp]
-enroll_enabled = false
-verify_enabled = false
+enroll_enabled = true
+verify_enabled = true
 
 # Configure MFA via Phone Messaging
 [auth.mfa.phone]

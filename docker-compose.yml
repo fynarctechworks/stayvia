@@ -56,7 +56,14 @@ services:
       NODE_ENV: development
       PORT: 3000
       DATABASE_URL: postgresql://stayvia:stayvia@postgres:5432/stayvia
-      REDIS_URL: redis://redis:6379
+      # Must be UPSTASH_REDIS_URL: config/env.ts declares no REDIS_URL key and
+      # lib/redis.ts reads env.UPSTASH_REDIS_URL exclusively, so the old name
+      # was silently ignored (Zod does not reject unknown keys) and the API
+      # fell back to its in-process cache. The redis container looked healthy
+      # and wired up while startDashboardSubscriber never fanned out — making
+      # any cross-process cache-invalidation bug unreproducible in the very
+      # stack meant to reproduce it.
+      UPSTASH_REDIS_URL: redis://redis:6379
       FRONTEND_URL: http://localhost:5173
       # Supabase values — keep in apps/api/.env (compose loads them below).
     env_file:
@@ -72,7 +79,6 @@ services:
         VITE_API_URL: http://localhost:3000/api/v1
         VITE_SUPABASE_URL: ${VITE_SUPABASE_URL:-}
         VITE_SUPABASE_ANON_KEY: ${VITE_SUPABASE_ANON_KEY:-}
-        VITE_UI_PREVIEW: "false"
     restart: unless-stopped
     depends_on:
       - api
