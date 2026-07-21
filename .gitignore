@@ -28,3 +28,7 @@ apps/web/src-tauri/target/
 /e2e/.runtime/
 /e2e-app/.runtime/
 /playwright-report-app/
+
+# Agent Skills installed via `npx skills add` (regenerable, local tooling)
+.agents/
+skills-lock.json
