@@ -19,7 +19,7 @@ import {
   Trash2,
   User,
   Wallet,
-} from "lucide-react";
+} from "@/lib/micons";
 import { useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useAuth } from "@/auth/AuthContext";
@@ -87,7 +87,7 @@ export default function ExpenseDetail() {
     if (!data) return;
     const ok = await dialog.confirm({
       title: "Delete this expense?",
-      message: `"${data.description}" — ${inr(data.amount)}. This can't be undone.`,
+      message: `"${data.description}" - ${inr(data.amount)}. This can't be undone.`,
       okLabel: "Delete",
       cancelLabel: "Keep",
       tone: "danger",
@@ -207,12 +207,12 @@ export default function ExpenseDetail() {
           <Detail
             label="Subcategory"
             icon={<Receipt className="w-3.5 h-3.5" />}
-            value={data.subcategory ?? "—"}
+            value={data.subcategory ?? "-"}
           />
           <Detail
             label="Bill / Invoice #"
             icon={<FileText className="w-3.5 h-3.5" />}
-            value={data.billNumber ?? "—"}
+            value={data.billNumber ?? "-"}
           />
           <Detail
             label="Payment"
@@ -250,7 +250,7 @@ export default function ExpenseDetail() {
           <Detail
             label="Name"
             icon={<User className="w-3.5 h-3.5" />}
-            value={data.vendorName ?? "—"}
+            value={data.vendorName ?? "-"}
           />
           <Detail
             label="Phone"
@@ -264,7 +264,7 @@ export default function ExpenseDetail() {
                   {data.vendorPhone}
                 </a>
               ) : (
-                "—"
+                "-"
               )
             }
           />
@@ -343,7 +343,7 @@ export default function ExpenseDetail() {
         <span>
           Recorded by{" "}
           <span className="text-brand-dark font-semibold">
-            {data.recordedByName ?? "—"}
+            {data.recordedByName ?? "-"}
           </span>{" "}
           on {format(new Date(data.createdAt), "dd MMM yyyy, h:mm a")}
         </span>

@@ -14,12 +14,10 @@ WORKDIR /repo
 ARG VITE_API_URL
 ARG VITE_SUPABASE_URL
 ARG VITE_SUPABASE_ANON_KEY
-ARG VITE_UI_PREVIEW=false
 
 ENV VITE_API_URL=$VITE_API_URL \
     VITE_SUPABASE_URL=$VITE_SUPABASE_URL \
-    VITE_SUPABASE_ANON_KEY=$VITE_SUPABASE_ANON_KEY \
-    VITE_UI_PREVIEW=$VITE_UI_PREVIEW
+    VITE_SUPABASE_ANON_KEY=$VITE_SUPABASE_ANON_KEY
 
 COPY package.json package-lock.json* ./
 COPY apps/web/package.json apps/web/
@@ -32,8 +30,8 @@ COPY tsconfig.base.json* ./
 COPY packages/shared packages/shared
 COPY apps/web apps/web
 
-RUN npm run build --workspace=@hoteldesk/shared --if-present \
- && npm run build:web --workspace=@hoteldesk/web
+RUN npm run build --workspace=@stayvia/shared --if-present \
+ && npm run build:web --workspace=@stayvia/web
 
 # ----------------------------------------------------------------------------
 # Stage 2 — serve with nginx

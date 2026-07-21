@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { format, isToday, isYesterday } from "date-fns";
-import { ArrowLeft, Check, CheckCheck, Loader2, MessageSquare, Search, Send, Users } from "lucide-react";
+import { ArrowLeft, Check, CheckCheck, Loader2, MessageSquare, Search, Send, Users } from "@/lib/micons";
 import { useEffect, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { useAuth } from "@/auth/AuthContext";
@@ -386,7 +386,7 @@ export default function Messages() {
               {!msgsQ.isLoading && messages.length === 0 && (
                 <div className="grid place-items-center h-full text-center">
                   <span className="px-4 py-2 rounded-lg bg-[#ffeecd] shadow-sm text-[12.5px] text-[#54656f]">
-                    No messages yet — say hello to {activeName.split(" ")[0]} 👋
+                    No messages yet - say hello to {activeName.split(" ")[0]} 👋
                   </span>
                 </div>
               )}

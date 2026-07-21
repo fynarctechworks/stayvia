@@ -7,7 +7,7 @@ import {
   DoorOpen,
   Search,
   UserPlus,
-} from "lucide-react";
+} from "@/lib/micons";
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
@@ -478,7 +478,7 @@ function ReservationRow({
             ))
           ) : (
             <span className="text-textSecondary/60 inline-flex items-center gap-1">
-              <DoorOpen className="w-3 h-3" /> —
+              <DoorOpen className="w-3 h-3" /> -
             </span>
           )}
         </div>

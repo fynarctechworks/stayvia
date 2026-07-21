@@ -1,10 +1,14 @@
 import {
   CalendarCheck,
+  CalendarCheckFill,
   DoorOpen,
+  DoorOpenFill,
   LayoutDashboard,
+  LayoutDashboardFill,
   Menu,
   Users,
-} from "lucide-react";
+  UsersFill,
+} from "@/lib/micons";
 import { NavLink } from "react-router-dom";
 import { useAuth } from "@/auth/AuthContext";
 import { cn } from "@/lib/utils";
@@ -20,6 +24,8 @@ interface Tab {
   to: string;
   label: string;
   icon: typeof LayoutDashboard;
+  // FILL=1 variant rendered when the tab is active.
+  iconFill: typeof LayoutDashboard;
   permission: string;
   // Highlight the tab for these extra path prefixes (e.g. Reservations
   // tab stays active on /reservations/:id and /reservations/new).
@@ -27,16 +33,17 @@ interface Tab {
 }
 
 const TABS: Tab[] = [
-  { to: "/dashboard", label: "Home", icon: LayoutDashboard, permission: "view_dashboard" },
+  { to: "/dashboard", label: "Home", icon: LayoutDashboard, iconFill: LayoutDashboardFill, permission: "view_dashboard" },
   {
     to: "/reservations",
     label: "Bookings",
     icon: CalendarCheck,
+    iconFill: CalendarCheckFill,
     permission: "view_reservations",
     alsoActiveOn: ["/reservations", "/calendar"],
   },
-  { to: "/rooms", label: "Rooms", icon: DoorOpen, permission: "view_rooms" },
-  { to: "/guests", label: "Guests", icon: Users, permission: "view_guests", alsoActiveOn: ["/guests"] },
+  { to: "/rooms", label: "Rooms", icon: DoorOpen, iconFill: DoorOpenFill, permission: "view_rooms" },
+  { to: "/guests", label: "Guests", icon: Users, iconFill: UsersFill, permission: "view_guests", alsoActiveOn: ["/guests"] },
 ];
 
 export function BottomNav({ onMore }: { onMore: () => void }) {
@@ -51,17 +58,16 @@ export function BottomNav({ onMore }: { onMore: () => void }) {
     >
       <div className="grid grid-cols-5 h-14">
         {tabs.map((t) => {
-          const Icon = t.icon;
+          const path = window.location.pathname;
+          const onRootDashboard =
+            t.to === "/dashboard" && (path === "/" || path === "/dashboard");
+          const onExtra = (t.alsoActiveOn ?? []).some((p) => path.startsWith(p));
           return (
             <NavLink
               key={t.to}
               to={t.to}
               end={t.to === "/dashboard"}
               className={({ isActive }) => {
-                const path = window.location.pathname;
-                const onRootDashboard =
-                  t.to === "/dashboard" && (path === "/" || path === "/dashboard");
-                const onExtra = (t.alsoActiveOn ?? []).some((p) => path.startsWith(p));
                 const active = isActive || onRootDashboard || onExtra;
                 return cn(
                   "flex flex-col items-center justify-center gap-0.5 text-[10px] font-medium transition-colors",
@@ -69,8 +75,16 @@ export function BottomNav({ onMore }: { onMore: () => void }) {
                 );
               }}
             >
-              <Icon className="w-5 h-5" />
-              <span>{t.label}</span>
+              {({ isActive }) => {
+                const Icon =
+                  isActive || onRootDashboard || onExtra ? t.iconFill : t.icon;
+                return (
+                  <>
+                    <Icon className="w-5 h-5" />
+                    <span>{t.label}</span>
+                  </>
+                );
+              }}
             </NavLink>
           );
         })}

@@ -40,7 +40,6 @@ export default defineConfig({
       VITE_API_URL: `http://127.0.0.1:${E2E_API_PORT}/api/v1`,
       VITE_SUPABASE_URL: "http://e2e-supabase.invalid",
       VITE_SUPABASE_ANON_KEY: "e2e-fake-anon-key-not-a-real-secret",
-      VITE_UI_PREVIEW: "false",
     },
     timeout: 120_000,
   },

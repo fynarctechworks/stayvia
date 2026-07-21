@@ -1,5 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
+import { useNavigate } from "react-router-dom";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   ArrowRight,
@@ -8,7 +9,7 @@ import {
   Undo2,
   Wrench,
   X,
-} from "lucide-react";
+} from "@/lib/micons";
 import { api, ApiError } from "@/lib/api";
 import { useToast } from "@/components/Toast";
 
@@ -80,8 +81,12 @@ const TRANSITIONS: Record<HkStatus, TransitionOpt[]> = {
     { to: "dirty", label: "Needs Cleaning (turn-down)", direction: "reverse" },
     { to: "maintenance", label: "Send to Maintenance", direction: "side" },
   ],
+  // Maintenance rooms deliberately have NO one-click "back to available":
+  // clearing a room out of service must go through the issue tracker
+  // (View Issue → resolve), not a quick menu that skips the paper trail.
+  // "Needs Cleaning" stays — that's the legit housekeeping step once the
+  // physical fix is done.
   maintenance: [
-    { to: "available", label: "Back to Available", direction: "forward" },
     { to: "dirty", label: "Needs Cleaning", direction: "reverse" },
   ],
 };
@@ -110,6 +115,7 @@ export function RoomActionPopover({ roomId, roomNumber, status, trigger, onChang
   // container or the page fold.
   const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
   const qc = useQueryClient();
+  const navigate = useNavigate();
   const { toast } = useToast();
 
   const update = useMutation({
@@ -262,6 +268,18 @@ export function RoomActionPopover({ roomId, roomNumber, status, trigger, onChang
             </div>
 
             <div className="p-2 flex flex-col gap-1.5">
+              {status === "maintenance" && (
+                <button
+                  onClick={() => {
+                    setOpen(false);
+                    navigate(`/rooms/${roomNumber}`);
+                  }}
+                  className="w-full flex items-center gap-2.5 px-3 py-2 text-sm font-medium rounded-md text-left transition-colors bg-brand-dark text-cream hover:bg-brand-dark/90 shadow-sm"
+                >
+                  <Wrench className="w-4 h-4 shrink-0" />
+                  <span className="flex-1">View Issue</span>
+                </button>
+              )}
               {options.map((opt) => {
                 const Icon = iconForTarget(opt);
                 const cls =

@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { Maximize2, Menu, Minimize2 } from "lucide-react";
+import { Maximize2, Menu, Minimize2 } from "@/lib/micons";
 import type { ReactNode } from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
@@ -177,7 +177,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           } place-items-center select-none transition-[padding] duration-200 ease-out`}
         >
           <img
-            src="/logo.jpg"
+            src="/logo.png"
             alt=""
             className="w-[min(70vw,640px)] h-auto opacity-[0.06] mix-blend-multiply"
           />
@@ -201,12 +201,12 @@ export function AppShell({ children }: { children: ReactNode }) {
           </button>
           <div className="flex items-center gap-2 min-w-0">
             <img
-              src="/logo.jpg"
+              src="/logo.png"
               alt=""
-              className="w-7 h-7 rounded-sm bg-cream object-contain p-0.5 ring-1 ring-brass/30 shrink-0"
+              className="w-7 h-7 rounded-sm object-contain shrink-0"
             />
             <div className="min-w-0">
-              <div className="text-sm font-semibold leading-tight truncate">{property?.name ?? "Stayvia"}</div>
+              <div className="text-sm font-semibold leading-tight truncate uppercase">{property?.name ?? "Stayvia"}</div>
               <div className="text-[9px] text-brass tracking-[0.15em] leading-none">HOTEL OS</div>
             </div>
           </div>
@@ -264,8 +264,8 @@ export function AppShell({ children }: { children: ReactNode }) {
         aria-label={focusMode ? "Exit focus mode" : "Enter focus mode"}
         title={
           focusMode
-            ? "Exit focus mode (F) — Shift+click also exits browser fullscreen"
-            : "Focus mode (F) — hides sidebar. Shift+click also goes browser fullscreen."
+            ? "Exit focus mode (F) - Shift+click also exits browser fullscreen"
+            : "Focus mode (F) - hides sidebar. Shift+click also goes browser fullscreen."
         }
       >
         {focusMode ? (

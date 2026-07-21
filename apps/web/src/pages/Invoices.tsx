@@ -8,7 +8,7 @@ import {
   FileText,
   Receipt,
   Search,
-} from "lucide-react";
+} from "@/lib/micons";
 import Papa from "papaparse";
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
@@ -179,7 +179,7 @@ export default function Invoices() {
         <div>
           <h1 className="text-2xl font-bold text-brand-dark">Invoices</h1>
           <p className="text-xs text-textSecondary mt-0.5">
-            {total} invoice{total === 1 ? "" : "s"} — issued, partial, paid, and voided
+            {total} invoice{total === 1 ? "" : "s"} - issued, partial, paid, and voided
           </p>
         </div>
         <button
@@ -418,7 +418,7 @@ function InvoiceRow({
             onClick={onOpenReservation}
             className="font-mono text-[10px] text-accentBlue hover:underline truncate block"
           >
-            {inv.reservationNumber ?? "—"}
+            {inv.reservationNumber ?? "-"}
           </button>
         </div>
 
@@ -495,7 +495,7 @@ function InvoiceRow({
               onClick={onOpenReservation}
               className="font-mono text-[10px] text-accentBlue hover:underline mt-0.5"
             >
-              {inv.reservationNumber ?? "—"}
+              {inv.reservationNumber ?? "-"}
             </button>
             <div className="text-[10px] text-textSecondary mt-1">
               {format(new Date(inv.createdAt), "dd MMM yyyy")} · {scopeLabel}

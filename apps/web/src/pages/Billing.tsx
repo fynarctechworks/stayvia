@@ -7,7 +7,7 @@ import {
   Info,
   Loader2,
   ShieldCheck,
-} from "lucide-react";
+} from "@/lib/micons";
 import { useState } from "react";
 import { useAuth } from "@/auth/AuthContext";
 import { useDialog } from "@/components/Dialog";
@@ -72,7 +72,7 @@ function loadRazorpayCheckout(): Promise<void> {
 }
 
 function fmtDate(iso: string | null): string {
-  return iso ? format(new Date(iso), "d MMM yyyy") : "—";
+  return iso ? format(new Date(iso), "d MMM yyyy") : "-";
 }
 
 export default function Billing() {
@@ -189,7 +189,7 @@ export default function Billing() {
               </span>
             </div>
             <p className="text-xs text-textSecondary mt-1">
-              Everything in Stayvia — reservations, housekeeping, invoices, reports and staff
+              Everything in Stayvia - reservations, housekeeping, invoices, reports and staff
               accounts.
             </p>
           </div>
@@ -272,7 +272,7 @@ export default function Billing() {
               : "Your subscription has lapsed."}{" "}
             Staff can sign in, but reservations, invoices and other day-to-day features stay
             read-blocked until the subscription is active. Subscribe above to unlock everything
-            instantly — your data is safe and nothing has been deleted.
+            instantly - your data is safe and nothing has been deleted.
           </p>
         </div>
       ) : data.status === "trialing" ? (
@@ -283,7 +283,7 @@ export default function Billing() {
           </div>
           <p className="text-sm text-textSecondary">
             Full access until {fmtDate(data.trialEndsAt)}. Subscribe any time before then and
-            billing simply starts when you pay — no interruption for your front desk.
+            billing simply starts when you pay - no interruption for your front desk.
           </p>
         </div>
       ) : null}

@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { addDays, differenceInCalendarDays, format } from "date-fns";
-import { AlertTriangle, ChevronDown, ChevronLeft, FileText, Minus, Plus, ShieldCheck, Snowflake, Sparkles, Trash2, Tv, Upload, Users, Wifi, X } from "lucide-react";
+import { AlertTriangle, ChevronDown, ChevronLeft, FileText, Minus, Plus, ShieldCheck, Snowflake, SprayCan, Trash2, Tv, Upload, Users, Wifi, X } from "@/lib/micons";
 import { CheckInReceiptModal, type CheckInReceiptData } from "@/components/CheckInReceiptModal";
 import { OtpModal } from "@/components/OtpModal";
 import { TimePicker12h } from "@/components/TimePicker12h";
@@ -11,7 +11,7 @@ import { ArrowKeyGroup } from "@/components/ArrowKeyGroup";
 import { Combobox } from "@/components/Combobox";
 import { EmailInput } from "@/components/EmailInput";
 import { useDialog } from "@/components/Dialog";
-import { ApiError, api } from "@/lib/api";
+import { ApiError, api, newIdempotencyKey } from "@/lib/api";
 import { citiesForState } from "@/lib/indianCities";
 import { INDIAN_STATES, INDIAN_UNION_TERRITORIES } from "@/lib/indianStates";
 import { invalidateReservationData } from "@/lib/invalidate";
@@ -378,6 +378,11 @@ export default function NewReservation() {
 
   const isCreditBooking = bookingSource === "complimentary";
 
+  // One key per form mount, covering the whole create attempt. Reset after a
+  // successful booking so a second booking from the same mounted form (the
+  // "New Booking (Same Guest)" flow) is not treated as a replay of the first.
+  const [submitKey, setSubmitKey] = useState(() => newIdempotencyKey());
+
   const nights = useMemo(() => {
     const d = differenceInCalendarDays(new Date(checkOutDate), new Date(checkInDate));
     return Math.max(0, d);
@@ -453,12 +458,17 @@ export default function NewReservation() {
         gstSlabHighRate: string;
         gstMode: "exclusive" | "inclusive";
         otpRequiredForCheckin: boolean;
+        hideComplimentary?: boolean;
       } | null>("/settings/public"),
   });
 
   // Property-wide OTP policy. Defaults to on until settings load (and for
   // rows created before the setting existed) so we never silently skip OTP.
   const otpEnabled = publicSettings.data?.otpRequiredForCheckin ?? true;
+  // Complimentary feature switch — hiding OFF means the hotel doesn't use
+  // the discreet comp flow, so the booking-source option is dropped.
+  // Defaults off (matches the new-hotel default) until settings load.
+  const compFeatureOn = publicSettings.data?.hideComplimentary ?? false;
 
   // Wallet balance for the selected existing guest. Skipped when staff is
   // creating a new guest (no history → no credit).
@@ -749,7 +759,7 @@ export default function NewReservation() {
       if (coGuestId === guestId)
         throw new Error("The booker can't also be listed as a co-guest");
       if (coGuestIds.includes(coGuestId))
-        throw new Error("The same guest is listed twice — pick a different person");
+        throw new Error("The same guest is listed twice - pick a different person");
       coGuestIds.push(coGuestId);
     }
 
@@ -825,7 +835,7 @@ export default function NewReservation() {
         const ord = i + 2; // booker is guest 1; co-guests start at 2
         if (!c.form.fullName || !c.form.phone || !c.form.idProofNumber)
           throw new Error(
-            `Fill in guest ${ord}'s name, phone and ID number — or clear all three to skip`,
+            `Fill in guest ${ord}'s name, phone and ID number - or clear all three to skip`,
           );
         if (!c.form.gender)
           throw new Error(`Gender is required for guest ${ord}`);
@@ -849,7 +859,7 @@ export default function NewReservation() {
       if (selectedGuest?.id && dupCheckIds.includes(selectedGuest.id))
         throw new Error("The booker can't also be listed as a co-guest");
       if (new Set(dupCheckIds).size !== dupCheckIds.length)
-        throw new Error("The same guest is listed twice — pick a different person");
+        throw new Error("The same guest is listed twice - pick a different person");
 
       // ── NO writes yet. The guest rows + KYC uploads happen in
       // persistGuestsAndKyc(), which runs only at the moment of commitment:
@@ -940,7 +950,13 @@ export default function NewReservation() {
         creditNotes: isCreditBooking && creditNotes ? creditNotes : undefined,
         otpCode: otpCode ?? undefined,
         skipOtp: otpCode ? undefined : true,
-      });
+      },
+      // Network-level protection on top of the button guard: a retried POST
+      // (proxy, flaky link, browser repost) would otherwise create a second
+      // booking for the same rooms AND record the advance twice. The server
+      // already runs idempotent("reservations.create") — it just never
+      // received a key from here.
+      { idempotencyKey: submitKey });
 
       const tookAdvance = !isCreditBooking && advance > 0;
       if (mode === "walkin") {
@@ -960,6 +976,7 @@ export default function NewReservation() {
       // so the spinner doesn't blink off mid-flight.
       freshGuestIdsRef.current = [];
       persistedRef.current = null;
+      setSubmitKey(newIdempotencyKey());
       setPendingOtpGuestId(null);
       setPendingOtpPhone(null);
       invalidateReservationData(qc, { reservationId: reservation.id });
@@ -1147,7 +1164,7 @@ export default function NewReservation() {
             phone: settings.hotelPhone,
             ownerPhone: settings.ownerPhone,
             gstin: settings.hotelGstin,
-            logoUrl: settings.hotelLogoUrl ?? "/logo.jpg",
+            logoUrl: settings.hotelLogoUrl ?? "/logo.png",
             checkInTime: settings.checkInTime,
             checkOutTime: settings.checkOutTime,
           },
@@ -1308,9 +1325,14 @@ export default function NewReservation() {
     if (tag === "SELECT") {
       // A dropdown owns its arrows (they change the selected option). Only
       // Enter advances, and only once it has a value — so Enter can't skip
-      // an unfilled field.
+      // an unfilled field. Enter on an EMPTY dropdown pops it open so staff
+      // can pick with arrows + Enter without touching the mouse.
       if (!isEnter) return;
-      if (!(el as HTMLSelectElement).value) return;
+      if (!(el as HTMLSelectElement).value) {
+        e.preventDefault();
+        openDropdown(el);
+        return;
+      }
     } else if (isDown || isUp) {
       // Text box: only jump when the caret is at the far end in the direction
       // travelled, so arrows still navigate the text being typed. Inputs like
@@ -1340,13 +1362,31 @@ export default function NewReservation() {
     if (idx < 0) return;
 
     if (isUp) {
-      if (idx > 0) focusables[idx - 1]!.focus();
+      if (idx > 0) {
+        focusables[idx - 1]!.focus();
+        openDropdown(focusables[idx - 1]!);
+      }
       return;
     }
     if (idx < focusables.length - 1) {
       focusables[idx + 1]!.focus();
+      openDropdown(focusables[idx + 1]!);
     } else {
       el.blur();
+    }
+  }
+
+  // Pop a native <select> open when keyboard navigation lands on it, so the
+  // options are immediately arrow-navigable. showPicker() needs a user
+  // gesture (the keydown counts) and a recent browser — older ones just
+  // get the focused select, same as before.
+  function openDropdown(el: HTMLElement) {
+    if (el.tagName !== "SELECT") return;
+    const s = el as HTMLSelectElement & { showPicker?: () => void };
+    try {
+      s.showPicker?.();
+    } catch {
+      /* unsupported browser or not allowed — focus alone is fine */
     }
   }
 
@@ -1419,7 +1459,7 @@ export default function NewReservation() {
             {checkInDate < todayStr && (
               <div className="text-[11px] text-warning mt-1 flex items-start gap-1">
                 <span>⚠</span>
-                <span>Backdated check-in — only log this if it's a booking you forgot to enter earlier.</span>
+                <span>Backdated check-in - only log this if it's a booking you forgot to enter earlier.</span>
               </div>
             )}
             {/* Check-in time is required (0023). It flows through to the
@@ -1472,23 +1512,25 @@ export default function NewReservation() {
             )}
           </div>
           <div>
-            <label className="label block mb-1">Adults</label>
+            <label className="label block mb-1">
+              Adults <span className="text-danger">*</span>
+            </label>
             <input
               className="input"
               type="number"
               min={1}
+              required
               // Empty string while the field is cleared so the user can
-              // type "2" without battling a sticky "0". Falls back to
-              // min on blur.
+              // type "2" without battling a sticky "0".
               value={adults === 0 ? "" : adults}
               onChange={(e) => {
                 const v = e.target.value;
                 setAdults(v === "" ? 0 : Math.max(0, Number(v)));
               }}
-              onBlur={() => {
-                if (adults < 1) setAdults(1);
-              }}
             />
+            {adults < 1 && (
+              <div className="text-[11px] text-danger mt-1">At least 1 adult is required</div>
+            )}
           </div>
           <div>
             <label className="label block mb-1">Children</label>
@@ -1949,7 +1991,7 @@ export default function NewReservation() {
                   {adults} adult{adults === 1 ? "" : "s"} but selected rooms sleep {effectiveCapacity}.
                 </div>
                 <div className="text-textSecondary mt-0.5">
-                  Add an extra bed to a room below, or select another room —{" "}
+                  Add an extra bed to a room below, or select another room -{" "}
                   <strong>{capacityShortfall}</strong> more {capacityShortfall === 1 ? "berth" : "berths"} needed.
                 </div>
               </div>
@@ -1957,7 +1999,7 @@ export default function NewReservation() {
           ) : (
             <div className="text-xs text-success flex items-center gap-1.5">
               <Users className="w-3.5 h-3.5" />
-              Capacity OK — sleeps {effectiveCapacity} for {adults} adult{adults === 1 ? "" : "s"}
+              Capacity OK - sleeps {effectiveCapacity} for {adults} adult{adults === 1 ? "" : "s"}
               {extraBedCapacity > 0 ? ` (incl. ${extraBedCapacity} extra bed${extraBedCapacity === 1 ? "" : "s"})` : ""}.
             </div>
           )
@@ -2053,7 +2095,7 @@ export default function NewReservation() {
                             className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-sm text-[10px] font-semibold bg-warning/15 text-warning"
                             title="Room hasn't been cleaned since the last checkout. Mark clean before assigning to a guest."
                           >
-                            <Sparkles className="w-3 h-3" /> DIRTY
+                            <SprayCan className="w-3 h-3" /> DIRTY
                           </span>
                         )}
                         {r.hasAc ? (
@@ -2175,7 +2217,7 @@ export default function NewReservation() {
                         }}
                         className="w-full inline-flex items-center justify-center gap-1.5 px-2 h-8 rounded-sm border border-warning/50 text-warning hover:bg-warning/10 text-xs font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
                       >
-                        <Sparkles className="w-3.5 h-3.5" />
+                        <SprayCan className="w-3.5 h-3.5" />
                         {cleanInFlight ? "Marking clean…" : "Mark clean & select"}
                       </button>
                       <div className="text-[10px] text-textSecondary mt-1 leading-tight">
@@ -2358,12 +2400,16 @@ export default function NewReservation() {
 
       <div className="card space-y-3">
         <h2 className="font-semibold text-brand-dark">4. Booking Source</h2>
-        <ArrowKeyGroup className="grid grid-cols-3 gap-2">
-          {([
-            { v: "walkin", label: "Walk-in" },
-            { v: "phone_whatsapp", label: "Phone / WhatsApp" },
-            { v: "complimentary", label: "Complimentary" },
-          ] as const).map((opt) => (
+        <ArrowKeyGroup className={`grid gap-2 ${compFeatureOn ? "grid-cols-3" : "grid-cols-2"}`}>
+          {(
+            [
+              { v: "walkin", label: "Walk-in" },
+              { v: "phone_whatsapp", label: "Phone / WhatsApp" },
+              ...(compFeatureOn
+                ? ([{ v: "complimentary", label: "Complimentary" }] as const)
+                : []),
+            ] as const
+          ).map((opt) => (
             <button
               key={opt.v}
               type="button"
@@ -2405,7 +2451,7 @@ export default function NewReservation() {
             }`}
           >
             <span className="text-white text-[10px] leading-none">
-              {otpEnabled ? "✓" : "—"}
+              {otpEnabled ? "✓" : "-"}
             </span>
           </div>
           <div className="text-sm">
@@ -2542,7 +2588,7 @@ export default function NewReservation() {
               {isShortStay
                 ? `${shortStayDurationHours} hrs × ${selectedRooms.length}`
                 : `${nights} × ${selectedRooms.length}`}{" "}
-              room{selectedRooms.length === 1 ? "" : "s"}) — GST included
+              room{selectedRooms.length === 1 ? "" : "s"}) - GST included
             </span>
             <span className="font-mono">{inr(roomAmount)}</span>
           </div>
@@ -2622,7 +2668,7 @@ export default function NewReservation() {
               <AlertTriangle className="w-4 h-4 text-warning shrink-0 mt-0.5" />
               <div className="flex-1 text-xs leading-snug">
                 <div className="font-semibold text-warning mb-1.5">
-                  Same-day re-let — {reletRooms.length} room
+                  Same-day re-let - {reletRooms.length} room
                   {reletRooms.length === 1 ? "" : "s"} reserved for tomorrow
                 </div>
                 <ul className="space-y-1 mb-2">
@@ -2658,10 +2704,18 @@ export default function NewReservation() {
           </button>
           <button
             className="btn-primary"
-            disabled={!canSubmit || create.isPending}
+            // `create` is VALIDATION ONLY — its mutationFn resolves in the
+            // same tick, so create.isPending alone left the button live for
+            // the entire real commit. That commit is `createAfterOtp`
+            // (persists guests + KYC, then POSTs the reservation with the
+            // advance), fired from create.onSuccess. With OTP disabled no
+            // modal covers the button either, so a second click re-entered
+            // the flow mid-flight, reset the persisted-guest refs, and booked
+            // the rooms + took the advance a second time.
+            disabled={!canSubmit || create.isPending || createAfterOtp.isPending}
             onClick={handlePrimarySubmit}
           >
-            {create.isPending
+            {create.isPending || createAfterOtp.isPending
               ? mode === "walkin"
                 ? "Checking in…"
                 : "Creating…"
@@ -2687,6 +2741,7 @@ export default function NewReservation() {
       <OtpModal
         guestId={pendingOtpGuestId ?? undefined}
         phone={pendingOtpPhone ?? undefined}
+        email={newGuest.email.trim() || undefined}
         open={(!!pendingOtpGuestId || !!pendingOtpPhone) && otpEnabled}
         onClose={() => {
           // OTP abandoned. Normally nothing was written yet (guests are
@@ -3039,7 +3094,7 @@ function CoGuestCard(props: {
         <h2 className="font-semibold text-navy">
           Guest {guestNumber}{" "}
           <span className="text-xs text-textSecondary font-normal">
-            (optional — skip to book without this guest's KYC)
+            (optional - skip to book without this guest's KYC)
           </span>
         </h2>
         <div className="flex items-center gap-2 text-xs">

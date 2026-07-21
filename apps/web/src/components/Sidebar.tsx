@@ -1,25 +1,43 @@
 import { useQuery } from "@tanstack/react-query";
 import {
   Activity,
+  ActivityFill,
   BadgeIndianRupee,
+  BadgeIndianRupeeFill,
   BarChart3,
+  BarChart3Fill,
   Bell,
+  BellFill,
   CalendarCheck,
+  CalendarCheckFill,
   CalendarDays,
+  CalendarDaysFill,
   ChevronLeft,
   ChevronRight,
   CreditCard,
+  CreditCardFill,
   DoorOpen,
+  DoorOpenFill,
   LayoutDashboard,
+  LayoutDashboardFill,
   LogOut,
   MessageSquare,
+  MessageSquareFill,
   Receipt,
+  ReceiptFill,
   Settings,
-  Sparkles,
+  SettingsFill,
+  SprayCan,
+  SprayCanFill,
   TrendingDown,
+  TrendingDownFill,
+  UserCog,
+  UserCogFill,
   Users,
+  UsersFill,
   Wallet,
-} from "lucide-react";
+  WalletFill,
+} from "@/lib/micons";
 import { NavLink } from "react-router-dom";
 import { useAuth } from "@/auth/AuthContext";
 import { useDialog } from "@/components/Dialog";
@@ -30,6 +48,9 @@ interface NavItem {
   to: string;
   label: string;
   icon: typeof LayoutDashboard;
+  // FILL=1 variant rendered when the item is active (Material Symbols
+  // outline + filled-active pattern).
+  iconFill: typeof LayoutDashboard;
   permission?: string; // permission key required to see this item
   // Strictly role-gated items (no permission key exists) — e.g. Billing,
   // which the API guards with requireRole('admin').
@@ -38,22 +59,23 @@ interface NavItem {
 
 // Each item declares the permission key required. Admin (god mode) sees everything.
 const NAV: NavItem[] = [
-  { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard, permission: "view_dashboard" },
-  { to: "/rooms", label: "Rooms", icon: DoorOpen, permission: "view_rooms" },
-  { to: "/calendar", label: "Calendar", icon: CalendarDays, permission: "view_reservations" },
-  { to: "/reservations", label: "Reservations", icon: CalendarCheck, permission: "view_reservations" },
-  { to: "/guests", label: "Guests", icon: Users, permission: "view_guests" },
-  { to: "/housekeeping", label: "Housekeeping", icon: Sparkles, permission: "view_housekeeping" },
-  { to: "/messages", label: "Messages", icon: MessageSquare, permission: "view_messages" },
-  { to: "/invoices", label: "Invoices", icon: Receipt, permission: "view_invoices" },
-  { to: "/collections", label: "Collections", icon: Wallet, permission: "view_revenue" },
-  { to: "/credits", label: "Credits", icon: BadgeIndianRupee, permission: "view_revenue" },
-  { to: "/expenses", label: "Expenses", icon: TrendingDown, permission: "view_expenses" },
-  { to: "/notifications", label: "Notifications", icon: Bell, permission: "view_notifications" },
-  { to: "/activity", label: "Activity", icon: Activity, permission: "view_activity" },
-  { to: "/reports", label: "Reports", icon: BarChart3, permission: "view_reports" },
-  { to: "/billing", label: "Billing", icon: CreditCard, adminOnly: true },
-  { to: "/settings", label: "Settings", icon: Settings, permission: "manage_settings" },
+  { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard, iconFill: LayoutDashboardFill, permission: "view_dashboard" },
+  { to: "/rooms", label: "Rooms", icon: DoorOpen, iconFill: DoorOpenFill, permission: "view_rooms" },
+  { to: "/calendar", label: "Calendar", icon: CalendarDays, iconFill: CalendarDaysFill, permission: "view_reservations" },
+  { to: "/reservations", label: "Reservations", icon: CalendarCheck, iconFill: CalendarCheckFill, permission: "view_reservations" },
+  { to: "/guests", label: "Guests", icon: Users, iconFill: UsersFill, permission: "view_guests" },
+  { to: "/housekeeping", label: "Housekeeping", icon: SprayCan, iconFill: SprayCanFill, permission: "view_housekeeping" },
+  { to: "/messages", label: "Messages", icon: MessageSquare, iconFill: MessageSquareFill, permission: "view_messages" },
+  { to: "/invoices", label: "Invoices", icon: Receipt, iconFill: ReceiptFill, permission: "view_invoices" },
+  { to: "/collections", label: "Collections", icon: Wallet, iconFill: WalletFill, permission: "view_revenue" },
+  { to: "/credits", label: "Credits", icon: BadgeIndianRupee, iconFill: BadgeIndianRupeeFill, permission: "view_revenue" },
+  { to: "/expenses", label: "Expenses", icon: TrendingDown, iconFill: TrendingDownFill, permission: "view_expenses" },
+  { to: "/notifications", label: "Notifications", icon: Bell, iconFill: BellFill, permission: "view_notifications" },
+  { to: "/activity", label: "Activity", icon: Activity, iconFill: ActivityFill, permission: "view_activity" },
+  { to: "/reports", label: "Reports", icon: BarChart3, iconFill: BarChart3Fill, permission: "view_reports" },
+  { to: "/billing", label: "Billing", icon: CreditCard, iconFill: CreditCardFill, adminOnly: true },
+  { to: "/staff", label: "Staff", icon: UserCog, iconFill: UserCogFill, permission: "manage_staff" },
+  { to: "/settings", label: "Settings", icon: Settings, iconFill: SettingsFill, permission: "manage_settings" },
 ];
 
 export function Sidebar({
@@ -158,13 +180,13 @@ export function Sidebar({
         )}
       >
         <img
-          src="/logo.jpg"
+          src="/logo.png"
           alt="Stayvia"
-          className="w-10 h-10 rounded-md bg-cream object-contain p-0.5 shrink-0 ring-1 ring-brass/30"
+          className="w-10 h-10 rounded-[10px] object-contain shrink-0 ring-1 ring-brass/40"
         />
         {!collapsed && (
           <div className="min-w-0">
-            <div className="text-base font-semibold tracking-tight leading-tight truncate text-cream">{property?.name ?? "Stayvia"}</div>
+            <div className="text-base font-semibold tracking-tight leading-tight truncate text-cream uppercase">{property?.name ?? "Stayvia"}</div>
             <div className="text-[10px] text-brass tracking-[0.15em] mt-0.5">HOTEL OS</div>
           </div>
         )}
@@ -172,7 +194,10 @@ export function Sidebar({
 
       <nav className="flex-1 py-3 overflow-y-auto overflow-x-hidden no-scrollbar">
         {visible.map((item) => {
-          const Icon = item.icon;
+          // Dashboard lives at both / and /dashboard — highlight
+          // the Dashboard nav item for either URL.
+          const onRootDashboard =
+            item.to === "/dashboard" && window.location.pathname === "/";
           return (
             <NavLink
               key={item.to}
@@ -180,10 +205,6 @@ export function Sidebar({
               end={item.to === "/dashboard"}
               title={collapsed ? item.label : undefined}
               className={({ isActive }) => {
-                // Dashboard lives at both / and /dashboard — highlight
-                // the Dashboard nav item for either URL.
-                const onRootDashboard =
-                  item.to === "/dashboard" && window.location.pathname === "/";
                 const active = isActive || onRootDashboard;
                 return cn(
                   "flex items-center gap-3 py-2.5 text-sm transition-colors",
@@ -194,8 +215,12 @@ export function Sidebar({
                 );
               }}
             >
-              <Icon className="w-4 h-4 shrink-0" />
-              {!collapsed && <span className="flex-1">{item.label}</span>}
+              {({ isActive }) => {
+                const Icon = isActive || onRootDashboard ? item.iconFill : item.icon;
+                return (
+                  <>
+                    <Icon className="w-4 h-4 shrink-0" />
+                    {!collapsed && <span className="flex-1">{item.label}</span>}
               {!collapsed && item.to === "/notifications" && unread > 0 && (
                 <span
                   className="w-2 h-2 rounded-full bg-brass shrink-0"
@@ -210,16 +235,19 @@ export function Sidebar({
                   title={`${unreadMessages} unread message${unreadMessages === 1 ? "" : "s"}`}
                 />
               )}
-              {!collapsed && item.to === "/collections" && owingCount > 0 && (
-                <span
-                  className="relative flex w-2 h-2 shrink-0"
-                  aria-label={`${owingCount} guest(s) owing`}
-                  title={`${owingCount} guest(s) owing`}
-                >
-                  <span className="absolute inset-0 rounded-full bg-danger animate-ping opacity-60" />
-                  <span className="relative w-2 h-2 rounded-full bg-danger" />
-                </span>
-              )}
+                    {!collapsed && item.to === "/collections" && owingCount > 0 && (
+                      <span
+                        className="relative flex w-2 h-2 shrink-0"
+                        aria-label={`${owingCount} guest(s) owing`}
+                        title={`${owingCount} guest(s) owing`}
+                      >
+                        <span className="absolute inset-0 rounded-full bg-danger animate-ping opacity-60" />
+                        <span className="relative w-2 h-2 rounded-full bg-danger" />
+                      </span>
+                    )}
+                  </>
+                );
+              }}
             </NavLink>
           );
         })}
@@ -228,7 +256,7 @@ export function Sidebar({
       {!collapsed ? (
         <div className="px-5 py-4 border-t border-brass/15">
           <div className="text-[10px] text-brass tracking-[0.15em]">SIGNED IN AS</div>
-          <div className="text-sm font-medium truncate text-cream mt-1">{profile.fullName}</div>
+          <div className="text-sm font-medium truncate text-cream mt-1 uppercase">{profile.fullName}</div>
           <div className="text-xs text-cream/50 capitalize">
             {profile.rbacRoleKey ?? profile.role}
           </div>

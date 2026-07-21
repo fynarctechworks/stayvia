@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { format } from "date-fns";
-import { BedDouble, Bell, CalendarPlus, CheckCircle2, ExternalLink, FileImage, Pencil, Plus, ShieldCheck, Trash2, Upload, Wallet, X } from "lucide-react";
+import { BedDouble, Bell, CalendarPlus, CheckCircle2, ExternalLink, FileImage, Pencil, Plus, ShieldCheck, Trash2, Upload, Wallet, X } from "@/lib/micons";
 import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { Can } from "@/auth/Can";
@@ -219,7 +219,7 @@ export default function GuestProfile() {
               }
               title={
                 (data.stats?.totalStays ?? 0) > 0
-                  ? "Guest has stay history — cancel or void those bookings first"
+                  ? "Guest has stay history - cancel or void those bookings first"
                   : "Delete this guest"
               }
             >
@@ -542,7 +542,7 @@ function StatsRow({ stats }: { stats: GuestStats }) {
   if (stats.upcomingStays > 0) parts.push(`${stats.upcomingStays} upcoming`);
   if (stats.completedStays > 0) parts.push(`${stats.completedStays} completed`);
   if (stats.cancelledStays > 0) parts.push(`${stats.cancelledStays} cancelled`);
-  const totalSub = parts.length > 0 ? parts.join(" · ") : "—";
+  const totalSub = parts.length > 0 ? parts.join(" · ") : "-";
 
   // For "Last stay", only say "Since X" if there's at least one completed stay.
   // For brand-new guests with only future bookings, surface that instead so we
@@ -664,7 +664,7 @@ function BalanceBreakdown({ guestId }: { guestId: string }) {
       </div>
 
       <div className="text-[11px] text-textSecondary mt-2 leading-tight">
-        Collect alongside this guest's next check-out — the modal offers a "Collect previous
+        Collect alongside this guest's next check-out - the modal offers a "Collect previous
         balance" toggle that applies to these items in oldest-first order.
       </div>
     </div>
@@ -925,7 +925,7 @@ function KycThumb({
         className="border-2 border-dashed border-borderc rounded-sm p-4 flex items-center gap-2 text-textSecondary text-xs hover:border-brand-dark hover:text-brand-dark transition-colors w-full text-left"
       >
         <Upload className="w-4 h-4 opacity-70" />
-        <span>{label} — click to upload</span>
+        <span>{label} - click to upload</span>
       </button>
     );
   }
@@ -1146,7 +1146,7 @@ function WalletSection({ guestId }: { guestId: string }) {
       </div>
 
       <div className="text-2xl font-bold text-brand-dark">{inr(balance)}</div>
-      <div className="text-xs text-textSecondary mt-0.5">Available for future bookings — no expiry</div>
+      <div className="text-xs text-textSecondary mt-0.5">Available for future bookings - no expiry</div>
 
       {data?.entries && data.entries.length > 0 && (
         <div className="mt-4">
@@ -1247,7 +1247,7 @@ function TagsEditor({ tags }: { guestId: string; tags: string[] }) {
   if (tags.length === 0) {
     return (
       <div className="text-xs text-textSecondary italic">
-        No tags yet — they appear automatically after the first stay.
+        No tags yet - they appear automatically after the first stay.
       </div>
     );
   }
@@ -1464,7 +1464,10 @@ function NotesTab({ guestId }: { guestId: string }) {
 function FollowUpsTab({ guestId }: { guestId: string }) {
   const qc = useQueryClient();
   const [task, setTask] = useState("");
-  const [dueDate, setDueDate] = useState(new Date().toISOString().slice(0, 10));
+  // Desk-local day. toISOString() is the UTC day, which during 00:00-05:30
+  // IST is yesterday — the follow-up seeded a past due date and the row
+  // rendered "Overdue" the instant it was created.
+  const [dueDate, setDueDate] = useState(format(new Date(), "yyyy-MM-dd"));
 
   const { data: items = [], isLoading } = useQuery({
     queryKey: ["guest-followups", guestId],

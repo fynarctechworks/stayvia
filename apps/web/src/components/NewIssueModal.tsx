@@ -7,7 +7,7 @@ import {
   type MaintenanceSeverity,
 } from "@stayvia/shared";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { X } from "lucide-react";
+import { X } from "@/lib/micons";
 import { useState } from "react";
 import { api } from "@/lib/api";
 
@@ -194,7 +194,7 @@ export function NewIssueModal({
             </label>
             <input
               className="input"
-              placeholder="Short summary — e.g. AC not cooling"
+              placeholder="Short summary - e.g. AC not cooling"
               value={title}
               onChange={(e) => setTitle(e.target.value)}
               maxLength={200}
@@ -207,7 +207,7 @@ export function NewIssueModal({
             </label>
             <textarea
               className="input min-h-[88px]"
-              placeholder="Details that help the technician — when noticed, what was tried, etc."
+              placeholder="Details that help the technician - when noticed, what was tried, etc."
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               maxLength={2000}

@@ -8,7 +8,7 @@ import {
 } from "@stayvia/shared";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { format } from "date-fns";
-import { ChevronLeft, Send } from "lucide-react";
+import { ChevronLeft, Send } from "@/lib/micons";
 import { useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { Loader } from "@/components/Loader";
@@ -268,7 +268,7 @@ export default function MaintenanceDetail() {
               <div className="flex gap-2 pt-2 border-t border-borderc">
                 <textarea
                   className="input flex-1 min-h-[60px]"
-                  placeholder="Record an update — e.g. technician arrived, parts ordered…"
+                  placeholder="Record an update - e.g. technician arrived, parts ordered…"
                   value={comment}
                   onChange={(e) => setComment(e.target.value)}
                   maxLength={2000}

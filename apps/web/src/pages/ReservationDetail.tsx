@@ -15,14 +15,17 @@ import {
   Pencil,
   Plus,
   Snowflake,
-  Sparkles,
+  SprayCan,
   Tv,
   Wifi,
   ShieldAlert,
   ShieldCheck,
+  Lock,
   Trash2,
+  Undo2,
+  UserRoundPlus,
   XCircle,
-} from "lucide-react";
+} from "@/lib/micons";
 import {
   MAINTENANCE_CATEGORIES,
   MAINTENANCE_CATEGORY_LABELS,
@@ -31,8 +34,9 @@ import {
   type MaintenanceCategory,
   type MaintenanceSeverity,
 } from "@stayvia/shared";
-import { Fragment, useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
+import { useAuth } from "@/auth/AuthContext";
 import { CheckInReceiptModal, type CheckInReceiptData } from "@/components/CheckInReceiptModal";
 import { EarlyCheckInModal } from "@/components/EarlyCheckInModal";
 import { EditInvoiceModal } from "@/components/EditInvoiceModal";
@@ -47,6 +51,13 @@ import { useToast } from "@/components/Toast";
 import { ApiError, api, newIdempotencyKey } from "@/lib/api";
 import { invalidateReservationData } from "@/lib/invalidate";
 import { inr } from "@/lib/utils";
+
+// Hotel-clock instants must carry the property offset. Without it the
+// browser parses "2026-07-20T11:00:00" in ITS OWN timezone, so a manager
+// viewing from Dubai (UTC+4) saw overdue badges and late-checkout times
+// disagree with the server (which builds the same value with +05:30) by the
+// difference between the two zones.
+const IST_OFFSET = "+05:30";
 
 interface Detail {
   id: string;
@@ -187,6 +198,9 @@ interface Detail {
     amount: string;
     gstRate: string;
     createdAt: string;
+    // Rows written by Extend Stay are system-owned (migration 0012): they
+    // carry only the rate delta, so the UI must not offer a bare delete.
+    source?: "manual" | "stay_extension";
   }[];
   invoice: {
     id: string;
@@ -236,6 +250,7 @@ interface Detail {
 export default function ReservationDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const { can } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
   const qc = useQueryClient();
   const dialog = useDialog();
@@ -300,6 +315,7 @@ export default function ReservationDetail() {
         checkInTime: string | null;
         checkOutTime: string | null;
         otpRequiredForCheckin: boolean;
+        hideComplimentary?: boolean;
       }>("/settings/public"),
     staleTime: 5 * 60 * 1000,
   });
@@ -307,6 +323,10 @@ export default function ReservationDetail() {
   // Property-wide OTP policy. Defaults to on until settings load so we never
   // silently skip verification on a slow network.
   const otpEnabled = settingsQ.data?.otpRequiredForCheckin ?? true;
+  // Complimentary feature switch: hiding OFF means the hotel isn't using
+  // the discreet comp flow, so the Make Complimentary action disappears.
+  // Defaults off (matches the new-hotel default) until settings load.
+  const compFeatureOn = settingsQ.data?.hideComplimentary ?? false;
 
   function invalidate() {
     invalidateReservationData(qc, { reservationId: id, guestId: data?.guestId });
@@ -407,6 +427,18 @@ export default function ReservationDetail() {
   // No-show: guest never arrived. Advance is forfeit (kept as revenue,
   // not refunded). Rooms release immediately. Distinct from Cancel so
   // reports can separate true cancellations from no-shows.
+  // Rolls the dates, num_nights, the marker and the rate-delta charge back
+  // together. Deleting the charge alone used to look like an undo but left the
+  // stay extended and billed at the old room rate.
+  const undoExtension = useMutation({
+    mutationFn: () => api.post(`/reservations/${r!.id}/undo-extension`),
+    onSuccess: () => {
+      invalidate();
+      toast("Extension undone", "success");
+    },
+    onError: (e: Error) => toast(e.message, "error"),
+  });
+
   const noShow = useMutation({
     mutationFn: (note: string) =>
       api.post<{ forfeitedAdvance: number }>(`/reservations/${id}/no-show`, {
@@ -478,6 +510,103 @@ export default function ReservationDetail() {
   const rooms = data.rooms;
   const charges = data.additionalCharges;
   const invoice = data.invoice;
+
+  // Rooms the guest is still in.
+  //
+  // A mid-stay swap leaves a row for the VACATED room too, bounded to end at
+  // the swap date, while the live row runs to the reservation's checkout
+  // (NULL bounds = unsegmented, always live). That closed leg must keep
+  // appearing in the Rooms table and on the invoice — the guest really did
+  // sleep there and those nights are billable — but it must never be offered
+  // as somewhere to act NOW. Listing it turned a one-room stay into "2 of 2
+  // rooms" in the Extend and Add Charge pickers, and a charge attributed to a
+  // room the guest has left lands on a row nothing will invoice.
+  const liveRooms = rooms.filter(
+    (rm) => !rm.effectiveTo || rm.effectiveTo >= r.checkOutDate,
+  );
+
+  // Spells out exactly what Undo Extension will change, with real figures,
+  // so nobody confirms a money-affecting rollback from a vague prompt.
+  const undoExtensionSummary = (() => {
+    if (!r.originalCheckOutDate) return null;
+    const fmtDay = (d: string) => format(new Date(d), "dd MMM yyyy");
+    const nightsNow = Number(r.numNights ?? 0);
+    const nightsAfter = Math.max(
+      0,
+      differenceInCalendarDays(
+        new Date(r.originalCheckOutDate),
+        new Date(r.checkInDate),
+      ),
+    );
+    const dropped = Math.max(0, nightsNow - nightsAfter);
+    // Charges the server will delete (source = "stay_extension").
+    const extCharges = charges.filter((c) => c.source === "stay_extension");
+    const extTotal = extCharges.reduce((sum, c) => sum + Number(c.amount), 0);
+
+    // JSX, not a string: the dialog renders `message` as a ReactNode in a
+    // plain div, so newlines in a string would collapse into one paragraph.
+    const Row = ({ label, children }: { label: string; children: ReactNode }) => (
+      <div className="flex items-baseline gap-3 py-1">
+        <span className="w-20 shrink-0 text-[11px] uppercase tracking-wider text-textSecondary">
+          {label}
+        </span>
+        <span className="text-sm text-textPrimary">{children}</span>
+      </div>
+    );
+    return (
+      <div className="mt-1">
+        <div className="rounded-sm border border-borderc bg-bg px-3 py-2">
+          <Row label="Check-out">
+            <span className="line-through text-textSecondary">
+              {fmtDay(r.checkOutDate)}
+            </span>
+            <span className="mx-2 text-textSecondary">→</span>
+            <strong>{fmtDay(r.originalCheckOutDate)}</strong>
+          </Row>
+          <Row label="Nights">
+            <span className="line-through text-textSecondary">{nightsNow}</span>
+            <span className="mx-2 text-textSecondary">→</span>
+            <strong>{nightsAfter}</strong>
+            {dropped > 0 && (
+              <span className="ml-2 text-danger text-xs">
+                {dropped} night{dropped === 1 ? "" : "s"} no longer billed
+              </span>
+            )}
+          </Row>
+          {extCharges.length > 0 && (
+            <Row label="Removed">
+              {extCharges.length} extension rate charge
+              {extCharges.length === 1 ? "" : "s"}
+              <span className="ml-2 font-mono text-danger">
+                −{inr(extTotal)}
+              </span>
+            </Row>
+          )}
+        </div>
+        <div className="text-xs text-textSecondary mt-2">
+          The bill is recalculated from the restored dates. Payments already
+          collected are <strong>not</strong> touched — if that leaves the guest
+          overpaid, it shows as a balance to refund.
+        </div>
+      </div>
+    );
+  })();
+
+  // Uninvoiced rooms grouped into billing units, matching how the server
+  // issues per-room invoices: legs of one swap chain share a swapId and go on
+  // a SINGLE invoice, because a guest who changed rooms is one occupant.
+  // Anything unswapped is its own group.
+  const uninvoicedOccupancies = (() => {
+    const byKey = new Map<string, typeof rooms>();
+    for (const rm of rooms) {
+      if (rm.roomInvoiceId) continue;
+      const key = rm.swapId ?? rm.id;
+      const existing = byKey.get(key);
+      if (existing) existing.push(rm);
+      else byKey.set(key, [rm]);
+    }
+    return [...byKey.values()];
+  })();
   const payments = data.payments;
   const guest = data.guest;
   const nights = r.numNights ?? Math.max(
@@ -498,7 +627,7 @@ export default function ReservationDetail() {
       : (() => {
           const [hh, mm] = (r.hotelCheckInTime ?? "12:00").split(":");
           return new Date(
-            `${r.checkInDate}T${(hh ?? "12").padStart(2, "0")}:${(mm ?? "00").padStart(2, "0")}:00`,
+            `${r.checkInDate}T${(hh ?? "12").padStart(2, "0")}:${(mm ?? "00").padStart(2, "0")}:00${IST_OFFSET}`,
           ).getTime();
         })();
     return new Date(startMs + Math.round(durationHours * 3600 * 1000));
@@ -521,7 +650,7 @@ export default function ReservationDetail() {
     if (r.status !== "checked_in") return 0;
     const today = new Date();
     today.setHours(0, 0, 0, 0);
-    const out = new Date(r.checkOutDate + "T00:00:00");
+    const out = new Date(r.checkOutDate + `T00:00:00${IST_OFFSET}`);
     const diff = Math.floor((today.getTime() - out.getTime()) / 86400000);
     return Math.max(0, diff);
   })();
@@ -546,7 +675,9 @@ export default function ReservationDetail() {
       effectiveOut = new Date(checkedInAt.getTime() + durationH * 3600_000);
     } else {
       const [hh = "11", mm = "00"] = (r.hotelCheckOutTime ?? "11:00").split(":");
-      effectiveOut = new Date(`${r.checkOutDate}T${hh.padStart(2, "0")}:${mm.padStart(2, "0")}:00`);
+      effectiveOut = new Date(
+        `${r.checkOutDate}T${hh.padStart(2, "0")}:${mm.padStart(2, "0")}:00${IST_OFFSET}`,
+      );
     }
     const grantHours = Number(r.lateCheckoutHours ?? 0);
     if (grantHours > 0) {
@@ -554,6 +685,24 @@ export default function ReservationDetail() {
     }
     const diffMs = Date.now() - effectiveOut.getTime();
     return diffMs > 0 ? Math.floor(diffMs / 60_000) : 0;
+  })();
+
+  // Granted late checkout, surfaced on the Dates card: the base departure
+  // time (planned > day-use exit > hotel default) shifted by the granted
+  // hours. Hidden once the guest actually checked out.
+  const lateGrantHours = Number(r.lateCheckoutHours ?? 0);
+  const lateOutDisplay = (() => {
+    if (lateGrantHours <= 0 || r.checkedOutAt) return null;
+    const base = r.plannedCheckOutAt
+      ? new Date(r.plannedCheckOutAt)
+      : shortStayCheckoutAt ??
+        (() => {
+          const [hh = "11", mm = "00"] = (r.hotelCheckOutTime ?? "11:00").split(":");
+          return new Date(
+            `${r.checkOutDate}T${hh.padStart(2, "0")}:${mm.padStart(2, "0")}:00${IST_OFFSET}`,
+          );
+        })();
+    return new Date(base.getTime() + lateGrantHours * 3600_000);
   })();
 
   return (
@@ -569,6 +718,34 @@ export default function ReservationDetail() {
             Overdue · {overdueDays}d
           </span>
         )}
+        {/* Corrective action, not part of the day-to-day flow — it lives in
+            the header rather than the action bar so it doesn't sit among the
+            buttons staff press on every stay. Only rendered for a booking
+            that HAS been extended; reverts to the originally-booked checkout,
+            since original_check_out_date is stamped once and never
+            overwritten (so this undoes every extend, not just the last). */}
+        {(r.status === "checked_in" || r.status === "confirmed") &&
+          r.originalCheckOutDate &&
+          !invoice &&
+          can("extend_stay") && (
+            <button
+              className="ml-auto btn-secondary inline-flex items-center gap-2 !h-9"
+              disabled={undoExtension.isPending}
+              onClick={async () => {
+                const ok = await dialog.confirm({
+                  title: "Undo stay extension?",
+                  message: undoExtensionSummary,
+                  okLabel: "Undo extension",
+                  cancelLabel: "Keep the extension",
+                  tone: "danger",
+                });
+                if (ok) undoExtension.mutate();
+              }}
+            >
+              <Undo2 className="w-4 h-4" />
+              {undoExtension.isPending ? "Undoing…" : "Undo Extension"}
+            </button>
+          )}
       </div>
 
       {overdueDays > 0 && (
@@ -576,7 +753,7 @@ export default function ReservationDetail() {
           <div className="text-danger text-lg leading-none mt-0.5">⚠</div>
           <div className="flex-1">
             <div className="font-semibold text-danger">
-              Stay was scheduled to end {format(new Date(r.checkOutDate), "dd MMM yyyy")} —{" "}
+              Stay was scheduled to end {format(new Date(r.checkOutDate), "dd MMM yyyy")} -{" "}
               {overdueDays} day{overdueDays === 1 ? "" : "s"} ago.
             </div>
             <div className="text-xs text-textSecondary mt-0.5">
@@ -602,7 +779,7 @@ export default function ReservationDetail() {
             <div className="text-danger text-lg leading-none mt-0.5">⚠</div>
             <div className="flex-1">
               <div className="font-semibold text-danger">
-                Guest hasn't arrived — booking was for{" "}
+                Guest hasn't arrived - booking was for{" "}
                 {format(new Date(r.checkInDate), "dd MMM yyyy")}{" "}
                 ({daysLate} day{daysLate === 1 ? "" : "s"} ago).
               </div>
@@ -725,12 +902,49 @@ export default function ReservationDetail() {
                   · actual
                 </span>
               )}
+              {lateOutDisplay && (
+                <span className="ml-1.5 inline-flex items-center gap-1 text-[10px] uppercase tracking-wider text-warning font-semibold">
+                  · +{lateGrantHours}h late · till {format(lateOutDisplay, "h:mm a")}
+                </span>
+              )}
             </div>
             <div className="text-textSecondary text-xs mt-1">
               {isShortStay
                 ? `Day use · ${durationHours} hour${durationHours === 1 ? "" : "s"}`
                 : `${nights} night${nights === 1 ? "" : "s"}`}
             </div>
+            {/* "This stay was extended" belongs on the Dates card, because the
+                per-room ORIGINAL/EXTENDED breakdown below is deliberately
+                suppressed for swap-segmented rows (those rows already show
+                their own windows and subtotals, so repeating the split there
+                would double-count). On a swapped booking that left the
+                extension completely invisible — the only hint was the Undo
+                Extension button. This states it once, for every shape of
+                stay, without touching the billing breakdown.
+                original_check_out_date is stamped on the FIRST extend and
+                never overwritten, so this correctly spans several extends. */}
+            {r.originalCheckOutDate && !isShortStay && (
+              <div
+                className="mt-1.5 inline-flex items-center gap-1.5 rounded-sm bg-warning/10 px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-[#B45309]"
+                title={`Originally booked to ${format(new Date(r.originalCheckOutDate), "dd MMM yyyy")}. Extended to ${format(new Date(r.checkOutDate), "dd MMM yyyy")}.`}
+              >
+                <CalendarPlus className="w-3 h-3" />
+                Extended
+                <span className="font-normal normal-case tracking-normal text-textSecondary">
+                  {format(new Date(r.originalCheckOutDate), "dd MMM")} →{" "}
+                  {format(new Date(r.checkOutDate), "dd MMM")}
+                  {(() => {
+                    const added = differenceInCalendarDays(
+                      new Date(r.checkOutDate),
+                      new Date(r.originalCheckOutDate),
+                    );
+                    return added > 0
+                      ? ` · +${added} night${added === 1 ? "" : "s"}`
+                      : "";
+                  })()}
+                </span>
+              </div>
+            )}
           </div>
         </div>
         <div className="card">
@@ -745,7 +959,7 @@ export default function ReservationDetail() {
           </div>
           {overpaid > 0.009 && (
             <div className="text-xs text-warning font-medium mt-1">
-              Guest overpaid — refund or credit due
+              Guest overpaid - refund or credit due
             </div>
           )}
         </div>
@@ -786,7 +1000,7 @@ export default function ReservationDetail() {
       </div>
 
       <div className="flex flex-wrap gap-2">
-        {r.status === "confirmed" && (
+        {r.status === "confirmed" && can("check_in") && (
           <button
             className="btn-primary"
             onClick={handleStartCheckIn}
@@ -800,7 +1014,7 @@ export default function ReservationDetail() {
                 : "Check In"}
           </button>
         )}
-        {canCheckOut && (
+        {canCheckOut && can("check_out") && (
           <button
             className="btn-primary"
             onClick={() => {
@@ -827,27 +1041,38 @@ export default function ReservationDetail() {
             <FileDown className="w-4 h-4" /> Preview Invoice
           </button>
         )}
-        {(r.status === "checked_in" || r.status === "confirmed") && (
+        {(r.status === "checked_in" || r.status === "confirmed") && can("add_charge") && (
           <button className="btn-secondary inline-flex items-center gap-2" onClick={() => setShowCharge(true)}>
             <Plus className="w-4 h-4" /> Add Charge
           </button>
         )}
-        {(r.status === "checked_in" || r.status === "confirmed") && (
+        {(r.status === "checked_in" || r.status === "confirmed") && can("extend_stay") && (
           <button className="btn-secondary inline-flex items-center gap-2" onClick={() => setShowExtend(true)}>
             <CalendarPlus className="w-4 h-4" /> Extend Stay
           </button>
         )}
-        {(r.status === "checked_in" || r.status === "confirmed") && (
+        {(r.status === "checked_in" || r.status === "confirmed") && can("manage_rooms_on_stay") && (
           <button className="btn-secondary inline-flex items-center gap-2" onClick={() => setShowAddRoom(true)}>
             <BedDouble className="w-4 h-4" /> Add Room
           </button>
         )}
-        {r.status === "checked_in" && (
+        {/* Separate booking for the SAME guest — jumps to New Reservation
+            with the guest preselected, so their KYC on file is reused and
+            the new stay gets its own bill/invoice lifecycle. */}
+        {can("create_reservations") && (
+        <button
+          className="btn-secondary inline-flex items-center gap-2"
+          onClick={() => navigate(`/reservations/new?mode=walkin&guestId=${r.guestId}`)}
+        >
+          <UserRoundPlus className="w-4 h-4" /> New Booking (Same Guest)
+        </button>
+        )}
+        {r.status === "checked_in" && can("extend_stay") && (
           <button className="btn-secondary inline-flex items-center gap-2" onClick={() => setShowLate(true)}>
-            <Clock className="w-4 h-4" /> Late Checkout
+            <Clock className="w-4 h-4" /> Grant Late Checkout
           </button>
         )}
-        {Number(r.balanceDue) > 0.009 && r.status !== "cancelled" && (
+        {Number(r.balanceDue) > 0.009 && r.status !== "cancelled" && can("record_payments") && (
           <button className="btn-secondary inline-flex items-center gap-2" onClick={() => setShowPay(true)}>
             <CreditCard className="w-4 h-4" /> Record Payment
           </button>
@@ -858,7 +1083,8 @@ export default function ReservationDetail() {
             surface and appears only in Reports → Complimentary. No
             invoice/payment changes. Cancelled bookings are excluded. */}
         {["confirmed", "checked_in", "checked_out"].includes(r.status)
-          && r.bookingSource !== "complimentary" && (
+          && r.bookingSource !== "complimentary"
+          && compFeatureOn && can("edit_reservations") && (
           <button
             className="btn-secondary inline-flex items-center gap-2"
             onClick={() => setShowMakeComp(true)}
@@ -867,7 +1093,7 @@ export default function ReservationDetail() {
             <Gift className="w-4 h-4" /> Make Complimentary
           </button>
         )}
-        {r.status === "confirmed" && (
+        {r.status === "confirmed" && can("cancel_reservations") && (
           <button
             className="btn-secondary inline-flex items-center gap-2"
             onClick={async () => {
@@ -892,7 +1118,7 @@ export default function ReservationDetail() {
             <AlertTriangle className="w-4 h-4" /> Mark No-show
           </button>
         )}
-        {canCancel && (
+        {canCancel && can("cancel_reservations") && (
           <button
             className="btn-danger inline-flex items-center gap-2"
             onClick={() => setShowCancel(true)}
@@ -917,7 +1143,7 @@ export default function ReservationDetail() {
             </tr>
           </thead>
           <tbody>
-            {rooms.map((room, roomIndex) => {
+            {rooms.map((room) => {
               // Swap chain context. Rows that share a swap_id are
               // sibling segments of the same swap event. Sort them by
               // effective_from to figure out who's the predecessor
@@ -927,6 +1153,7 @@ export default function ReservationDetail() {
               // actions on closed legs.
               let swapSiblingNumber: string | null = null;
               let swapDirection: "to" | "from" | null = null;
+              let swapSiblingRate: string | null = null;
               if (room.swapId) {
                 const siblings = rooms
                   .filter((rr) => rr.swapId === room.swapId)
@@ -945,9 +1172,11 @@ export default function ReservationDetail() {
                   if (idx === siblings.length - 1) {
                     swapDirection = "from";
                     swapSiblingNumber = siblings[idx - 1]!.roomNumber;
+                    swapSiblingRate = siblings[idx - 1]!.ratePerNight;
                   } else {
                     swapDirection = "to";
                     swapSiblingNumber = siblings[idx + 1]!.roomNumber;
+                    swapSiblingRate = siblings[idx + 1]!.ratePerNight;
                   }
                 }
               }
@@ -960,6 +1189,18 @@ export default function ReservationDetail() {
                 !swapSiblingNumber && (room.swapHistory ?? []).length > 0
                   ? room.swapHistory ?? []
                   : [];
+              // A room added mid-stay via Add Room is segmented (it has its own
+              // effective window) but is NOT a swap — no swapId, no swapped-from
+              // link, no swap history. The row must not be read as a swap: the
+              // timeline badge would fall back to a bare "Swapped" pill and the
+              // breakdown would mislabel its nights "Stay Extension" just
+              // because they fall after the original checkout.
+              const isSwapRow =
+                !!room.swapId ||
+                !!room.swappedFromRoom ||
+                (room.swapHistory ?? []).length > 0;
+              const isAddedRoom =
+                !isSwapRow && !!(room.effectiveFrom || room.effectiveTo);
               return (
                 <Fragment key={room.id}>
                   {virtualHistory.map((hop) =>
@@ -985,31 +1226,34 @@ export default function ReservationDetail() {
                     nights={nights}
                     swapSiblingNumber={swapSiblingNumber}
                     swapDirection={swapDirection}
+                    swapSiblingRate={swapSiblingRate}
+                    isAddedRoom={isAddedRoom}
                     onSaved={invalidate}
-                    onInvoiceIssuedNeedsPayment={(inv) =>
-                      setPostIssuePay({
-                        invoiceId: inv.id,
-                        invoiceNumber: inv.invoiceNumber,
-                        balanceDue: inv.balanceDue,
-                      })
-                    }
                   />
-                  {/* Extended-stay breakdown, once, under the first room.
-                      Skipped for day-use and for swap-segmented rows, where
-                      the per-room window already drives the subtotal. */}
-                  {roomIndex === 0 &&
-                    r.originalCheckOutDate &&
-                    r.stayType !== "short_stay" &&
-                    !room.effectiveFrom &&
-                    !room.effectiveTo && (
+                  {/* Extended-stay breakdown, per room, against THAT room's
+                      own window.
+                      Previously this rendered only under the first room and
+                      only when the row was unsegmented — so on a swapped
+                      booking the extension became invisible in this table
+                      entirely. Splitting per room fixes that without
+                      double-counting: each row's nights are clamped to its own
+                      [effective_from, effective_to), so the segment rows and
+                      these sub-rows describe the same nights once.
+                      Rendered for EVERY room of an extended booking, so the
+                      table always attributes each room's nights to either the
+                      original booking or the extension. A room lying wholly on
+                      one side simply yields a single row (the other portion is
+                      0n and ExtensionBreakdownRows skips it). */}
+                  {r.originalCheckOutDate && r.stayType !== "short_stay" && (
                       <ExtensionBreakdownRows
-                        checkInDate={r.checkInDate}
+                        windowFrom={room.effectiveFrom ?? r.checkInDate}
+                        windowTo={room.effectiveTo ?? r.checkOutDate}
                         originalCheckOut={r.originalCheckOutDate}
-                        currentCheckOut={r.checkOutDate}
                         ratePerNight={room.ratePerNight}
                         displayType={
                           room.displayType ?? room.roomType.replace(/_/g, " ")
                         }
+                        mode={isAddedRoom ? "added" : "split"}
                       />
                     )}
                 </Fragment>
@@ -1039,7 +1283,19 @@ export default function ReservationDetail() {
                   reservationId={r.id}
                   charge={c}
                   gstMode={r.gstMode ?? "exclusive"}
-                  canEdit={!invoice}
+                  // Charge mutations are permission-gated (cash-skim vector):
+                  // edit needs edit_reservations, delete needs delete_charge
+                  // (deliberately absent from the front-desk role).
+                  canEdit={!invoice && can("edit_reservations")}
+                  // Extension charges are deliberately NOT deletable here:
+                  // they hold only the rate delta, so removing one leaves
+                  // the stay extended but billed at the old room rate. Undo
+                  // Extension rolls the dates and the charge back together.
+                  canDelete={
+                    !invoice &&
+                    can("delete_charge") &&
+                    c.source !== "stay_extension"
+                  }
                   onSaved={invalidate}
                 />
               ))}
@@ -1289,7 +1545,7 @@ export default function ReservationDetail() {
                       />
                       {showReversed ? "Hide" : "Show"} reversed ({reversedDocs.length})
                       <span className="text-[10px] text-textSecondary/70">
-                        — paid invoices replaced via credit note, kept for GST
+                        - paid invoices replaced via credit note, kept for GST
                       </span>
                     </button>
                     {showReversed && (
@@ -1369,7 +1625,9 @@ export default function ReservationDetail() {
       {showCharge && (
         <ChargeModal
           reservationId={r.id}
-          rooms={r.rooms.map((rm) => ({
+          // Live rooms only — a charge attributed to a room the guest has
+          // already swapped out of sits on a closed leg.
+          rooms={liveRooms.map((rm) => ({
             id: rm.id,
             roomNumber: rm.roomNumber,
             invoiced: !!rm.roomInvoiceId,
@@ -1417,17 +1675,26 @@ export default function ReservationDetail() {
           totalGst={Number(r.gstAmount)}
           grandTotal={Number(r.grandTotal)}
           totalPaid={Number(totalPaid)}
-          remainingRoomCount={r.rooms.filter((rm) => !rm.roomInvoiceId).length}
-          remainingRooms={r.rooms
-            .filter((rm) => !rm.roomInvoiceId)
-            .map((rm) => ({ roomNumber: rm.roomNumber, occupantName: null }))}
+          // Counts OCCUPANCIES, not rows. A segmented swap leaves a row for
+          // the vacated room too, so counting rows made a one-room swapped
+          // stay look like two rooms — which flipped the checkout into
+          // per-room invoicing and offered the Combine toggle for a single
+          // guest. The API groups swap legs onto one invoice (they share
+          // swap_id); this mirrors that grouping so the UI and the bill agree.
+          remainingRoomCount={uninvoicedOccupancies.length}
+          remainingRooms={uninvoicedOccupancies.map((g) => ({
+            // Whole chain, so the desk sees "101 → 102" rather than a room
+            // the guest already left.
+            roomNumber: g.map((rm) => rm.roomNumber).join(" → "),
+            occupantName: null,
+          }))}
           alreadyInvoicedRooms={r.rooms
             .filter((rm) => rm.roomInvoiceId)
             .map((rm) => {
               const inv = r.invoices?.find((i) => i.id === rm.roomInvoiceId);
               return {
                 roomNumber: rm.roomNumber,
-                invoiceNumber: inv?.invoiceNumber ?? "—",
+                invoiceNumber: inv?.invoiceNumber ?? "-",
               };
             })}
           additionalCharges={charges.map((c) => ({
@@ -1575,7 +1842,7 @@ export default function ReservationDetail() {
                 phone: settingsQ.data.hotelPhone,
                 ownerPhone: settingsQ.data.ownerPhone,
                 gstin: settingsQ.data.hotelGstin,
-                logoUrl: settingsQ.data.hotelLogoUrl ?? "/logo.jpg",
+                logoUrl: settingsQ.data.hotelLogoUrl ?? "/logo.png",
                 checkInTime: settingsQ.data.checkInTime,
                 checkOutTime: settingsQ.data.checkOutTime,
               },
@@ -1652,7 +1919,7 @@ export default function ReservationDetail() {
                   phone: settingsQ.data.hotelPhone,
                   ownerPhone: settingsQ.data.ownerPhone,
                   gstin: settingsQ.data.hotelGstin,
-                  logoUrl: settingsQ.data.hotelLogoUrl ?? "/logo.jpg",
+                  logoUrl: settingsQ.data.hotelLogoUrl ?? "/logo.png",
                   checkInTime: settingsQ.data.checkInTime,
                   checkOutTime: settingsQ.data.checkOutTime,
                 },
@@ -1669,7 +1936,14 @@ export default function ReservationDetail() {
           reservationId={r.id}
           currentCheckOut={r.checkOutDate}
           currentRate={rooms[0]?.ratePerNight ?? "0"}
-          rooms={r.rooms.map((rm) => ({
+          // Only rooms the guest is actually still in. After a mid-stay swap
+          // the booking keeps a row for the vacated room too, bounded to end
+          // at the swap date — offering it here listed "2 of 2 rooms" for a
+          // one-room stay and, if left ticked, made the server re-block a
+          // sellable room and double the extension rate delta. A closed leg
+          // is any row ending before the reservation's own checkout; the live
+          // leg ends exactly at it (NULL = unsegmented, always live).
+          rooms={liveRooms.map((rm) => ({
             id: rm.id,
             roomNumber: rm.roomNumber,
             invoiced: !!rm.roomInvoiceId,
@@ -1685,7 +1959,7 @@ export default function ReservationDetail() {
             setShowExtend(false);
             invalidate();
             toast(
-              `Split off ${created.reservationNumber} — opening it now`,
+              `Split off ${created.reservationNumber} - opening it now`,
               "success",
             );
             navigate(`/reservations/${created.reservationNumber}`);
@@ -1828,8 +2102,12 @@ function paymentFamilyLabel(notes: string | null): string | null {
     // the " · part Y/Z" trailer so siblings collapse.
     return trimmed.replace(/\s*·\s*part \d+\/\d+.*$/, "").replace(/\s*\(Room [^)]+\)/, "");
   }
-  if (trimmed.startsWith("Booking — no advance collected")) {
-    return "Booking — no advance collected";
+  // Both spellings: legacy rows in the DB carry the em-dash version.
+  if (
+    trimmed.startsWith("Booking — no advance collected") ||
+    trimmed.startsWith("Booking - no advance collected")
+  ) {
+    return "Booking - no advance collected";
   }
   return null;
 }
@@ -1938,8 +2216,8 @@ function SwapClosedLegRow(props: {
         )}
       </td>
       <td className="capitalize text-textSecondary">{props.fromRoom.displayType}</td>
-      <td className="font-mono tabular-nums text-textSecondary">—</td>
-      <td className="font-mono tabular-nums text-textSecondary">—</td>
+      <td className="font-mono tabular-nums text-textSecondary">-</td>
+      <td className="font-mono tabular-nums text-textSecondary">-</td>
       <td className="text-right">
         <span className="text-[10px] uppercase tracking-wider font-semibold px-2 py-0.5 rounded-sm bg-textSecondary/10 text-textSecondary">
           closed
@@ -1955,20 +2233,43 @@ function SwapClosedLegRow(props: {
 // booking and the extension, each with its own nights × rate = subtotal —
 // the desk reads the extension as a first-class line, not buried in a total.
 // Rendered once, under the first room row (mirrors SwapClosedLegRow's shape).
+// Splits ONE room's nights either side of the originally-booked checkout.
+//
+// The window is the room's own [effective_from, effective_to) when the row is
+// swap-segmented, else the reservation's dates. Clamping to that window is
+// what makes this safe on a swapped booking: the reservation-level split would
+// re-count nights the segment rows already show. A room lying wholly on one
+// side of the original checkout simply yields one row (the other is 0n and is
+// not rendered).
 function ExtensionBreakdownRows(props: {
-  checkInDate: string;
+  windowFrom: string;
+  windowTo: string;
   originalCheckOut: string;
-  currentCheckOut: string;
   ratePerNight: string;
   displayType: string;
+  // "added" = the room was booked mid-stay via Add Room, not part of the
+  // original booking and not the checkout extension. Its whole window is one
+  // "Added room" row — splitting it at the original checkout would mislabel it
+  // "Stay Extension" just because its dates happen to fall after that date.
+  mode?: "split" | "added";
 }) {
   const dayMs = 24 * 60 * 60 * 1000;
   const rate = Number(props.ratePerNight);
   const nightsBetween = (from: string, to: string) =>
     Math.max(0, Math.round((new Date(to).getTime() - new Date(from).getTime()) / dayMs));
+  // yyyy-MM-dd compares correctly as a string, so no Date round-trip needed.
+  const earlier = (a: string, b: string) => (a < b ? a : b);
+  const later = (a: string, b: string) => (a > b ? a : b);
 
-  const origNights = nightsBetween(props.checkInDate, props.originalCheckOut);
-  const extNights = nightsBetween(props.originalCheckOut, props.currentCheckOut);
+  // Portion of THIS room's window before the original checkout...
+  const origFrom = props.windowFrom;
+  const origTo = earlier(props.windowTo, props.originalCheckOut);
+  // ...and the portion after it.
+  const extFrom = later(props.windowFrom, props.originalCheckOut);
+  const extTo = props.windowTo;
+
+  const origNights = nightsBetween(origFrom, origTo);
+  const extNights = nightsBetween(extFrom, extTo);
 
   const seg = (
     label: string,
@@ -1998,15 +2299,25 @@ function ExtensionBreakdownRows(props: {
     </tr>
   );
 
+  if (props.mode === "added") {
+    const n = nightsBetween(props.windowFrom, props.windowTo);
+    return n > 0
+      ? seg("Added room", props.windowFrom, props.windowTo, n, {
+          text: "Added",
+          cls: "bg-brand-soft text-brand-dark border-brand-dark/30",
+        })
+      : null;
+  }
+
   return (
     <>
       {origNights > 0 &&
-        seg("Original booking", props.checkInDate, props.originalCheckOut, origNights, {
+        seg("Original booking", origFrom, origTo, origNights, {
           text: "Original",
           cls: "bg-textSecondary/10 text-textSecondary border-textSecondary/30",
         })}
       {extNights > 0 &&
-        seg("Stay extension", props.originalCheckOut, props.currentCheckOut, extNights, {
+        seg("Stay extension", extFrom, extTo, extNights, {
           text: "Extended",
           cls: "bg-accentBlue/10 text-accentBlue border-accentBlue/30",
         })}
@@ -2093,20 +2404,16 @@ function RoomRow(props: {
   // on closed legs.
   swapSiblingNumber?: string | null;
   swapDirection?: "to" | "from" | null;
+  // The sibling segment's per-night rate — lets the active leg show a
+  // "₹1,700 → ₹1,500/night" tag when a swap changed the price.
+  swapSiblingRate?: string | null;
+  // True when this segmented row is a mid-stay ADDED room, not a swap leg.
+  // Drives an "Added" timeline badge instead of the swap pill.
+  isAddedRoom?: boolean;
   onSaved: () => void;
-  // Called when a per-room invoice was just issued AND it still has a
-  // balance to collect. The parent uses this to surface the Record
-  // Payment modal (same flow as the combined-invoice issue path).
-  onInvoiceIssuedNeedsPayment?: (inv: {
-    id: string;
-    invoiceNumber: string;
-    balanceDue: number;
-  }) => void;
 }) {
-  const dialog = useDialog();
   const rate = Number(props.room.ratePerNight);
-  const [perRoomBusy, setPerRoomBusy] = useState<null | "checkout" | "invoice">(null);
-  const [perRoomError, setPerRoomError] = useState<string | null>(null);
+  const { can } = useAuth();
   const [showRoomCheckout, setShowRoomCheckout] = useState(false);
   const [showSwap, setShowSwap] = useState(false);
 
@@ -2135,56 +2442,6 @@ function RoomRow(props: {
         ),
       )
     : props.nights;
-
-  // Per-room invoice. The API uses migration 0017's invoices.scope='room'.
-  const issueRoomInvoice = useMutation({
-    mutationFn: () =>
-      api.post<{
-        id: string;
-        invoiceNumber: string;
-        grandTotal: string;
-        balanceDue: string;
-        status: string;
-      }>(`/reservations/${props.reservationId}/invoice`, {
-        scope: "room",
-        roomId: props.room.id,
-      }),
-    onMutate: () => {
-      setPerRoomBusy("invoice");
-      setPerRoomError(null);
-    },
-    onSuccess: (inv) => {
-      props.onSaved();
-      const owed = Number(inv.balanceDue);
-      if (owed > 0.009 && props.onInvoiceIssuedNeedsPayment) {
-        props.onInvoiceIssuedNeedsPayment({
-          id: inv.id,
-          invoiceNumber: inv.invoiceNumber,
-          balanceDue: owed,
-        });
-      }
-    },
-    onError: (e: Error) => setPerRoomError(e.message),
-    onSettled: () => setPerRoomBusy(null),
-  });
-
-  // Two-step confirmation before issuing a per-room invoice. Once issued,
-  // editing the bill means voiding + re-issuing — a destructive workflow —
-  // so we make staff explicitly confirm to avoid accidental clicks.
-  async function confirmAndIssueInvoice() {
-    const lineTotal = rate * Math.max(1, props.nights);
-    const ok = await dialog.confirm({
-      title: `Issue invoice for Room ${props.room.roomNumber}?`,
-      message: `A separate tax invoice will be generated for this room (${
-        props.room.displayType ?? props.room.roomType.replace(/_/g, " ")
-      } · ₹${rate.toFixed(0)}/night × ${props.nights} night${
-        props.nights === 1 ? "" : "s"
-      } ≈ ₹${lineTotal.toFixed(2)} + GST). This action issues the invoice immediately — to change anything later you'll need to void & re-issue.`,
-      okLabel: "Issue invoice",
-      cancelLabel: "Cancel",
-    });
-    if (ok) issueRoomInvoice.mutate();
-  }
 
   // Per-room status pill colours. Maps the new reservation-room
   // statuses to badge styles (different from physical room status).
@@ -2288,12 +2545,27 @@ function RoomRow(props: {
             </div>
           );
         })()}
+        {/* Added-room timeline. A room booked mid-stay via Add Room is
+            segmented but is NOT a swap — it must not borrow the swap pill,
+            which fell back to a bare "Swapped" here because there is no
+            sibling leg to name. */}
+        {isSegmented && props.isAddedRoom && (
+          <div className="mt-1 flex items-center gap-1.5 flex-wrap">
+            <span className="text-[9px] uppercase tracking-wide font-semibold px-1.5 py-0.5 rounded border bg-brand-soft text-brand-dark border-brand-dark/30">
+              Added mid-stay
+            </span>
+            <span className="text-[11px] text-textSecondary font-mono">
+              {format(new Date(segFrom), "dd MMM")} →{" "}
+              {format(new Date(segTo), "dd MMM")} · {rowNights}n
+            </span>
+          </div>
+        )}
         {/* Segment timeline (0019). Shows the swap direction so staff
             instantly read the row's role — "Swapped TO Room 205" on
             the closed leg, "Swapped FROM Room 203" on the active leg.
             Falls back to a plain "Swapped" pill when the sibling
             isn't on the response (e.g. data races, legacy rows). */}
-        {isSegmented && (
+        {isSegmented && !props.isAddedRoom && (
           <div className="mt-1 flex items-center gap-1.5 flex-wrap">
             <span
               className={`text-[9px] uppercase tracking-wide font-semibold px-1.5 py-0.5 rounded border ${
@@ -2322,6 +2594,18 @@ function RoomRow(props: {
                 · {props.room.swapReason}
               </span>
             )}
+            {/* Rate change from the swap — shown on the ACTIVE leg only
+                (that's the row the guest is paying on now). */}
+            {props.swapDirection === "from" &&
+              props.swapSiblingRate &&
+              Math.abs(Number(props.swapSiblingRate) - Number(props.room.ratePerNight)) > 0.009 && (
+                <span className="text-[11px] font-semibold text-warning">
+                  · {inr(Number(props.swapSiblingRate))} → {inr(Number(props.room.ratePerNight))}
+                  /night (
+                  {Number(props.room.ratePerNight) < Number(props.swapSiblingRate) ? "-" : "+"}
+                  {inr(Math.abs(Number(props.room.ratePerNight) - Number(props.swapSiblingRate)))})
+                </span>
+              )}
           </div>
         )}
         {hasAnyAmenity && (
@@ -2376,7 +2660,7 @@ function RoomRow(props: {
           // read-only.
           <span
             className="text-[10px] font-mono text-textSecondary px-1.5 py-0.5 rounded bg-textSecondary/10 border border-textSecondary/20"
-            title={`Vacated on ${format(new Date(segTo), "dd MMM yyyy")} — guest moved to Room ${props.swapSiblingNumber}`}
+            title={`Vacated on ${format(new Date(segTo), "dd MMM yyyy")} - guest moved to Room ${props.swapSiblingNumber}`}
           >
             closed
           </span>
@@ -2409,7 +2693,7 @@ function RoomRow(props: {
                     }
                   />
                 )}
-              {props.room.roomStatus === "checked_in" && !props.room.roomInvoiceId && (
+              {props.room.roomStatus === "checked_in" && !props.room.roomInvoiceId && can("manage_rooms_on_stay") && (
                 <button
                   className="btn-secondary !h-7 !px-2 text-xs"
                   onClick={() => setShowSwap(true)}
@@ -2422,33 +2706,29 @@ function RoomRow(props: {
                   Swap
                 </button>
               )}
-              {props.room.roomStatus === "checked_in" && (
+              {props.room.roomStatus === "checked_in" && can("check_out") && (
                 <button
                   className="btn-secondary !h-7 !px-2 text-xs"
-                  disabled={perRoomBusy !== null}
                   onClick={() => setShowRoomCheckout(true)}
                   title="Check this guest out & collect payment"
                 >
                   Check Out
                 </button>
               )}
-              {/* "Issue Invoice" removed: invoices are generated by the
-                  payment/checkout flows (per-room Check Out or the
+              {/* No "Issue Invoice" here by design: invoices are generated
+                  by the payment/checkout flows (per-room Check Out or the
                   reservation-level Check Out & Generate Invoice), never
-                  ahead of payment. confirmAndIssueInvoice + the API route
-                  stay for the checkout flow's internal use. */}
+                  ahead of payment. The API's invoices.scope='room' path is
+                  still driven from the checkout flow below. */}
               {props.room.roomInvoiceId && (
                 <span
                   className="text-[10px] font-mono text-success px-1.5 py-0.5 rounded bg-success/10 border border-success/30"
-                  title="A per-room invoice exists for this room — see Invoices section"
+                  title="A per-room invoice exists for this room - see Invoices section"
                 >
                   invoiced
                 </span>
               )}
             </div>
-            {perRoomError && (
-              <div className="text-[11px] text-danger mt-1 font-normal">{perRoomError}</div>
-            )}
           </>
         )}
       </td>
@@ -2604,6 +2884,22 @@ function SwapRoomModal(props: {
     enabled: probeIn < probeOut,
   });
 
+  const qc = useQueryClient();
+  // Dirty rooms stay in the availability result (a checked-out room a guest
+  // could still move into). Same gate as the New Reservation and Add Room
+  // pickers: a dirty room can't be selected until it's marked clean, so a
+  // guest is never assigned an unturned room.
+  const markClean = useMutation({
+    mutationFn: (roomId: string) =>
+      api.patch(`/rooms/${roomId}/status`, { status: "available", reason: "Cleaned for room swap" }),
+    onSuccess: (_data, roomId) => {
+      qc.setQueryData<AvailRoom[]>(["availability", probeIn, probeOut], (cur) =>
+        cur?.map((r) => (r.id === roomId ? { ...r, status: "available" } : r)) ?? cur,
+      );
+      qc.invalidateQueries({ queryKey: ["rooms"] });
+    },
+  });
+
   const swap = useMutation({
     mutationFn: () => {
       const parsedRate = rateOverride.trim() === "" ? null : Number(rateOverride);
@@ -2688,7 +2984,7 @@ function SwapRoomModal(props: {
             <>
               Day-use guest in room <strong>{props.fromRoomNumber}</strong>.
               Pick the new room. The rate auto-fills to the new room's base
-              rate — edit it if needed.
+              rate - edit it if needed.
             </>
           ) : moveWholeStay ? (
             <>
@@ -2696,7 +2992,7 @@ function SwapRoomModal(props: {
               {format(new Date(props.segmentFrom), "dd MMM")} →{" "}
               {format(new Date(props.segmentTo), "dd MMM")}). The whole stay
               moves to the new room now. Pick the new room. The rate
-              auto-fills to the new room's base rate — edit it if needed.
+              auto-fills to the new room's base rate - edit it if needed.
             </>
           ) : (
             <>
@@ -2705,7 +3001,7 @@ function SwapRoomModal(props: {
               <strong>{format(new Date(props.segmentFrom), "dd MMM")}</strong>{" "}
               to <strong>{format(new Date(props.segmentTo), "dd MMM")}</strong>.
               Pick the date the guest moves and the new room. The rate
-              auto-fills to the new room's base rate — edit it if needed.
+              auto-fills to the new room's base rate - edit it if needed.
             </>
           )}
         </div>
@@ -2832,7 +3128,7 @@ function SwapRoomModal(props: {
                 </label>
                 <input
                   className="input"
-                  placeholder="Short summary — e.g. AC not cooling"
+                  placeholder="Short summary - e.g. AC not cooling"
                   value={issueTitle}
                   onChange={(e) => setIssueTitle(e.target.value)}
                   maxLength={200}
@@ -2844,7 +3140,7 @@ function SwapRoomModal(props: {
                 </label>
                 <textarea
                   className="input min-h-[72px]"
-                  placeholder="Details that help the technician — when noticed, what was tried, etc."
+                  placeholder="Details that help the technician - when noticed, what was tried, etc."
                   value={issueDescription}
                   onChange={(e) => setIssueDescription(e.target.value)}
                   maxLength={2000}
@@ -2898,34 +3194,71 @@ function SwapRoomModal(props: {
               <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
                 {rooms.map((rm) => {
                   const active = toRoomId === rm.id;
+                  const isDirty = rm.status === "dirty";
+                  const cleanInFlight =
+                    markClean.isPending && markClean.variables === rm.id;
+                  // Pick a room: set it as the target and auto-fill its base
+                  // rate (one click for the common case; editable before
+                  // confirming).
+                  const select = () => {
+                    setToRoomId(rm.id);
+                    setRateOverride(String(Number(rm.baseRate).toFixed(0)));
+                  };
                   return (
-                    <button
+                    <div
                       key={rm.id}
-                      type="button"
-                      onClick={() => {
-                        setToRoomId(rm.id);
-                        // Auto-fill the rate with the new room's base
-                        // rate so the most common case (use the listed
-                        // rate) is one click. Staff can edit before
-                        // confirming.
-                        setRateOverride(String(Number(rm.baseRate).toFixed(0)));
-                      }}
                       className={`p-2.5 rounded-sm border-2 text-left transition-colors ${
                         active
                           ? "border-brand-dark bg-brand-soft"
-                          : "border-borderc hover:border-brand-dark hover:bg-bg"
+                          : isDirty
+                            ? "border-warning/50 bg-warning/5"
+                            : "border-borderc hover:border-brand-dark hover:bg-bg"
                       }`}
                     >
-                      <div className="font-mono font-bold text-brand-dark text-sm">
-                        {rm.roomNumber}
-                      </div>
-                      <div className="text-[11px] text-textSecondary capitalize truncate">
-                        {rm.roomType}
-                      </div>
-                      <div className="text-[11px] text-textSecondary font-mono mt-0.5">
-                        ₹{Number(rm.baseRate).toFixed(0)}/n
-                      </div>
-                    </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          // A dirty room must be cleaned first — block the
+                          // plain tap and let the "Mark clean & select"
+                          // affordance below do the assignment.
+                          if (isDirty && !active) return;
+                          select();
+                        }}
+                        className="text-left w-full"
+                        aria-disabled={isDirty && !active}
+                      >
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <span className="font-mono font-bold text-brand-dark text-sm leading-tight">
+                            {rm.roomNumber}
+                          </span>
+                          {isDirty && (
+                            <span className="inline-flex items-center gap-0.5 px-1 py-0.5 rounded-sm text-[9px] font-semibold bg-warning/15 text-warning">
+                              <SprayCan className="w-2.5 h-2.5" /> DIRTY
+                            </span>
+                          )}
+                        </div>
+                        <div className="text-[11px] text-textSecondary capitalize truncate mt-0.5">
+                          {rm.roomType}
+                        </div>
+                        <div className="text-[11px] text-textSecondary font-mono mt-1">
+                          ₹{Number(rm.baseRate).toFixed(0)}/n
+                        </div>
+                      </button>
+                      {isDirty && !active && (
+                        <button
+                          type="button"
+                          disabled={cleanInFlight}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            markClean.mutate(rm.id, { onSuccess: () => select() });
+                          }}
+                          className="mt-2 w-full inline-flex items-center justify-center gap-1 px-1.5 h-7 rounded-sm border border-warning/50 text-warning hover:bg-warning/10 text-[11px] font-semibold disabled:opacity-50"
+                        >
+                          <SprayCan className="w-3 h-3" />
+                          {cleanInFlight ? "Cleaning…" : "Mark clean & select"}
+                        </button>
+                      )}
+                    </div>
                   );
                 })}
               </div>
@@ -3024,13 +3357,25 @@ function SwapRoomModal(props: {
 
 function ChargeRow(props: {
   reservationId: string;
-  charge: { id: string; description: string; amount: string; gstRate: string; createdAt: string; quantity?: number; rate?: string };
+  charge: {
+    id: string;
+    description: string;
+    amount: string;
+    gstRate: string;
+    createdAt: string;
+    quantity?: number;
+    rate?: string;
+    // "stay_extension" rows are written by Extend Stay and hold only the
+    // rate delta — deleting one under-bills the stay without undoing it.
+    source?: "manual" | "stay_extension";
+  };
   // Reservation's GST mode. In inclusive mode the stored `amount` is
   // NET (recalc adds GST on top to reach the gross the guest agreed
   // to), so we display gross here. In exclusive mode `amount` is
   // already what the guest pays for this line, so we display as-is.
   gstMode: "exclusive" | "inclusive";
   canEdit: boolean;
+  canDelete: boolean;
   onSaved: () => void;
 }) {
   const dialog = useDialog();
@@ -3130,30 +3475,46 @@ function ChargeRow(props: {
         )}
       </td>
       <td className="text-right">
-        {props.canEdit && !editing && (
+        {/* Explain the missing delete button rather than leaving a blank gap —
+            staff previously deleted this row expecting it to undo the
+            extension, and instead silently under-billed the stay. */}
+        {props.charge.source === "stay_extension" && !editing && (
+          <span
+            className="mr-1 inline-flex items-center gap-1 text-[10px] uppercase tracking-wider text-textSecondary"
+            title="Part of the stay extension. Use Undo Extension to roll back the dates and this charge together — deleting it alone would leave the stay extended but billed at the old room rate."
+          >
+            <Lock className="w-3 h-3" />
+            Extension
+          </span>
+        )}
+        {(props.canEdit || props.canDelete) && !editing && (
           <div className="inline-flex gap-1">
-            <button
-              className="btn-secondary !h-7 !px-2"
-              onClick={() => setEditing(true)}
-              title="Edit"
-            >
-              <Pencil className="w-3.5 h-3.5" />
-            </button>
-            <button
-              className="btn-secondary !h-7 !px-2 text-danger"
-              onClick={async () => {
-                const ok = await dialog.confirm({
-                  title: "Delete charge",
-                  message: `Remove "${props.charge.description}" from this reservation?`,
-                  okLabel: "Delete",
-                  tone: "danger",
-                });
-                if (ok) del.mutate();
-              }}
-              title="Delete"
-            >
-              <Trash2 className="w-3.5 h-3.5" />
-            </button>
+            {props.canEdit && (
+              <button
+                className="btn-secondary !h-7 !px-2"
+                onClick={() => setEditing(true)}
+                title="Edit"
+              >
+                <Pencil className="w-3.5 h-3.5" />
+              </button>
+            )}
+            {props.canDelete && (
+              <button
+                className="btn-secondary !h-7 !px-2 text-danger"
+                onClick={async () => {
+                  const ok = await dialog.confirm({
+                    title: "Delete charge",
+                    message: `Remove "${props.charge.description}" from this reservation?`,
+                    okLabel: "Delete",
+                    tone: "danger",
+                  });
+                  if (ok) del.mutate();
+                }}
+                title="Delete"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+              </button>
+            )}
           </div>
         )}
         {editing && (
@@ -3304,7 +3665,12 @@ function AddRoomModal(props: {
   onClose: () => void;
   onSaved: () => void;
 }) {
-  const today = new Date().toISOString().slice(0, 10);
+  // The DESK's calendar day, not UTC. toISOString() is 5h30 behind IST, so
+  // during the night-audit window (00:00-05:30) it returns YESTERDAY — the
+  // mid-stay add-room defaulted to a back-dated start and billed an extra
+  // night, and the picker's `min` allowed it. Matches the swap modal, which
+  // already uses format() for exactly this reason.
+  const today = format(new Date(), "yyyy-MM-dd");
   const isShortStay = props.stayType === "short_stay";
   // Day-use: start = the booking's single date, no separate start
   // picker. Overnight: default start = max(today, checkInDate) so the
@@ -3315,6 +3681,9 @@ function AddRoomModal(props: {
       ? props.checkInDate
       : today;
   const [startDate, setStartDate] = useState(defaultStart);
+  // Optional early end for the added room — defaults to the parent's
+  // check-out, can be pulled in (never pushed past it).
+  const [endDate, setEndDate] = useState(props.checkOutDate);
   // Probe window. For day-use we widen to [d, d+1) so the API's
   // daterange overlap check actually fires (a same-day [d, d) range
   // is empty in Postgres and silently matches nothing).
@@ -3322,7 +3691,7 @@ function AddRoomModal(props: {
     ? new Date(new Date(props.checkInDate).getTime() + 86400000)
         .toISOString()
         .slice(0, 10)
-    : props.checkOutDate;
+    : endDate;
   // Selected rooms keyed by id → chosen rate per night. Adding/removing a
   // room mutates this map; the rate seeds from the room's base rate but
   // staff can edit each one independently.
@@ -3378,8 +3747,7 @@ function AddRoomModal(props: {
     : Math.max(
         0,
         Math.round(
-          (new Date(props.checkOutDate).getTime() - new Date(startDate).getTime()) /
-            86400000,
+          (new Date(endDate).getTime() - new Date(startDate).getTime()) / 86400000,
         ),
       );
   const grandPreview = pickedIds.reduce(
@@ -3399,6 +3767,8 @@ function AddRoomModal(props: {
           roomId: id,
           ratePerNight: picked[id],
           startDate,
+          // Only sent when staff pulled it in from the parent's check-out.
+          ...(endDate !== props.checkOutDate ? { endDate } : {}),
         });
         setProgress({ done: i + 1, total: pickedIds.length });
       }
@@ -3427,7 +3797,7 @@ function AddRoomModal(props: {
         <OverdueWarning minutesOverdue={props.minutesOverdue ?? 0} />
         {isShortStay ? (
           <div className="text-xs text-textSecondary rounded-sm bg-bg/60 border border-borderc px-3 py-2">
-            Day-use booking — the added room covers the same date (
+            Day-use booking - the added room covers the same date (
             <strong>{format(new Date(props.checkInDate), "dd MMM yyyy")}</strong>) at a
             flat rate. Date pickers don't apply.
           </div>
@@ -3450,11 +3820,22 @@ function AddRoomModal(props: {
             <div>
               <label className="label block mb-1">End Date (check-out)</label>
               <input
-                className="input bg-bg/50 cursor-not-allowed"
+                className="input"
                 type="date"
-                value={props.checkOutDate}
-                disabled
+                min={startDate}
+                max={props.checkOutDate}
+                value={endDate}
+                onChange={(e) => {
+                  setEndDate(e.target.value);
+                  setPicked({});
+                }}
               />
+              {endDate < props.checkOutDate && (
+                <div className="text-[11px] text-textSecondary mt-1">
+                  Room leaves the booking on {format(new Date(endDate), "dd MMM")} - before
+                  the stay's check-out.
+                </div>
+              )}
             </div>
           </div>
         )}
@@ -3533,7 +3914,7 @@ function AddRoomModal(props: {
                                   </span>
                                   {isDirty && (
                                     <span className="inline-flex items-center gap-0.5 px-1 py-0.5 rounded-sm text-[9px] font-semibold bg-warning/15 text-warning">
-                                      <Sparkles className="w-2.5 h-2.5" /> DIRTY
+                                      <SprayCan className="w-2.5 h-2.5" /> DIRTY
                                     </span>
                                   )}
                                 </div>
@@ -3556,7 +3937,7 @@ function AddRoomModal(props: {
                                   }}
                                   className="mt-2 w-full inline-flex items-center justify-center gap-1 px-1.5 h-7 rounded-sm border border-warning/50 text-warning hover:bg-warning/10 text-[11px] font-semibold disabled:opacity-50"
                                 >
-                                  <Sparkles className="w-3 h-3" />
+                                  <SprayCan className="w-3 h-3" />
                                   {cleanInFlight ? "Cleaning…" : "Mark clean & select"}
                                 </button>
                               )}
@@ -3975,7 +4356,7 @@ function ExtendModal(props: {
                   un-picked rooms stay on this reservation unchanged.
                 </>
               ) : (
-                <>All rooms extend together — same reservation, new check-out date.</>
+                <>All rooms extend together - same reservation, new check-out date.</>
               )}
             </div>
           </div>
@@ -4014,7 +4395,7 @@ function ExtendModal(props: {
                       setMoves((m) => ({ ...m, [b.roomId]: e.target.value }))
                     }
                   >
-                    <option value="">— don't extend this room —</option>
+                    <option value="">- don't extend this room -</option>
                     {(optionsQ.data?.alternatives ?? [])
                       // An alternative can only take one guest.
                       .filter(
@@ -4038,7 +4419,7 @@ function ExtendModal(props: {
               </div>
             )}
             <div className="text-[11px] text-textSecondary leading-tight">
-              Picking a room books a continuation reservation for the same guest —
+              Picking a room books a continuation reservation for the same guest -
               details and KYC carry over, nothing to re-enter. The guest confirms
               with a one-time code.
             </div>
@@ -4349,10 +4730,12 @@ function LateCheckoutModal(props: {
   });
 
   return (
-    <ModalShell title="Late Checkout" onClose={props.onClose}>
+    <ModalShell title="Grant Late Checkout" onClose={props.onClose}>
       <div className="space-y-3">
         <div className="text-sm text-textSecondary">
-          Add a grace period with an optional fee. This adds a charge to the reservation.
+          Grant the guest extra hours past the normal check-out time, with an
+          optional agreed fee (added to the bill now). The stay won't show as
+          overdue until the granted time passes.
         </div>
         <div className="grid grid-cols-2 gap-3">
           <div>
@@ -4486,8 +4869,11 @@ function ChargeModal(props: {
           },
           // Each leg needs its own idempotency key — re-using one key
           // would make the server replay the first response for legs
-          // 2..N instead of inserting separate charges.
-          { idempotencyKey: newIdempotencyKey() },
+          // 2..N instead of inserting separate charges. Derived from the
+          // modal-scoped base key (NOT freshly minted per call) so that a
+          // retry after a mid-loop failure replays the legs that already
+          // succeeded instead of double-charging them.
+          { idempotencyKey: `${idempotencyKey}-leg-${i}` },
         );
       }
     },
@@ -4520,7 +4906,7 @@ function ChargeModal(props: {
             <div className="text-xs text-warning mt-1 flex items-start gap-1.5">
               <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
               <span>
-                Late-checkout fees aren&apos;t added here — enter the fee on the
+                Late-checkout fees aren&apos;t added here - enter the fee on the
                 <strong> Check Out</strong> screen, where it&apos;s applied when
                 you complete check-out. This form is for other extras.
               </span>
@@ -4570,7 +4956,7 @@ function ChargeModal(props: {
             </div>
             <div className="text-[11px] text-textSecondary mt-1 leading-tight">
               {selectedCount === 0
-                ? "No rooms picked — charge lands on whichever invoice covers the last remaining rooms (reservation-wide)."
+                ? "No rooms picked - charge lands on whichever invoice covers the last remaining rooms (reservation-wide)."
                 : selectedCount === 1
                   ? "Bills only on this room's invoice."
                   : `Total amount will be split evenly across ${selectedCount} rooms (${inr(perRoomAmount)} each).`}
@@ -4764,6 +5150,11 @@ function PerRoomCheckoutModal(props: {
   onClose: () => void;
   onDone: () => void;
 }) {
+  // One key per modal mount, shared by every step of this multi-step
+  // checkout. Retrying after a partial failure must replay the steps that
+  // already succeeded (notably the wallet redemption) rather than repeat them.
+  const idempotencyKey = useMemo(() => newIdempotencyKey(), []);
+
   const quoteQ = useQuery({
     queryKey: ["per-room-checkout-quote", props.reservationId, props.roomId],
     queryFn: () =>
@@ -4843,7 +5234,10 @@ function PerRoomCheckoutModal(props: {
           await api.post(
             `/reservations/${props.reservationId}/apply-wallet-credit`,
             { amount },
-            { idempotencyKey: newIdempotencyKey() },
+            // Modal-scoped key: retrying this multi-step checkout must not
+            // redeem the wallet a second time. Safe to share with the other
+            // calls in this modal — the server composite includes routeKey.
+            { idempotencyKey },
           );
         }
         await api.post(
@@ -4946,12 +5340,12 @@ function PerRoomCheckoutModal(props: {
                   />
                   {amount < due - 0.009 && (
                     <div className="text-[11px] text-textSecondary mt-1">
-                      Short by {inr(due - amount)} — the rest stays on the invoice.
+                      Short by {inr(due - amount)} - the rest stays on the invoice.
                     </div>
                   )}
                   {amount > due + 0.009 && (
                     <div className="text-[11px] text-warning mt-1">
-                      Over by {inr(amount - due)} — please collect only what's due, or use the
+                      Over by {inr(amount - due)} - please collect only what's due, or use the
                       booker's combined invoice for overpayments / refunds.
                     </div>
                   )}
@@ -5289,7 +5683,7 @@ function CombinedInvoiceModal({
                 />
                 {payAmount > 0.009 && payAmount < grandEstimate - 0.009 && (
                   <div className="text-[11px] text-textSecondary mt-1">
-                    Short of estimate — invoice will be marked Partial.
+                    Short of estimate - invoice will be marked Partial.
                   </div>
                 )}
               </div>
@@ -5373,7 +5767,7 @@ function InvoiceModeToggle({
           </div>
           <div className="text-xs text-textSecondary">
             All rooms + extras on a single tax invoice. You can still print a per-room bill for each
-            room from it (for guests splitting the cost) — those are reference copies, not separate
+            room from it (for guests splitting the cost) - those are reference copies, not separate
             tax invoices.
           </div>
         </div>
@@ -5605,6 +5999,15 @@ function CheckoutModal(props: {
     collectingPreviousWithUnpaid ||
     (isWallet && finalAmount > walletBalance + 0.009);
 
+  // One key per modal mount. Every call below derives from it, so retrying
+  // a checkout that failed partway replays the steps that already landed
+  // instead of repeating them. Minting keys inside mutationFn (as this used
+  // to) defeated the server's idempotency entirely: the late-fee POST is
+  // step 1 of a multi-step mutation whose later steps can legitimately fail
+  // (e.g. REFUND_MODE_REQUIRED), and the modal stays open with the button
+  // re-enabled — so pressing it again billed the fee a second time.
+  const idempotencyKey = useMemo(() => newIdempotencyKey(), []);
+
   const act = useMutation({
     mutationFn: async () => {
       // If the staff entered a late-checkout fee, add it as a charge FIRST
@@ -5624,7 +6027,7 @@ function CheckoutModal(props: {
             rate: lateFeeAmount,
             gstRate: 0,
           },
-          { idempotencyKey: newIdempotencyKey() },
+          { idempotencyKey: `${idempotencyKey}-latefee` },
         );
       }
 
@@ -5643,7 +6046,7 @@ function CheckoutModal(props: {
           await api.post(
             `/reservations/${props.reservationId}/apply-wallet-credit`,
             { amount: finalAmount },
-            { idempotencyKey: newIdempotencyKey() },
+            { idempotencyKey: `${idempotencyKey}-wallet` },
           );
         }
         const body: Record<string, unknown> = { invoiceMode };
@@ -5687,7 +6090,11 @@ function CheckoutModal(props: {
               // collectCompanionCollections in routes/invoices.ts.
               notes: `Collected at check-out of ${props.reservationNumber}`,
             },
-            { idempotencyKey: newIdempotencyKey() },
+            // Keyed by the target reservation: unique per previous bill (each
+            // needs its own payment row), and stable across retries so a
+            // failure partway through the loop replays the slices already
+            // collected instead of taking the money twice.
+            { idempotencyKey: `${idempotencyKey}-prev-${item.reservationId}` },
           );
           left = +(left - slice).toFixed(2);
         }
@@ -6143,7 +6550,7 @@ function MakeCompModal(props: {
           <div className="font-bold text-warning uppercase tracking-wider text-[10px] mb-1">
             What this does
           </div>
-          Moves <strong>{props.reservationNumber}</strong> out of every revenue view —
+          Moves <strong>{props.reservationNumber}</strong> out of every revenue view -
           Dashboard, Revenue report, GST, Collections, Room Performance, and the main
           Reservations list. It only appears in <strong>Reports → Complimentary</strong>{" "}
           from then on (value <span className="font-mono">{inr(props.grandTotal)}</span>,
@@ -6214,7 +6621,7 @@ function OverdueWarning({ minutesOverdue }: { minutesOverdue: number }) {
       <div>
         <strong>{lateText} past check-out time.</strong> For a{" "}
         <strong>late-checkout fee</strong>, enter it on the Check Out screen
-        (it's applied when you complete check-out) — this form is for other
+        (it's applied when you complete check-out) - this form is for other
         extras like restaurant or laundry.
       </div>
     </div>

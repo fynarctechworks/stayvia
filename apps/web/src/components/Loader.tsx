@@ -25,10 +25,10 @@ export function Loader({ label, size = "md", fullscreen = false }: LoaderProps) 
           style={{ animation: "loader-spin-cw 1.2s cubic-bezier(0.5, 0.1, 0.5, 0.9) infinite" }}
         />
         <div
-          className={`relative ${d.logo} grid place-items-center rounded-full bg-white shadow-sm ring-1 ring-brand/15`}
+          className={`relative ${d.logo} grid place-items-center`}
           style={{ animation: "loader-pulse 1.6s ease-in-out infinite" }}
         >
-          <img src="/logo.jpg" alt="" className="w-full h-full object-contain p-1 rounded-full" />
+          <img src="/logo.png" alt="" className="w-full h-full object-contain p-1" />
         </div>
       </div>
       {label && (

@@ -1,4 +1,3 @@
-import { UI_PREVIEW, mockGet, mockMutation } from "./mock-data";
 import { supabase } from "./supabase";
 
 const RAW_BASE = (import.meta.env.VITE_API_URL as string) ?? "";
@@ -96,7 +95,6 @@ async function handle<T>(res: Response): Promise<T> {
 
 export const api = {
   async get<T>(path: string, params?: Record<string, string | number | undefined>): Promise<T> {
-    if (UI_PREVIEW) return mockGet<T>(path, params);
     const url = new URL(`${BASE}${path}`);
     if (params) {
       for (const [k, v] of Object.entries(params)) {
@@ -116,7 +114,6 @@ export const api = {
     // or network retry.
     opts?: { idempotencyKey?: string },
   ): Promise<T> {
-    if (UI_PREVIEW) return mockMutation<T>(path);
     const headers: Record<string, string> = {
       "Content-Type": "application/json",
       ...((await authHeader()) as Record<string, string>),
@@ -131,7 +128,6 @@ export const api = {
   },
 
   async put<T>(path: string, body?: unknown): Promise<T> {
-    if (UI_PREVIEW) return mockMutation<T>(path);
     const res = await fetch(`${BASE}${path}`, {
       method: "PUT",
       headers: { "Content-Type": "application/json", ...(await authHeader()) },
@@ -141,7 +137,6 @@ export const api = {
   },
 
   async patch<T>(path: string, body?: unknown): Promise<T> {
-    if (UI_PREVIEW) return mockMutation<T>(path);
     const res = await fetch(`${BASE}${path}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json", ...(await authHeader()) },
@@ -151,7 +146,6 @@ export const api = {
   },
 
   async del<T>(path: string): Promise<T> {
-    if (UI_PREVIEW) return mockMutation<T>(path);
     const res = await fetch(`${BASE}${path}`, {
       method: "DELETE",
       headers: await authHeader(),
@@ -160,7 +154,6 @@ export const api = {
   },
 
   async upload<T>(path: string, form: FormData): Promise<T> {
-    if (UI_PREVIEW) return mockMutation<T>(path);
     const res = await fetch(`${BASE}${path}`, {
       method: "POST",
       headers: await authHeader(),

@@ -15,7 +15,7 @@
 
 import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { CheckCircle2, Eye, EyeOff, Loader2, Lock, ShieldAlert } from "lucide-react";
+import { CheckCircle2, Eye, EyeOff, Loader2, Lock, ShieldAlert } from "@/lib/micons";
 import { supabase } from "@/lib/supabase";
 
 type Phase = "verifying" | "ready" | "invalid" | "done";
@@ -101,9 +101,9 @@ export default function ResetPassword() {
       <div className="w-full max-w-md bg-surface border border-borderc rounded-md shadow-sm p-6 sm:p-8">
         <div className="flex items-center gap-3 mb-6">
           <img
-            src="/logo.jpg"
+            src="/logo.png"
             alt="Stayvia"
-            className="w-12 h-12 rounded-lg object-contain bg-cream ring-1 ring-brass/30"
+            className="w-12 h-12 rounded-lg object-contain"
           />
           <div className="leading-tight">
             <div className="font-semibold text-brand-dark">Stayvia</div>

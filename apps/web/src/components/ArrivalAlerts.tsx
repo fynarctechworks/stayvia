@@ -9,10 +9,13 @@
 // cards, "Open →" buttons, large day-pills) so both alert types
 // share the same visual language. Color rules:
 //   - Upcoming arrivals → INFO BLUE. Heads-up, not urgent.
+//   - Late arrivals     → WARNING AMBER. Past their expected arrival but
+//                         still inside the no-show cutoff: chase, don't
+//                         write off.
 //   - Likely no-shows   → DANGER RED. Same red as multi-day overdue.
 
 import { useQuery } from "@tanstack/react-query";
-import { AlertTriangle, BellRing } from "lucide-react";
+import { AlertTriangle, BellRing, CalendarClock } from "@/lib/micons";
 import { useMemo, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "@/auth/AuthContext";
@@ -25,6 +28,9 @@ interface UpcomingArrival {
   guestPhone: string;
   checkInDate: string;
   reminderSent: boolean;
+  // Minutes past the guest's expected arrival, 0 when not yet due.
+  // Server-computed so it advances with the 30s dashboard poll.
+  lateMinutes: number;
 }
 
 interface LikelyNoShow {
@@ -50,6 +56,15 @@ function daysUntil(dateStr: string, now: number): number {
   const d = new Date(dateStr);
   d.setHours(0, 0, 0, 0);
   return Math.round((d.getTime() - today.getTime()) / 86400000);
+}
+
+// "45 MIN LATE" / "2H LATE" / "2H 10M LATE" — kept short so it fits the
+// row pill next to the guest name.
+function fmtLate(mins: number): string {
+  if (mins < 60) return `${mins} min late`;
+  const h = Math.floor(mins / 60);
+  const m = mins % 60;
+  return m === 0 ? `${h}h late` : `${h}h ${m}m late`;
 }
 
 export function ArrivalAlerts() {
@@ -83,16 +98,22 @@ export function ArrivalAlerts() {
 
   const noShows = data?.likely_no_shows ?? [];
 
+  // Past their expected arrival but not yet written off — these get their
+  // own amber band so a guest who's an hour late doesn't hide inside the
+  // calm blue "arriving today" list until the 6h no-show cutoff fires.
+  const lateArrivals = arrivals.filter((a) => a.lateMinutes > 0);
+  const expected = arrivals.filter((a) => a.lateMinutes === 0);
+
   if (onLogin || (arrivals.length === 0 && noShows.length === 0)) return null;
 
   // Pluralised headline tokens shared by both banners.
   const arrivalsHeadline = (() => {
-    const today = arrivals.filter((a) => a.daysAway <= 0).length;
-    const tomorrow = arrivals.filter((a) => a.daysAway === 1).length;
+    const today = expected.filter((a) => a.daysAway <= 0).length;
+    const tomorrow = expected.filter((a) => a.daysAway === 1).length;
     const parts: string[] = [];
     if (today > 0) parts.push(`${today} arriving today`);
     if (tomorrow > 0) parts.push(`${tomorrow} tomorrow`);
-    return parts.join(" · ") || `${arrivals.length} upcoming`;
+    return parts.join(" · ") || `${expected.length} upcoming`;
   })();
 
   return (
@@ -158,8 +179,78 @@ export function ArrivalAlerts() {
         </div>
       )}
 
+      {/* Late arrivals — AMBER. Guest is overdue but still inside the
+          no-show cutoff, so the ask is "call them", not "write them off". */}
+      {lateArrivals.length > 0 && (
+        <div className="border-b-2 border-warning bg-warning text-cream">
+          <div className="px-4 py-2.5">
+            <div className="flex items-center gap-2 mb-2">
+              <CalendarClock className="w-4 h-4 shrink-0" />
+              <div className="font-bold text-[12px] uppercase tracking-[0.14em] leading-tight">
+                {lateArrivals.length} late arrival
+                {lateArrivals.length === 1 ? "" : "s"} · not checked in
+              </div>
+            </div>
+            <ul className="space-y-1.5">
+              {lateArrivals.map((a) => (
+                <li
+                  key={a.id}
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => navigate(`/reservations/${a.reservationNumber}`)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault();
+                      navigate(`/reservations/${a.reservationNumber}`);
+                    }
+                  }}
+                  className="flex items-center gap-3 px-3 py-2 rounded-md bg-cream/10 border border-cream/30 cursor-pointer hover:bg-cream/20 transition-colors focus:outline-none focus:ring-2 focus:ring-cream/60"
+                >
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="font-mono text-[11px] text-cream/90">
+                        {a.reservationNumber}
+                      </span>
+                      <span className="font-semibold text-[14px] truncate">
+                        {a.guestName}
+                      </span>
+                      <span className="font-mono text-[11px] text-cream/80">
+                        {a.guestPhone}
+                      </span>
+                      {a.reminderSent && (
+                        <span
+                          className="text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded bg-cream/15 text-cream"
+                          title="WhatsApp reminder sent"
+                        >
+                          ✓ reminded
+                        </span>
+                      )}
+                    </div>
+                    <div className="text-[11px] text-cream/80 mt-0.5">
+                      Expected earlier today · still not arrived
+                    </div>
+                  </div>
+                  <span className="inline-flex items-center px-2.5 h-7 rounded-md text-[11px] font-bold uppercase tracking-wider shrink-0 bg-cream text-[#B45309]">
+                    {fmtLate(a.lateMinutes)}
+                  </span>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      navigate(`/reservations/${a.reservationNumber}`);
+                    }}
+                    className="inline-flex items-center px-3 h-8 text-xs font-bold rounded-sm bg-cream text-[#B45309] hover:opacity-90 transition-colors shrink-0"
+                  >
+                    Open →
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </div>
+        </div>
+      )}
+
       {/* Upcoming arrivals — BLUE, sticky, informational. */}
-      {arrivals.length > 0 && (
+      {expected.length > 0 && (
         <div className="border-b-2 border-info bg-info text-cream">
           <div className="px-4 py-2.5">
             <div className="flex items-center gap-2 mb-2">
@@ -169,7 +260,7 @@ export function ArrivalAlerts() {
               </div>
             </div>
             <ul className="space-y-1.5">
-              {arrivals.map((a) => {
+              {expected.map((a) => {
                 const pillLabel =
                   a.daysAway <= 0
                     ? "Today"

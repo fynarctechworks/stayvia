@@ -5,13 +5,9 @@ import {
   Eye,
   EyeOff,
   MapPin,
-  Pencil,
-  Plus,
   ShieldCheck,
   Smartphone,
-  Trash2,
-  UserPlus,
-} from "lucide-react";
+} from "@/lib/micons";
 import { useEffect, useMemo, useState } from "react";
 import { useAuth } from "@/auth/AuthContext";
 import { useDialog } from "@/components/Dialog";
@@ -19,20 +15,15 @@ import { TimePicker12h } from "@/components/TimePicker12h";
 import { Loader } from "@/components/Loader";
 import { useToast } from "@/components/Toast";
 import { api } from "@/lib/api";
-import { invalidateRoomData } from "@/lib/invalidate";
 import { supabase } from "@/lib/supabase";
-import { inr } from "@/lib/utils";
 
-type Tab = "my-profile" | "hotel" | "room-types" | "staff" | "roles";
+type Tab = "my-profile" | "hotel";
 
 export default function Settings() {
   const tabs = useMemo<{ id: Tab; label: string }[]>(
     () => [
       { id: "my-profile", label: "My Profile" },
       { id: "hotel", label: "Hotel Profile" },
-      { id: "room-types", label: "Room Types" },
-      { id: "staff", label: "Staff" },
-      { id: "roles", label: "Roles & Permissions" },
     ],
     [],
   );
@@ -57,9 +48,6 @@ export default function Settings() {
       </div>
       {tab === "my-profile" && <MyProfileTab />}
       {tab === "hotel" && <HotelTab />}
-      {tab === "room-types" && <RoomTypesTab />}
-      {tab === "staff" && <StaffTab />}
-      {tab === "roles" && <RolesTab />}
     </div>
   );
 }
@@ -89,17 +77,25 @@ function MyProfileTab() {
 
   const [form, setForm] = useState({ fullName: "", email: "", phone: "" });
   const [err, setErr] = useState<string | null>(null);
+  // Required only for an email change — the email IS the login identity, so
+  // the server demands the current password before repointing it.
+  const [emailPw, setEmailPw] = useState("");
 
   useEffect(() => {
     if (!me) return;
     setForm({ fullName: me.fullName, email: me.email, phone: me.phone ?? "" });
   }, [me]);
 
+  const emailChanged = !!me && form.email !== me.email;
+
   const save = useMutation({
     mutationFn: async () => {
       const patch: Record<string, unknown> = {};
       if (me && form.fullName !== me.fullName) patch.fullName = form.fullName;
-      if (me && form.email !== me.email) patch.email = form.email;
+      if (me && form.email !== me.email) {
+        patch.email = form.email;
+        patch.currentPassword = emailPw;
+      }
       const newPhone = form.phone.trim() || null;
       if (me && newPhone !== (me.phone ?? null)) patch.phone = newPhone;
       if (Object.keys(patch).length === 0) {
@@ -110,6 +106,7 @@ function MyProfileTab() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["auth-me"] });
       setErr(null);
+      setEmailPw("");
       toast("Profile updated", "success");
     },
     onError: (e: Error) => setErr(e.message),
@@ -118,7 +115,7 @@ function MyProfileTab() {
   if (isLoading || !me) return <Loader />;
 
   return (
-    <div className="space-y-4 max-w-2xl">
+    <div className="space-y-4">
       <div className="card space-y-5">
         <div>
           <h3 className="font-semibold text-brand-dark text-lg">My Profile</h3>
@@ -167,6 +164,25 @@ function MyProfileTab() {
           </Field>
         </div>
 
+        {emailChanged && (
+          <div className="rounded-sm border border-warning/40 bg-warning/5 p-3 space-y-2">
+            <div className="text-xs text-textPrimary">
+              You are changing the email you sign in with. Enter your current
+              password to confirm it is you.
+            </div>
+            <Field label="Current Password">
+              <input
+                className="input"
+                type="password"
+                autoComplete="current-password"
+                placeholder="Your current password"
+                value={emailPw}
+                onChange={(e) => setEmailPw(e.target.value)}
+              />
+            </Field>
+          </div>
+        )}
+
         {err && (
           <div className="rounded-sm border border-danger/30 bg-danger/5 px-3 py-2 text-danger text-sm">
             {err}
@@ -177,7 +193,7 @@ function MyProfileTab() {
           <button
             className="btn-primary"
             onClick={() => save.mutate()}
-            disabled={save.isPending}
+            disabled={save.isPending || (emailChanged && !emailPw)}
           >
             {save.isPending ? "Saving…" : "Save Changes"}
           </button>
@@ -280,7 +296,7 @@ function ChangePasswordCard({ phone }: { phone: string | null }) {
       {!hasPhone && (
         <div className="rounded-sm border border-warning/40 bg-warning/10 px-3 py-2 text-warning text-sm">
           You don't have a phone number on file. Add one above and save before changing your
-          password — the OTP is delivered via WhatsApp.
+          password - the OTP is delivered via WhatsApp.
         </div>
       )}
 
@@ -466,6 +482,15 @@ function TwoFactorCard() {
   const [err, setErr] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
 
+  // GoTrue returns "MFA enroll is disabled for TOTP" when the Supabase project
+  // has TOTP MFA turned off — locally via config.toml [auth.mfa.totp], and on
+  // a hosted project when it's not on the Pro plan (or MFA is off in
+  // Dashboard > Authentication). Detect it so the card explains that instead
+  // of surfacing a raw provider error, and stops offering a button that can
+  // only fail.
+  const mfaUnavailable =
+    !!err && /mfa.*(disabled|not enabled|not available)/i.test(err);
+
   const startEnroll = useMutation({
     mutationFn: async () => {
       const { data, error } = await supabase.auth.mfa.enroll({
@@ -614,17 +639,25 @@ function TwoFactorCard() {
             </div>
           )}
 
-          {err && (
-            <div className="rounded-sm border border-danger/30 bg-danger/5 px-3 py-2 text-danger text-sm">
-              {err}
+          {mfaUnavailable ? (
+            <div className="rounded-sm border border-borderc bg-bg px-3 py-2 text-textSecondary text-sm">
+              Two-factor authentication isn't available on this workspace yet.
+              It needs to be enabled in the project's authentication settings
+              (on hosted Supabase this requires the Pro plan).
             </div>
+          ) : (
+            err && (
+              <div className="rounded-sm border border-danger/30 bg-danger/5 px-3 py-2 text-danger text-sm">
+                {err}
+              </div>
+            )
           )}
 
           <div className="flex justify-end">
             <button
               className="btn-primary"
               onClick={() => startEnroll.mutate()}
-              disabled={startEnroll.isPending}
+              disabled={startEnroll.isPending || mfaUnavailable}
             >
               {startEnroll.isPending
                 ? "Preparing…"
@@ -731,12 +764,21 @@ interface HotelSettings {
   ownerPhone: string | null;
   ownerNotifyEnabled: boolean;
   otpRequiredForCheckin: boolean;
+  // Whether complimentary bookings stay hidden from the normal views
+  // (calendar, reservations, activity, invoices, dashboard alerts). On by
+  // default; off = comp bookings show like any other booking.
+  hideComplimentary: boolean;
   wifiSsid: string | null;
   wifiPassword: string | null;
   // Property-wide GST pricing mode. 'inclusive' = rate the staff types
   // already contains GST; 'exclusive' = GST is added on top. Only
   // affects NEW bookings; existing reservations keep their own snapshot.
   gstMode: "exclusive" | "inclusive";
+  // Tagline under the hotel name on invoices/receipts. "" hides the line.
+  docTagline?: string;
+  // Per-hotel logo shown in the shell, receipts and PDF invoices. Null =
+  // the Stayvia default mark.
+  hotelLogoUrl?: string | null;
   // Soft access gate for the Complimentary report (0024). The API
   // never sends the actual code — `complimentaryUnlockCode` is "" when
   // a code IS set, null when it's not. The boolean tells the UI
@@ -757,6 +799,10 @@ function HotelTab() {
   });
   const [form, setForm] = useState<HotelSettings | null>(null);
   const [msg, setMsg] = useState<string | null>(null);
+  // Local confirm field for the complimentary-report access code. Never
+  // sent to the API — purely a client-side typo guard.
+  const [confirmCode, setConfirmCode] = useState("");
+  const [codeErr, setCodeErr] = useState<string | null>(null);
 
   useEffect(() => {
     if (data?.settings && !form)
@@ -765,6 +811,7 @@ function HotelTab() {
         // Default to on for rows created before this column existed, so the
         // toggle never renders in an undefined/indeterminate state.
         otpRequiredForCheckin: data.settings.otpRequiredForCheckin ?? true,
+        hideComplimentary: data.settings.hideComplimentary ?? false,
       });
   }, [data, form]);
 
@@ -784,6 +831,8 @@ function HotelTab() {
         ownerPhone: f.ownerPhone && f.ownerPhone.trim() !== "" ? f.ownerPhone : null,
         ownerNotifyEnabled: f.ownerNotifyEnabled,
         otpRequiredForCheckin: f.otpRequiredForCheckin,
+        hideComplimentary: f.hideComplimentary,
+        docTagline: f.docTagline ?? "",
         wifiSsid: f.wifiSsid && f.wifiSsid.trim() !== "" ? f.wifiSsid : null,
         wifiPassword: f.wifiPassword && f.wifiPassword.trim() !== "" ? f.wifiPassword : null,
         gstMode: f.gstMode,
@@ -801,11 +850,30 @@ function HotelTab() {
             : f.complimentaryUnlockCode.trim();
       }
       for (const k of Object.keys(payload)) {
-        if (payload[k] === "" || payload[k] === undefined) delete payload[k];
+        // docTagline may legitimately be "" (hide the tagline line).
+        if ((payload[k] === "" && k !== "docTagline") || payload[k] === undefined) {
+          delete payload[k];
+        }
       }
-      return api.put("/settings", payload);
+      return api.put<HotelSettings | null>("/settings", payload);
     },
-    onSuccess: () => {
+    onSuccess: (saved) => {
+      // Re-seed the form from what the SERVER actually stored.
+      //
+      // The hydrate effect below only runs while `form` is null, so after the
+      // first load the on-screen values never re-synced. Combined with the
+      // sanitiser above — which deletes every "" key so a required field is
+      // not rejected — clearing a field appeared to succeed: the PUT never
+      // mentioned it, the server kept the old value, and the box stayed blank.
+      // An admin could "clear" the GSTIN and go on printing the old one on
+      // every invoice with nothing on screen to contradict them.
+      if (saved) {
+        setForm({
+          ...saved,
+          otpRequiredForCheckin: saved.otpRequiredForCheckin ?? true,
+          hideComplimentary: saved.hideComplimentary ?? false,
+        });
+      }
       qc.invalidateQueries({ queryKey: ["settings"] });
       // NewReservation and ReservationDetail read the public settings under a
       // separate key with a 5-min staleTime, so without this they'd keep the
@@ -816,6 +884,34 @@ function HotelTab() {
     },
     onError: (e: Error) => setMsg(e.message),
   });
+
+  const uploadLogo = useMutation({
+    mutationFn: (file: File) => {
+      const fd = new FormData();
+      fd.append("logo", file);
+      return api.upload<{ hotelLogoUrl: string }>("/settings/logo", fd);
+    },
+    onSuccess: (r) => {
+      setForm((prev) => (prev ? { ...prev, hotelLogoUrl: r.hotelLogoUrl } : prev));
+      qc.invalidateQueries({ queryKey: ["settings"] });
+      qc.invalidateQueries({ queryKey: ["settings-public"] });
+      setMsg("Logo updated");
+      setTimeout(() => setMsg(null), 2000);
+    },
+    onError: (e: Error) => setMsg(e.message),
+  });
+  const removeLogo = useMutation({
+    mutationFn: () => api.del("/settings/logo"),
+    onSuccess: () => {
+      setForm((prev) => (prev ? { ...prev, hotelLogoUrl: null } : prev));
+      qc.invalidateQueries({ queryKey: ["settings"] });
+      qc.invalidateQueries({ queryKey: ["settings-public"] });
+      setMsg("Logo removed");
+      setTimeout(() => setMsg(null), 2000);
+    },
+    onError: (e: Error) => setMsg(e.message),
+  });
+  const logoBusy = uploadLogo.isPending || removeLogo.isPending;
 
   if (!form) return <Loader />;
 
@@ -857,6 +953,47 @@ function HotelTab() {
 
   return (
     <div className="card space-y-3">
+      <div className="flex items-center gap-4">
+        <img
+          src={form.hotelLogoUrl || "/logo.png"}
+          alt="Hotel logo"
+          className="w-16 h-16 rounded-md object-contain border border-borderc bg-bg p-1 shrink-0"
+        />
+        <div className="min-w-0">
+          <div className="label">Hotel logo</div>
+          <div className="text-[11px] text-textSecondary mt-0.5">
+            Shown on receipts, invoices and the app header.
+            {!form.hotelLogoUrl && " Currently using the Stayvia default."}
+          </div>
+          <div className="flex items-center gap-3 mt-1.5">
+            <label className="text-xs font-semibold text-brand hover:underline cursor-pointer">
+              {logoBusy ? "Uploading…" : form.hotelLogoUrl ? "Replace" : "Upload logo"}
+              <input
+                type="file"
+                accept="image/jpeg,image/png,image/webp"
+                className="hidden"
+                disabled={logoBusy}
+                onChange={(e) => {
+                  const f = e.target.files?.[0];
+                  e.target.value = "";
+                  if (f) uploadLogo.mutate(f);
+                }}
+              />
+            </label>
+            {form.hotelLogoUrl && (
+              <button
+                type="button"
+                className="text-xs font-semibold text-danger hover:underline"
+                disabled={logoBusy}
+                onClick={() => removeLogo.mutate()}
+              >
+                Remove
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
+
       <div className="grid grid-cols-2 gap-3">
         <Field label="Hotel Name">
           <input className="input" value={form.hotelName} onChange={(e) => set("hotelName", e.target.value)} />
@@ -889,14 +1026,23 @@ function HotelTab() {
             onChange={(e) => set("invoicePrefix", e.target.value)}
           />
         </Field>
+        <Field label="Tagline (under hotel name on invoices & receipts)">
+          <input
+            className="input"
+            maxLength={60}
+            value={form.docTagline ?? ""}
+            onChange={(e) => set("docTagline", e.target.value)}
+            placeholder="Hospitality & Stays - leave empty to hide"
+          />
+        </Field>
         <Field label="GST Pricing Mode">
           <select
             className="input"
             value={form.gstMode ?? "inclusive"}
             onChange={(e) => set("gstMode", e.target.value as "exclusive" | "inclusive")}
           >
-            <option value="inclusive">Inclusive — rate already contains GST</option>
-            <option value="exclusive">Exclusive — GST is added on top of rate</option>
+            <option value="inclusive">Inclusive - rate already contains GST</option>
+            <option value="exclusive">Exclusive - GST is added on top of rate</option>
           </select>
           <div className="text-[11px] text-textSecondary mt-1 leading-snug">
             {form.gstMode === "inclusive" ? (
@@ -1003,15 +1149,30 @@ function HotelTab() {
             />
           </Field>
           <Field label="Send owner alerts">
-            <label className="flex items-center gap-2 px-3 py-2 border border-borderc rounded-sm bg-surface cursor-pointer hover:bg-bg select-none">
-              <input
-                type="checkbox"
-                checked={form.ownerNotifyEnabled}
-                onChange={(e) => set("ownerNotifyEnabled", e.target.checked)}
-                className="w-4 h-4 accent-brand"
-              />
-              <span className="text-sm">Enabled</span>
-            </label>
+            <div className="flex items-center justify-between px-3 py-2.5 border border-borderc rounded-sm bg-surface select-none">
+              <span className="text-sm font-medium text-textPrimary">
+                Owner alerts
+                <span className="ml-2 text-xs font-normal text-textSecondary">
+                  {form.ownerNotifyEnabled ? "On" : "Off"}
+                </span>
+              </span>
+              <button
+                type="button"
+                role="switch"
+                aria-checked={form.ownerNotifyEnabled}
+                aria-label="Send owner alerts"
+                onClick={() => set("ownerNotifyEnabled", !form.ownerNotifyEnabled)}
+                className={`relative shrink-0 h-6 w-11 rounded-full transition-colors ${
+                  form.ownerNotifyEnabled ? "bg-brand" : "bg-borderc"
+                }`}
+              >
+                <span
+                  className={`absolute top-0.5 left-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform ${
+                    form.ownerNotifyEnabled ? "translate-x-5" : "translate-x-0"
+                  }`}
+                />
+              </button>
+            </div>
           </Field>
         </div>
       </div>
@@ -1021,7 +1182,7 @@ function HotelTab() {
         <p className="text-xs text-textSecondary -mt-2">
           When OTP verification is on, every new booking sends a code to the
           guest that must be entered before check-in is completed. Turn it off
-          if guests can't reliably receive a code — bookings will be created
+          if guests can't reliably receive a code - bookings will be created
           without OTP.
         </p>
         <div className="flex items-center justify-between px-3 py-2.5 border border-borderc rounded-sm bg-surface select-none">
@@ -1051,6 +1212,95 @@ function HotelTab() {
       </div>
 
       <div className="border-t border-borderc pt-4 mt-2 space-y-3">
+        <h3 className="font-semibold text-brand-dark">Complimentary Bookings</h3>
+        <p className="text-xs text-textSecondary -mt-2">
+          On = the discreet complimentary flow is active: comp bookings stay
+          out of the calendar, reservations list, activity, invoices and
+          dashboard alerts - visible only in the code-gated Complimentary
+          report. Off = the complimentary feature is put away entirely: the
+          Make Complimentary button, booking source and report disappear, and
+          any existing comp bookings show like normal ones. Their money is
+          never counted as revenue either way.
+        </p>
+        <div className="flex items-center justify-between px-3 py-2.5 border border-borderc rounded-sm bg-surface select-none">
+          <span className="text-sm font-medium text-textPrimary">
+            Hide complimentary bookings
+            <span className="ml-2 text-xs font-normal text-textSecondary">
+              {form.hideComplimentary ? "On" : "Off"}
+            </span>
+          </span>
+          <button
+            type="button"
+            role="switch"
+            aria-checked={form.hideComplimentary}
+            aria-label="Hide complimentary bookings"
+            onClick={() => set("hideComplimentary", !form.hideComplimentary)}
+            className={`relative shrink-0 h-6 w-11 rounded-full transition-colors ${
+              form.hideComplimentary ? "bg-brand" : "bg-borderc"
+            }`}
+          >
+            <span
+              className={`absolute top-0.5 left-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform ${
+                form.hideComplimentary ? "translate-x-5" : "translate-x-0"
+              }`}
+            />
+          </button>
+        </div>
+
+        {/* Soft access gate for the Complimentary report (0024). Admins can
+            set or clear it; the API never returns the actual value back, so
+            a clearable masked field is the right pattern. */}
+        <p className="text-xs text-textSecondary">
+          Report access code: staff must type it before the Complimentary
+          report opens. Required while hiding is on.
+          {form.hasComplimentaryUnlockCode ? (
+            <span className="ml-1 text-success font-semibold">
+              · Code is set
+            </span>
+          ) : (
+            <span className="ml-1 text-textSecondary">· No code set</span>
+          )}
+        </p>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 items-end">
+          <Field
+            label={
+              form.hasComplimentaryUnlockCode
+                ? "Change code (leave blank to keep current)"
+                : "Set code"
+            }
+          >
+            <input
+              className="input font-mono"
+              type="password"
+              autoComplete="new-password"
+              placeholder={
+                form.hasComplimentaryUnlockCode ? "••••••••" : "min 4 characters"
+              }
+              value={form.complimentaryUnlockCode ?? ""}
+              onChange={(e) => {
+                set("complimentaryUnlockCode", e.target.value);
+                setCodeErr(null);
+              }}
+            />
+          </Field>
+          <Field label="Confirm code">
+            <input
+              className="input font-mono"
+              type="password"
+              autoComplete="new-password"
+              placeholder="Re-enter code"
+              value={confirmCode}
+              onChange={(e) => {
+                setConfirmCode(e.target.value);
+                setCodeErr(null);
+              }}
+            />
+          </Field>
+        </div>
+        {codeErr && <p className="text-danger text-xs">{codeErr}</p>}
+      </div>
+
+      <div className="border-t border-borderc pt-4 mt-2 space-y-3">
         <h3 className="font-semibold text-brand-dark">Guest Wi-Fi</h3>
         <p className="text-xs text-textSecondary -mt-2">
           Shown in the check-in WhatsApp message so guests don't have to ask the front desk.
@@ -1075,1220 +1325,36 @@ function HotelTab() {
         </div>
       </div>
 
-      {/* Soft access gate for a sensitive report (0024). Generic label
-          on purpose — "Reports access code" doesn't reveal which
-          specific report it gates. Admins can set or clear it; the
-          API never returns the actual value back so a clearable
-          masked field is the right pattern. */}
-      <div className="border-t border-borderc pt-4 mt-2 space-y-3">
-        <h3 className="font-semibold text-brand-dark">Reports access code</h3>
-        <p className="text-xs text-textSecondary -mt-2">
-          Front-desk staff must type this code before they can open
-          certain sensitive reports. Leave blank to disable the gate.
-          {form.hasComplimentaryUnlockCode ? (
-            <span className="ml-1 text-success font-semibold">
-              · Code is set
-            </span>
-          ) : (
-            <span className="ml-1 text-textSecondary">· No code set</span>
-          )}
-        </p>
-        <div className="grid grid-cols-1 sm:grid-cols-[1fr_auto] gap-3 items-end">
-          <Field
-            label={
-              form.hasComplimentaryUnlockCode
-                ? "Change code (leave blank to keep current)"
-                : "Set code"
-            }
-          >
-            <input
-              className="input font-mono"
-              type="password"
-              autoComplete="new-password"
-              placeholder={
-                form.hasComplimentaryUnlockCode ? "••••••••" : "min 4 characters"
-              }
-              value={form.complimentaryUnlockCode ?? ""}
-              onChange={(e) => set("complimentaryUnlockCode", e.target.value)}
-            />
-          </Field>
-          {form.hasComplimentaryUnlockCode && (
-            <button
-              type="button"
-              className="btn-secondary"
-              onClick={() => {
-                // Send an explicit null to clear the gate on save.
-                set("complimentaryUnlockCode", "");
-              }}
-            >
-              Clear on save
-            </button>
-          )}
-        </div>
-      </div>
-
       <div className="flex justify-end gap-2 items-center">
         {msg && <span className="text-xs text-success">{msg}</span>}
-        <button className="btn-primary" onClick={() => save.mutate(form)} disabled={save.isPending}>
+        <button
+          className="btn-primary"
+          onClick={() => {
+            // Typo guard: a newly typed access code must be confirmed
+            // before it's saved. Leaving the field untouched needs no
+            // confirmation.
+            const typed = form.complimentaryUnlockCode ?? "";
+            if (typed.trim() !== "" && typed !== confirmCode) {
+              setCodeErr("Access codes do not match. Re-enter the confirm code.");
+              return;
+            }
+            // Hiding complimentary bookings requires an access code —
+            // the server enforces the same rule.
+            const willHaveCode =
+              form.hasComplimentaryUnlockCode || typed.trim() !== "";
+            if (form.hideComplimentary && !willHaveCode) {
+              setCodeErr(
+                "Hiding complimentary bookings requires a report access code. Set one below first.",
+              );
+              return;
+            }
+            setCodeErr(null);
+            save.mutate(form);
+          }}
+          disabled={save.isPending}
+        >
           {save.isPending ? "Saving…" : "Save"}
         </button>
-      </div>
-    </div>
-  );
-}
-
-interface ShortStayBand {
-  label: string;
-  hours: number;
-  rate: number;
-}
-
-interface RoomTypeRow {
-  id: string;
-  slug: string;
-  label: string;
-  defaultRate: string;
-  maxOccupancy: string;
-  // Per-night charge for each extra person (extra bed) over a room's base
-  // occupancy. "0" means extra beds aren't offered for this type.
-  extraPersonRate: string;
-  description: string | null;
-  isActive: boolean;
-  // Day-use price bands shown on the reservation form when stay_type is
-  // 'short_stay'. Empty array when the property hasn't configured any
-  // (the booking form then pro-rates the overnight default rate).
-  shortStayBands?: ShortStayBand[];
-}
-
-function RoomTypesTab() {
-  const qc = useQueryClient();
-  const dialog = useDialog();
-  const { data: types = [] } = useQuery({
-    queryKey: ["room-types", true],
-    queryFn: () => api.get<RoomTypeRow[]>("/settings/room-types", { all: "true" }),
-  });
-
-  const [editing, setEditing] = useState<RoomTypeRow | null>(null);
-  const [showAdd, setShowAdd] = useState(false);
-
-  // Delete a room type. The API hard-deletes if no rooms reference
-  // the slug, and returns 409 IN_USE with a room count otherwise.
-  // On IN_USE we prompt the user to force-delete (which nulls the
-  // type on every dependent room) — only proceeding if they confirm.
-  const del = useMutation({
-    mutationFn: async (args: { id: string; force?: boolean }) => {
-      const path = `/settings/room-types/${args.id}${args.force ? "?force=true" : ""}`;
-      return api.del(path);
-    },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["room-types"] }),
-  });
-
-  // Restore (un-archive) a previously archived type. Same PUT endpoint
-  // the edit form uses, just flipping is_active back to true.
-  const restore = useMutation({
-    mutationFn: (t: RoomTypeRow) =>
-      api.put(`/settings/room-types/${t.id}`, {
-        label: t.label,
-        slug: t.slug,
-        defaultRate: Number(t.defaultRate),
-        maxOccupancy: t.maxOccupancy,
-        extraPersonRate: Number(t.extraPersonRate),
-        description: t.description ?? null,
-        isActive: true,
-      }),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["room-types"] });
-      qc.invalidateQueries({ queryKey: ["room-types-active"] });
-      invalidateRoomData(qc);
-    },
-  });
-
-  async function handleDelete(t: RoomTypeRow) {
-    const confirmed = await dialog.confirm({
-      title: `Delete "${t.label}"?`,
-      message:
-        "This permanently removes the room type. Use Archive instead if you want existing rooms to keep the label.",
-      okLabel: "Delete",
-      tone: "danger",
-    });
-    if (!confirmed) return;
-    try {
-      await del.mutateAsync({ id: t.id });
-    } catch (e) {
-      // API returns 409 IN_USE when rooms still reference this slug.
-      // ApiError carries .code + .details; the helper api client throws
-      // an Error with .message containing the API's message string.
-      const msg = e instanceof Error ? e.message : String(e);
-      const looksInUse = /still use|in use|IN_USE/i.test(msg);
-      if (!looksInUse) {
-        await dialog.alert({ title: "Couldn't delete", message: msg });
-        return;
-      }
-      const force = await dialog.confirm({
-        title: `Force-delete "${t.label}"?`,
-        message: `${msg}\n\nForce delete will detach those rooms (their type becomes empty until you edit them).`,
-        okLabel: "Force delete",
-        tone: "danger",
-      });
-      if (force) {
-        try {
-          await del.mutateAsync({ id: t.id, force: true });
-        } catch (e2) {
-          await dialog.alert({
-            title: "Force delete failed",
-            message: e2 instanceof Error ? e2.message : String(e2),
-          });
-        }
-      }
-    }
-  }
-
-  return (
-    <div className="space-y-4">
-      <div className="flex justify-between items-center">
-        <div className="text-sm text-textSecondary">
-          Room types drive every Type dropdown across the app. Archived types remain on existing rooms but are hidden from new-room forms.
-        </div>
-        <button className="btn-primary inline-flex items-center gap-2" onClick={() => setShowAdd(true)}>
-          <Plus className="w-4 h-4" /> Add Room Type
-        </button>
-      </div>
-
-      <div className="card p-0 overflow-x-auto">
-        <table className="table-base table-fixed">
-          <colgroup>
-            <col className="w-[24%]" />
-            <col className="w-[18%]" />
-            <col className="w-[13%]" />
-            <col className="w-[9%]" />
-            <col className="w-[13%]" />
-            <col className="w-[11%]" />
-            <col className="w-[12%]" />
-          </colgroup>
-          <thead>
-            <tr>
-              <th>Label</th>
-              <th>Slug</th>
-              <th className="!text-right">Default Rate</th>
-              <th className="!text-right">Max Occ.</th>
-              <th className="!text-right">Extra Bed/Night</th>
-              <th>Status</th>
-              <th className="!text-right">Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {types.length === 0 && (
-              <tr>
-                <td colSpan={7} className="p-4 text-textSecondary text-center">
-                  No room types yet. Add one to start creating rooms.
-                </td>
-              </tr>
-            )}
-            {types.map((t) => (
-              <tr key={t.id} className={t.isActive ? "" : "opacity-60"}>
-                <td className="font-medium text-navy">{t.label}</td>
-                <td className="font-mono text-xs text-textSecondary">{t.slug}</td>
-                <td className="text-right font-mono tabular-nums">{inr(t.defaultRate)}</td>
-                <td className="text-right tabular-nums">{t.maxOccupancy}</td>
-                <td className="text-right font-mono tabular-nums">
-                  {Number(t.extraPersonRate) > 0 ? inr(t.extraPersonRate) : "—"}
-                </td>
-                <td>
-                  <span
-                    className={`inline-block px-2 py-0.5 rounded-sm text-xs font-medium ${
-                      t.isActive
-                        ? "bg-success/15 text-success"
-                        : "bg-gray-200 text-textSecondary"
-                    }`}
-                  >
-                    {t.isActive ? "Active" : "Archived"}
-                  </span>
-                </td>
-                <td>
-                  <div className="flex items-center justify-end gap-3">
-                    <button
-                      className="text-accentBlue text-xs hover:underline"
-                      onClick={() => setEditing(t)}
-                    >
-                      Edit
-                    </button>
-                    {!t.isActive && (
-                      <button
-                        className="text-success text-xs hover:underline"
-                        onClick={() => restore.mutate(t)}
-                        disabled={restore.isPending}
-                        title="Make this room type active again"
-                      >
-                        Restore
-                      </button>
-                    )}
-                    <button
-                      className="text-danger text-xs hover:underline inline-flex items-center gap-1"
-                      onClick={() => handleDelete(t)}
-                      disabled={del.isPending}
-                    >
-                      <Trash2 className="w-3 h-3" /> Delete
-                    </button>
-                  </div>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-
-      {(showAdd || editing) && (
-        <RoomTypeModal
-          row={editing}
-          onClose={() => {
-            setShowAdd(false);
-            setEditing(null);
-          }}
-        />
-      )}
-    </div>
-  );
-}
-
-function slugify(s: string) {
-  return s
-    .toLowerCase()
-    .trim()
-    .replace(/[^a-z0-9]+/g, "_")
-    .replace(/^_+|_+$/g, "");
-}
-
-function RoomTypeModal({ row, onClose }: { row: RoomTypeRow | null; onClose: () => void }) {
-  const qc = useQueryClient();
-  const isEdit = !!row;
-  const [form, setForm] = useState({
-    slug: row?.slug ?? "",
-    label: row?.label ?? "",
-    defaultRate: row ? Number(row.defaultRate) : 1200,
-    maxOccupancy: row ? Number(row.maxOccupancy) : 2,
-    extraPersonRate: row ? Number(row.extraPersonRate) : 0,
-    description: row?.description ?? "",
-    isActive: row?.isActive ?? true,
-    shortStayBands: (row?.shortStayBands ?? []) as ShortStayBand[],
-  });
-  const [slugDirty, setSlugDirty] = useState(isEdit);
-  const [err, setErr] = useState<string | null>(null);
-
-  const save = useMutation({
-    mutationFn: () => {
-      const body = {
-        slug: form.slug,
-        label: form.label,
-        defaultRate: form.defaultRate,
-        maxOccupancy: form.maxOccupancy,
-        extraPersonRate: form.extraPersonRate,
-        description: form.description || null,
-        isActive: form.isActive,
-        // Filter out blank/zero rows so an empty trailing input doesn't
-        // get persisted as a useless band. The server clamps hours and
-        // rates again with Zod.
-        shortStayBands: form.shortStayBands.filter(
-          (b) => b.label.trim() && b.hours > 0 && b.rate >= 0,
-        ),
-      };
-      return isEdit
-        ? api.put(`/settings/room-types/${row!.id}`, body)
-        : api.post("/settings/room-types", body);
-    },
-    onSuccess: () => {
-      // A default-rate change cascades to rooms of this type on the server,
-      // so refresh every reader of a room rate — not just the type list.
-      qc.invalidateQueries({ queryKey: ["room-types"] });
-      qc.invalidateQueries({ queryKey: ["room-types-active"] });
-      invalidateRoomData(qc);
-      onClose();
-    },
-    onError: (e: Error) => setErr(e.message),
-  });
-
-  return (
-    <div
-      className="fixed inset-0 bg-black/50 flex items-center justify-center z-50"
-      onClick={onClose}
-    >
-      <div
-        className="bg-surface rounded-md w-full max-w-md p-6 space-y-4"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <h2 className="text-lg font-semibold text-navy">
-          {isEdit ? `Edit ${row!.label}` : "Add Room Type"}
-        </h2>
-        <Field label="Label (shown to staff)">
-          <input
-            className="input"
-            value={form.label}
-            onChange={(e) => {
-              const label = e.target.value;
-              setForm({
-                ...form,
-                label,
-                slug: slugDirty ? form.slug : slugify(label),
-              });
-            }}
-            placeholder="e.g. Penthouse Suite"
-          />
-        </Field>
-        <Field label="Slug (internal ID, lowercase, _ allowed)">
-          <input
-            className="input font-mono"
-            value={form.slug}
-            onChange={(e) => {
-              setSlugDirty(true);
-              setForm({ ...form, slug: slugify(e.target.value) });
-            }}
-            placeholder="penthouse_suite"
-          />
-          {isEdit && form.slug !== row!.slug && (
-            <div className="text-xs text-warning mt-1">
-              Renaming the slug will update every room and reservation referencing "{row!.slug}".
-            </div>
-          )}
-        </Field>
-        <div className="grid grid-cols-2 gap-3">
-          <Field label="Default Rate (₹)">
-            <input
-              className="input"
-              type="number"
-              value={form.defaultRate === 0 ? "" : form.defaultRate}
-              onChange={(e) => {
-                const v = e.target.value;
-                setForm({ ...form, defaultRate: v === "" ? 0 : Number(v) });
-              }}
-            />
-          </Field>
-          <Field label="Max Occupancy">
-            <input
-              className="input"
-              type="number"
-              value={form.maxOccupancy === 0 ? "" : form.maxOccupancy}
-              onChange={(e) => {
-                const v = e.target.value;
-                setForm({ ...form, maxOccupancy: v === "" ? 0 : Number(v) });
-              }}
-            />
-          </Field>
-        </div>
-        <Field label="Extra Person Rate (₹ / person / night)">
-          <input
-            className="input"
-            type="number"
-            min={0}
-            value={form.extraPersonRate === 0 ? "" : form.extraPersonRate}
-            placeholder="0"
-            onChange={(e) => {
-              const v = e.target.value;
-              setForm({ ...form, extraPersonRate: v === "" ? 0 : Math.max(0, Number(v)) });
-            }}
-          />
-          <div className="text-xs text-textSecondary mt-1">
-            Per-night charge for each extra bed beyond Max Occupancy. Leave 0 to
-            disable extra beds for this room type.
-          </div>
-        </Field>
-        <Field label="Description (optional)">
-          <input
-            className="input"
-            value={form.description}
-            onChange={(e) => setForm({ ...form, description: e.target.value })}
-          />
-        </Field>
-        <label className="inline-flex items-center gap-2 text-sm">
-          <input
-            type="checkbox"
-            checked={form.isActive}
-            onChange={(e) => setForm({ ...form, isActive: e.target.checked })}
-          />
-          Active (available in new-room forms)
-        </label>
-
-        <div className="pt-3 border-t border-borderc/40">
-          <div className="flex items-center justify-between mb-2">
-            <div>
-              <div className="text-sm font-semibold text-navy">Day-use price bands</div>
-              <div className="text-[11px] text-textSecondary">
-                Hourly tiers shown when staff picks "Day use" on a booking. Leave
-                empty to pro-rate from the nightly default rate.
-              </div>
-            </div>
-            <button
-              type="button"
-              className="text-xs text-accentBlue hover:underline"
-              onClick={() =>
-                setForm({
-                  ...form,
-                  shortStayBands: [
-                    ...form.shortStayBands,
-                    { label: "", hours: 0, rate: 0 },
-                  ],
-                })
-              }
-            >
-              + Add band
-            </button>
-          </div>
-          {form.shortStayBands.length > 0 && (
-            <table className="w-full text-xs">
-              <thead>
-                <tr className="text-left text-textSecondary">
-                  <th className="py-1 font-medium">Label</th>
-                  <th className="py-1 font-medium w-20">Hours</th>
-                  <th className="py-1 font-medium w-24">Rate (₹)</th>
-                  <th className="w-8"></th>
-                </tr>
-              </thead>
-              <tbody>
-                {form.shortStayBands.map((b, i) => (
-                  <tr key={i}>
-                    <td className="py-1 pr-1">
-                      <input
-                        className="input !h-8 text-xs"
-                        value={b.label}
-                        placeholder="e.g. 6 hrs"
-                        onChange={(e) => {
-                          const next = [...form.shortStayBands];
-                          next[i] = { ...next[i]!, label: e.target.value };
-                          setForm({ ...form, shortStayBands: next });
-                        }}
-                      />
-                    </td>
-                    <td className="py-1 pr-1">
-                      <input
-                        className="input !h-8 text-xs"
-                        type="number"
-                        min={1}
-                        max={23.5}
-                        step={0.5}
-                        value={b.hours || ""}
-                        onChange={(e) => {
-                          const next = [...form.shortStayBands];
-                          next[i] = { ...next[i]!, hours: Number(e.target.value) };
-                          setForm({ ...form, shortStayBands: next });
-                        }}
-                      />
-                    </td>
-                    <td className="py-1 pr-1">
-                      <input
-                        className="input !h-8 text-xs"
-                        type="number"
-                        min={0}
-                        value={b.rate || ""}
-                        onChange={(e) => {
-                          const next = [...form.shortStayBands];
-                          next[i] = { ...next[i]!, rate: Number(e.target.value) };
-                          setForm({ ...form, shortStayBands: next });
-                        }}
-                      />
-                    </td>
-                    <td className="py-1 text-right">
-                      <button
-                        type="button"
-                        className="text-danger text-xs hover:underline"
-                        onClick={() =>
-                          setForm({
-                            ...form,
-                            shortStayBands: form.shortStayBands.filter((_, j) => j !== i),
-                          })
-                        }
-                      >
-                        ×
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
-        </div>
-
-        {err && <div className="text-danger text-sm">{err}</div>}
-        <div className="flex justify-end gap-2 pt-2">
-          <button className="btn-secondary" onClick={onClose}>Cancel</button>
-          <button
-            className="btn-primary"
-            onClick={() => save.mutate()}
-            disabled={save.isPending || !form.label || !form.slug || form.defaultRate <= 0}
-          >
-            {save.isPending ? "Saving…" : isEdit ? "Save" : "Create"}
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-interface Staff {
-  id: string;
-  fullName: string;
-  email: string;
-  role: "admin" | "frontdesk" | "housekeeping";
-  phone: string | null;
-  isActive: boolean;
-}
-
-function StaffTab() {
-  const qc = useQueryClient();
-  const dialog = useDialog();
-  const { toast } = useToast();
-  const [showAdd, setShowAdd] = useState(false);
-  const [editing, setEditing] = useState<Staff | null>(null);
-  const { data = [] } = useQuery({
-    queryKey: ["staff"],
-    queryFn: () => api.get<Staff[]>("/staff"),
-  });
-
-  const deactivate = useMutation({
-    mutationFn: (id: string) => api.del(`/staff/${id}`),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["staff"] }),
-  });
-  const reactivate = useMutation({
-    mutationFn: (id: string) => api.put(`/staff/${id}`, { isActive: true }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["staff"] }),
-  });
-  const hardDelete = useMutation({
-    mutationFn: (id: string) => api.del(`/staff/${id}/hard`),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["staff"] }),
-    onError: (e: Error) => toast(e.message, "error"),
-  });
-
-  return (
-    <div className="space-y-4">
-      <div className="flex justify-end">
-        <button className="btn-primary inline-flex items-center gap-2" onClick={() => setShowAdd(true)}>
-          <UserPlus className="w-4 h-4" /> Add Staff
-        </button>
-      </div>
-      <div className="card p-0">
-        <table className="table-base">
-          <thead>
-            <tr>
-              <th>Name</th>
-              <th>Email</th>
-              <th>Role</th>
-              <th>Phone</th>
-              <th>Status</th>
-              <th className="text-right">Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {data.map((s) => (
-              <tr key={s.id} className={s.isActive ? "" : "opacity-60"}>
-                <td>{s.fullName}</td>
-                <td>{s.email}</td>
-                <td className="capitalize">{s.role}</td>
-                <td>{s.phone ?? "-"}</td>
-                <td>{s.isActive ? "Active" : "Deactivated"}</td>
-                <td className="text-right">
-                  <div className="inline-flex items-center gap-3">
-                    <button
-                      className="text-brand hover:underline text-xs inline-flex items-center gap-1"
-                      onClick={() => setEditing(s)}
-                    >
-                      <Pencil className="w-3 h-3" /> Edit
-                    </button>
-                    {s.isActive && (
-                      <button
-                        className="text-warning hover:underline text-xs inline-flex items-center gap-1"
-                        onClick={async () => {
-                          const ok = await dialog.confirm({
-                            title: `Deactivate ${s.fullName}?`,
-                            message: "They will lose access but their history is kept.",
-                            okLabel: "Deactivate",
-                            tone: "warning",
-                          });
-                          if (ok) deactivate.mutate(s.id);
-                        }}
-                      >
-                        Deactivate
-                      </button>
-                    )}
-                    {!s.isActive && (
-                      <button
-                        className="text-success hover:underline text-xs"
-                        onClick={() => reactivate.mutate(s.id)}
-                      >
-                        Reactivate
-                      </button>
-                    )}
-                    <button
-                      className="text-danger hover:underline text-xs inline-flex items-center gap-1"
-                      onClick={async () => {
-                        const ans = await dialog.prompt({
-                          title: `Permanently delete ${s.fullName}?`,
-                          message:
-                            "This removes them from auth and the database. Only works if they have no reservations, invoices, payments, or activity. Type DELETE to confirm.",
-                          placeholder: "Type DELETE",
-                          okLabel: "Delete forever",
-                          tone: "danger",
-                          required: true,
-                        });
-                        if (ans === "DELETE") hardDelete.mutate(s.id);
-                      }}
-                    >
-                      <Trash2 className="w-3 h-3" /> Delete
-                    </button>
-                  </div>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-      {showAdd && <AddStaffModal onClose={() => setShowAdd(false)} />}
-      {editing && <EditStaffModal staff={editing} onClose={() => setEditing(null)} />}
-    </div>
-  );
-}
-
-function EditStaffModal({ staff, onClose }: { staff: Staff; onClose: () => void }) {
-  const qc = useQueryClient();
-  const [form, setForm] = useState({
-    fullName: staff.fullName,
-    email: staff.email,
-    phone: staff.phone ?? "",
-  });
-  const [newPassword, setNewPassword] = useState("");
-  const [showPw, setShowPw] = useState(false);
-  const [err, setErr] = useState<string | null>(null);
-  const [msg, setMsg] = useState<string | null>(null);
-  // Reveal-once: after a reset, show the new password one time so it can be
-  // handed to the staff member. Never retrievable afterwards (hashed).
-  const [resetShown, setResetShown] = useState<string | null>(null);
-  const [copied, setCopied] = useState(false);
-
-  const { data: rbacRoles } = useQuery({
-    queryKey: ["rbac-roles"],
-    queryFn: () => api.get<RbacRole[]>("/rbac/roles"),
-  });
-  const { data: catalog } = useQuery({
-    queryKey: ["rbac-catalog"],
-    queryFn: () => api.get<PermissionDef[]>("/rbac/permissions"),
-  });
-  const { data: effective } = useQuery({
-    queryKey: ["rbac-effective", staff.id],
-    queryFn: () =>
-      api.get<{ roleKey: string | null; isGodMode: boolean; permissions: string[] }>(
-        `/rbac/users/${staff.id}/effective`,
-      ),
-  });
-  const { data: existingOverrides } = useQuery({
-    queryKey: ["rbac-overrides", staff.id],
-    queryFn: () =>
-      api.get<{ permissionKey: string; effect: "grant" | "deny" }[]>(
-        `/rbac/users/${staff.id}/overrides`,
-      ),
-  });
-
-  const [selectedRoleId, setSelectedRoleId] = useState<string | null>(null);
-  const [overrides, setOverrides] = useState<Record<string, "grant" | "deny">>({});
-  const [showAdvanced, setShowAdvanced] = useState(false);
-
-  // Initialise selectedRoleId once rbacRoles + effective have loaded
-  useEffect(() => {
-    if (selectedRoleId || !rbacRoles || !effective) return;
-    const cur = rbacRoles.find((r) => r.key === effective.roleKey);
-    setSelectedRoleId(cur?.id ?? null);
-  }, [rbacRoles, effective, selectedRoleId]);
-
-  // Initialise overrides from server once
-  useEffect(() => {
-    if (!existingOverrides) return;
-    const map: Record<string, "grant" | "deny"> = {};
-    for (const o of existingOverrides) map[o.permissionKey] = o.effect;
-    setOverrides(map);
-  }, [existingOverrides]);
-
-  const save = useMutation({
-    mutationFn: async () => {
-      // 1. Profile patch (name/email/phone/password)
-      const patch: Record<string, unknown> = {};
-      if (form.fullName !== staff.fullName) patch.fullName = form.fullName;
-      if (form.email !== staff.email) patch.email = form.email;
-      const newPhone = form.phone || null;
-      if (newPhone !== (staff.phone ?? null)) patch.phone = newPhone;
-      if (newPassword) patch.password = newPassword;
-      if (Object.keys(patch).length > 0) {
-        await api.put(`/staff/${staff.id}`, patch);
-      }
-
-      // 2. RBAC role
-      if (selectedRoleId && selectedRoleId !== rbacRoles?.find((r) => r.key === effective?.roleKey)?.id) {
-        await api.put(`/rbac/users/${staff.id}/role`, { roleId: selectedRoleId });
-      }
-
-      // 3. Overrides
-      const arr = Object.entries(overrides).map(([permissionKey, effect]) => ({
-        permissionKey,
-        effect,
-      }));
-      await api.put(`/rbac/users/${staff.id}/overrides`, { overrides: arr });
-    },
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["staff"] });
-      qc.invalidateQueries({ queryKey: ["rbac-effective", staff.id] });
-      qc.invalidateQueries({ queryKey: ["rbac-overrides", staff.id] });
-      // If the password was reset, surface it once instead of auto-closing.
-      if (newPassword) {
-        setResetShown(newPassword);
-      } else {
-        setMsg("Saved");
-        setTimeout(onClose, 700);
-      }
-    },
-    onError: (e: Error) => setErr(e.message),
-  });
-
-  function genStrong() {
-    const chars = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789";
-    let out = "";
-    const arr = new Uint32Array(14);
-    crypto.getRandomValues(arr);
-    for (const n of arr) out += chars[n % chars.length];
-    setNewPassword(out + "!");
-    setShowPw(true);
-  }
-
-  const selectedRole = rbacRoles?.find((r) => r.id === selectedRoleId) ?? null;
-  const baseRolePerms = new Set(
-    selectedRole?.permissions.includes("*")
-      ? (catalog ?? []).map((c) => c.key)
-      : selectedRole?.permissions ?? [],
-  );
-  const effectivePerms = (() => {
-    const set = new Set(baseRolePerms);
-    for (const [k, eff] of Object.entries(overrides)) {
-      if (eff === "grant") set.add(k);
-      else if (eff === "deny") set.delete(k);
-    }
-    return set;
-  })();
-
-  // Reveal-once screen after a password reset.
-  if (resetShown) {
-    return (
-      <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={onClose}>
-        <div
-          className="bg-surface rounded-md w-full max-w-md p-6 space-y-4"
-          onClick={(e) => e.stopPropagation()}
-        >
-          <h2 className="text-lg font-semibold text-brand-dark">Password reset</h2>
-          <p className="text-sm text-textSecondary">
-            New password for <strong className="text-brand-dark">{staff.fullName}</strong>. Copy it
-            and share securely — it <strong>won&apos;t be shown again</strong> (stored encrypted, can
-            only be reset).
-          </p>
-          <div className="relative">
-            <input readOnly className="input pr-20 font-mono select-all" value={resetShown} />
-            <button
-              type="button"
-              onClick={() => {
-                navigator.clipboard?.writeText(resetShown).then(() => {
-                  setCopied(true);
-                  setTimeout(() => setCopied(false), 2000);
-                });
-              }}
-              className="absolute right-2 top-1/2 -translate-y-1/2 inline-flex items-center gap-1 text-xs text-brand hover:underline"
-            >
-              {copied ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
-              {copied ? "Copied" : "Copy"}
-            </button>
-          </div>
-          <div className="flex justify-end pt-2">
-            <button className="btn-primary" onClick={onClose}>Done</button>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={onClose}>
-      <div
-        className="bg-surface rounded-md w-full max-w-2xl max-h-[90vh] overflow-hidden flex flex-col"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="px-5 py-3 border-b border-borderc">
-          <h2 className="text-lg font-semibold text-brand-dark">Edit Staff · {staff.fullName}</h2>
-        </div>
-        <div className="p-5 space-y-4 overflow-y-auto">
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          <Field label="Full Name">
-            <input
-              className="input"
-              value={form.fullName}
-              onChange={(e) => setForm({ ...form, fullName: e.target.value })}
-            />
-          </Field>
-          <Field label="Email">
-            <input
-              className="input"
-              type="email"
-              value={form.email}
-              onChange={(e) => setForm({ ...form, email: e.target.value })}
-            />
-          </Field>
-          <Field label="Phone (optional)">
-            <input
-              className="input"
-              type="tel"
-              inputMode="numeric"
-              maxLength={10}
-              placeholder="9876543210"
-              value={form.phone}
-              onChange={(e) =>
-                setForm({ ...form, phone: e.target.value.replace(/\D/g, "").slice(0, 10) })
-              }
-            />
-          </Field>
-          <Field label="Role">
-            <select
-              className="input"
-              value={selectedRoleId ?? ""}
-              onChange={(e) => setSelectedRoleId(e.target.value || null)}
-            >
-              <option value="">— Pick a role —</option>
-              {(rbacRoles ?? []).map((r) => (
-                <option key={r.id} value={r.id}>
-                  {r.label}
-                  {r.isSystem ? " · system" : " · custom"}
-                </option>
-              ))}
-            </select>
-          </Field>
-        </div>
-
-        {selectedRole && (
-          <div className="bg-bg/50 border border-borderc rounded-sm px-3 py-2 text-xs text-textSecondary">
-            <span className="font-semibold text-brand-dark">{selectedRole.label}</span> grants{" "}
-            {selectedRole.permissions.includes("*") ? (
-              <span className="font-semibold text-success">all permissions (god mode)</span>
-            ) : (
-              <span>{selectedRole.permissions.length} permissions</span>
-            )}
-            . Effective for this user: <span className="font-mono">{effectivePerms.size}</span>
-            {Object.keys(overrides).length > 0 && (
-              <span> · {Object.keys(overrides).length} override(s)</span>
-            )}
-          </div>
-        )}
-
-        {selectedRole && !selectedRole.permissions.includes("*") && catalog && (
-          <div>
-            <button
-              type="button"
-              onClick={() => setShowAdvanced((s) => !s)}
-              className="text-xs font-semibold text-brand hover:underline"
-            >
-              {showAdvanced ? "Hide" : "Show"} advanced permission overrides
-            </button>
-            {showAdvanced && (
-              <div className="mt-3 border border-borderc rounded-sm p-3 space-y-3">
-                <p className="text-xs text-textSecondary">
-                  Three-state for each permission: <strong>Inherit</strong> (use role default),{" "}
-                  <strong className="text-success">Grant</strong> (force allow), or{" "}
-                  <strong className="text-danger">Deny</strong> (force block). Deny wins.
-                </p>
-                {Object.entries(groupByArea(catalog)).map(([area, defs]) => (
-                  <div key={area}>
-                    <div className="text-xs font-bold text-brand-dark mb-1.5">{area}</div>
-                    <div className="space-y-1">
-                      {defs.map((d) => {
-                        const ovr = overrides[d.key];
-                        const inRole = baseRolePerms.has(d.key);
-                        return (
-                          <div
-                            key={d.key}
-                            className="flex items-center justify-between gap-2 text-sm py-1"
-                          >
-                            <div className="flex-1 min-w-0">
-                              <div className="text-textPrimary truncate">{d.label}</div>
-                              <div className="text-[11px] text-textSecondary font-mono">
-                                {d.key} · role:{" "}
-                                {inRole ? (
-                                  <span className="text-success">allowed</span>
-                                ) : (
-                                  <span className="text-textSecondary">not in role</span>
-                                )}
-                              </div>
-                            </div>
-                            <div className="flex gap-1 shrink-0">
-                              {(["inherit", "grant", "deny"] as const).map((opt) => {
-                                const active = (ovr ?? "inherit") === opt;
-                                const cls =
-                                  opt === "grant"
-                                    ? active
-                                      ? "bg-success text-white border-success"
-                                      : "border-borderc text-success hover:border-success"
-                                    : opt === "deny"
-                                      ? active
-                                        ? "bg-danger text-white border-danger"
-                                        : "border-borderc text-danger hover:border-danger"
-                                      : active
-                                        ? "bg-brand-dark text-cream border-brand-dark"
-                                        : "border-borderc text-textSecondary hover:border-brand-dark";
-                                return (
-                                  <button
-                                    key={opt}
-                                    type="button"
-                                    onClick={() =>
-                                      setOverrides((o) => {
-                                        const next = { ...o };
-                                        if (opt === "inherit") delete next[d.key];
-                                        else next[d.key] = opt;
-                                        return next;
-                                      })
-                                    }
-                                    className={`px-2 h-6 text-[10px] font-semibold rounded-sm border transition-colors capitalize ${cls}`}
-                                  >
-                                    {opt}
-                                  </button>
-                                );
-                              })}
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        )}
-
-        <div className="border-t border-borderc pt-3 mt-2">
-          <div className="text-xs uppercase tracking-wide text-textSecondary mb-2">Reset password</div>
-          <div className="relative">
-            <input
-              className="input pr-20 font-mono"
-              type={showPw ? "text" : "password"}
-              value={newPassword}
-              onChange={(e) => setNewPassword(e.target.value)}
-              placeholder="Leave blank to keep current"
-              minLength={8}
-              autoComplete="new-password"
-            />
-            <button
-              type="button"
-              onClick={() => setShowPw(!showPw)}
-              className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-textSecondary hover:text-brand"
-            >
-              {showPw ? "Hide" : "Show"}
-            </button>
-          </div>
-          <div className="flex justify-between items-center mt-1">
-            <button type="button" onClick={genStrong} className="text-xs text-brand hover:underline">
-              Generate strong password
-            </button>
-            {newPassword && newPassword.length < 8 && (
-              <span className="text-xs text-danger">Min 8 characters</span>
-            )}
-          </div>
-        </div>
-
-        {err && <div className="text-danger text-sm">{err}</div>}
-        {msg && <div className="text-success text-sm">{msg}</div>}
-        </div>
-        <div className="flex justify-end gap-2 px-5 py-3 border-t border-borderc bg-bg/50">
-          <button className="btn-secondary" onClick={onClose}>Cancel</button>
-          <button
-            className="btn-primary"
-            onClick={() => save.mutate()}
-            disabled={save.isPending || (newPassword.length > 0 && newPassword.length < 8)}
-          >
-            {save.isPending ? "Saving…" : "Save changes"}
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function AddStaffModal({ onClose }: { onClose: () => void }) {
-  const qc = useQueryClient();
-  const { toast } = useToast();
-  const [form, setForm] = useState({
-    email: "",
-    password: "",
-    fullName: "",
-    role: "frontdesk" as "admin" | "frontdesk" | "housekeeping",
-    phone: "",
-  });
-  const [err, setErr] = useState<string | null>(null);
-  const [showPw, setShowPw] = useState(false);
-  // Reveal-once: after a successful create we show the plaintext password
-  // one time so staff can hand it over. It's never retrievable afterwards
-  // (stored only as an irreversible hash), so this is the single chance
-  // to copy it.
-  const [created, setCreated] = useState<{ name: string; password: string } | null>(null);
-  const [copied, setCopied] = useState(false);
-
-  function genStrong() {
-    const chars = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789";
-    let out = "";
-    const arr = new Uint32Array(14);
-    crypto.getRandomValues(arr);
-    for (const n of arr) out += chars[n % chars.length];
-    setForm((f) => ({ ...f, password: out + "!" }));
-    setShowPw(true);
-  }
-
-  const save = useMutation({
-    mutationFn: () => api.post("/staff", { ...form, phone: form.phone || undefined }),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["staff"] });
-      // Don't close yet — surface the password once.
-      setCreated({ name: form.fullName, password: form.password });
-    },
-    onError: (e: Error) => setErr(e.message),
-  });
-
-  // Post-create reveal-once screen.
-  if (created) {
-    return (
-      <div
-        className="fixed inset-0 bg-black/50 flex items-center justify-center z-50"
-        onClick={onClose}
-      >
-        <div
-          className="bg-surface rounded-md w-full max-w-md p-6 space-y-4"
-          onClick={(e) => e.stopPropagation()}
-        >
-          <h2 className="text-lg font-semibold text-navy">Staff created</h2>
-          <p className="text-sm text-textSecondary">
-            <strong className="text-navy">{created.name}</strong> can now sign in. Copy the
-            password below and share it securely — it{" "}
-            <strong>won&apos;t be shown again</strong> (it&apos;s stored encrypted and can only be
-            reset, never viewed).
-          </p>
-          <div>
-            <label className="label block mb-1">Password</label>
-            <div className="relative">
-              <input
-                readOnly
-                className="input pr-20 font-mono select-all"
-                value={created.password}
-              />
-              <button
-                type="button"
-                onClick={() => {
-                  navigator.clipboard?.writeText(created.password).then(() => {
-                    setCopied(true);
-                    toast("Password copied", "success");
-                    setTimeout(() => setCopied(false), 2000);
-                  });
-                }}
-                className="absolute right-2 top-1/2 -translate-y-1/2 inline-flex items-center gap-1 text-xs text-brand hover:underline"
-              >
-                {copied ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
-                {copied ? "Copied" : "Copy"}
-              </button>
-            </div>
-          </div>
-          <div className="flex justify-end pt-2">
-            <button className="btn-primary" onClick={onClose}>Done</button>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  return (
-    <div
-      className="fixed inset-0 bg-black/50 flex items-center justify-center z-50"
-      onClick={onClose}
-    >
-      <div
-        className="bg-surface rounded-md w-full max-w-md p-6 space-y-4"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <h2 className="text-lg font-semibold text-navy">Add Staff</h2>
-        <Field label="Full Name">
-          <input
-            className="input"
-            value={form.fullName}
-            onChange={(e) => setForm({ ...form, fullName: e.target.value })}
-          />
-        </Field>
-        <Field label="Email">
-          <input
-            className="input"
-            type="email"
-            value={form.email}
-            onChange={(e) => setForm({ ...form, email: e.target.value })}
-          />
-        </Field>
-        <Field label="Password">
-          <div className="relative">
-            <input
-              className="input pr-20 font-mono"
-              type={showPw ? "text" : "password"}
-              value={form.password}
-              onChange={(e) => setForm({ ...form, password: e.target.value })}
-              minLength={8}
-              autoComplete="new-password"
-            />
-            <button
-              type="button"
-              onClick={() => setShowPw((v) => !v)}
-              className="absolute right-2 top-1/2 -translate-y-1/2 inline-flex items-center gap-1 text-xs text-textSecondary hover:text-brand"
-              aria-label={showPw ? "Hide password" : "Show password"}
-            >
-              {showPw ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
-              {showPw ? "Hide" : "Show"}
-            </button>
-          </div>
-          <div className="flex justify-between items-center mt-1">
-            <button type="button" onClick={genStrong} className="text-xs text-brand hover:underline">
-              Generate strong password
-            </button>
-            {form.password && form.password.length < 8 && (
-              <span className="text-xs text-danger">Min 8 characters</span>
-            )}
-          </div>
-        </Field>
-        <Field label="Role">
-          <select
-            className="input"
-            value={form.role}
-            onChange={(e) => setForm({ ...form, role: e.target.value as typeof form.role })}
-          >
-            <option value="frontdesk">Front Desk</option>
-            <option value="housekeeping">Housekeeping</option>
-            <option value="admin">Admin</option>
-          </select>
-        </Field>
-        <Field label="Phone (optional)">
-          <input
-            className="input"
-            type="tel"
-            inputMode="numeric"
-            maxLength={10}
-            placeholder="9876543210"
-            value={form.phone}
-            onChange={(e) => setForm({ ...form, phone: e.target.value.replace(/\D/g, "").slice(0, 10) })}
-          />
-        </Field>
-        {err && <div className="text-danger text-sm">{err}</div>}
-        <div className="flex justify-end gap-2 pt-2">
-          <button className="btn-secondary" onClick={onClose}>Cancel</button>
-          <button
-            className="btn-primary"
-            onClick={() => save.mutate()}
-            disabled={
-              save.isPending ||
-              !form.email ||
-              form.password.length < 8 ||
-              !form.fullName
-            }
-          >
-            {save.isPending ? "Creating…" : "Create"}
-          </button>
-        </div>
       </div>
     </div>
   );
@@ -2302,337 +1368,3 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
     </div>
   );
 }
-
-// ============================================================
-// Roles & Permissions tab
-// ============================================================
-
-interface PermissionDef {
-  key: string;
-  area: string;
-  label: string;
-  description?: string;
-}
-
-interface RbacRole {
-  id: string;
-  key: string;
-  label: string;
-  description: string | null;
-  isSystem: boolean;
-  permissions: string[];
-}
-
-function RolesTab() {
-  const qc = useQueryClient();
-  const dialog = useDialog();
-  const { toast } = useToast();
-  const [editing, setEditing] = useState<RbacRole | null>(null);
-  const [creating, setCreating] = useState(false);
-
-  const { data: rolesData } = useQuery({
-    queryKey: ["rbac-roles"],
-    queryFn: () => api.get<RbacRole[]>("/rbac/roles"),
-  });
-  const { data: catalog } = useQuery({
-    queryKey: ["rbac-catalog"],
-    queryFn: () => api.get<PermissionDef[]>("/rbac/permissions"),
-  });
-
-  const del = useMutation({
-    mutationFn: (id: string) => api.del(`/rbac/roles/${id}`),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["rbac-roles"] });
-      toast("Role deleted", "success");
-    },
-    onError: (e: Error) => toast(e.message, "error"),
-  });
-
-  if (!rolesData || !catalog) return <Loader />;
-
-  const grouped = groupByArea(catalog);
-
-  return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <div>
-          <p className="text-sm text-textSecondary">
-            Roles bundle permissions. System roles can be edited (except <em>admin</em>).
-            Custom roles can be deleted when no users hold them.
-          </p>
-        </div>
-        <button
-          className="btn-primary inline-flex items-center gap-2"
-          onClick={() => setCreating(true)}
-        >
-          <Plus className="w-4 h-4" /> New Role
-        </button>
-      </div>
-
-      <div className="card p-0">
-        <table className="table-base">
-          <thead>
-            <tr>
-              <th>Role</th>
-              <th>Type</th>
-              <th>Permissions</th>
-              <th></th>
-            </tr>
-          </thead>
-          <tbody>
-            {rolesData.map((r) => {
-              const isAdmin = r.key === "admin";
-              const permCount = r.permissions.includes("*") ? "All (god mode)" : `${r.permissions.length}`;
-              return (
-                <tr key={r.id}>
-                  <td>
-                    <div className="font-semibold text-brand-dark">{r.label}</div>
-                    <div className="text-xs text-textSecondary font-mono">{r.key}</div>
-                    {r.description && (
-                      <div className="text-xs text-textSecondary mt-0.5">{r.description}</div>
-                    )}
-                  </td>
-                  <td className="text-xs">
-                    {r.isSystem ? (
-                      <span className="px-1.5 py-0.5 rounded-sm bg-brand-soft text-brand-dark font-semibold">
-                        System
-                      </span>
-                    ) : (
-                      <span className="px-1.5 py-0.5 rounded-sm bg-bg text-textSecondary border border-borderc">
-                        Custom
-                      </span>
-                    )}
-                  </td>
-                  <td className="text-sm font-mono">{permCount}</td>
-                  <td className="text-right">
-                    <div className="inline-flex gap-2">
-                      {!isAdmin && (
-                        <button
-                          className="text-brand text-xs hover:underline inline-flex items-center gap-1"
-                          onClick={() => setEditing(r)}
-                        >
-                          <Pencil className="w-3 h-3" /> Edit
-                        </button>
-                      )}
-                      {!r.isSystem && (
-                        <button
-                          className="text-danger text-xs hover:underline inline-flex items-center gap-1"
-                          onClick={async () => {
-                            const ok = await dialog.confirm({
-                              title: `Delete role "${r.label}"?`,
-                              message:
-                                "This cannot be undone. Users currently in this role must be reassigned first.",
-                              okLabel: "Delete role",
-                              tone: "danger",
-                            });
-                            if (ok) del.mutate(r.id);
-                          }}
-                        >
-                          <Trash2 className="w-3 h-3" /> Delete
-                        </button>
-                      )}
-                    </div>
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
-
-      {creating && <RoleEditor catalog={grouped} onClose={() => setCreating(false)} />}
-      {editing && (
-        <RoleEditor catalog={grouped} role={editing} onClose={() => setEditing(null)} />
-      )}
-    </div>
-  );
-}
-
-function groupByArea(catalog: PermissionDef[]): Record<string, PermissionDef[]> {
-  const out: Record<string, PermissionDef[]> = {};
-  for (const p of catalog) {
-    if (!out[p.area]) out[p.area] = [];
-    out[p.area]!.push(p);
-  }
-  return out;
-}
-
-function RoleEditor({
-  role,
-  catalog,
-  onClose,
-}: {
-  role?: RbacRole;
-  catalog: Record<string, PermissionDef[]>;
-  onClose: () => void;
-}) {
-  const qc = useQueryClient();
-  const { toast } = useToast();
-  const [key, setKey] = useState(role?.key ?? "");
-  const [label, setLabel] = useState(role?.label ?? "");
-  const [description, setDescription] = useState(role?.description ?? "");
-  const [perms, setPerms] = useState<Set<string>>(new Set(role?.permissions ?? []));
-  const [err, setErr] = useState<string | null>(null);
-
-  function toggle(k: string) {
-    setPerms((s) => {
-      const next = new Set(s);
-      if (next.has(k)) next.delete(k);
-      else next.add(k);
-      return next;
-    });
-  }
-
-  function toggleArea(area: string, on: boolean) {
-    const keys = (catalog[area] ?? []).map((p) => p.key);
-    setPerms((s) => {
-      const next = new Set(s);
-      for (const k of keys) {
-        if (on) next.add(k);
-        else next.delete(k);
-      }
-      return next;
-    });
-  }
-
-  const save = useMutation({
-    mutationFn: () => {
-      const body = {
-        key,
-        label,
-        description: description || null,
-        permissions: Array.from(perms),
-      };
-      if (role) {
-        const { key: _k, ...rest } = body;
-        return api.patch(`/rbac/roles/${role.id}`, rest);
-      }
-      return api.post(`/rbac/roles`, body);
-    },
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["rbac-roles"] });
-      toast(role ? "Role updated" : "Role created", "success");
-      onClose();
-    },
-    onError: (e: Error) => setErr(e.message),
-  });
-
-  return (
-    <div
-      className="fixed inset-0 z-[150] grid place-items-center bg-brand-dark/40 p-4"
-      onMouseDown={(e) => {
-        if (e.target === e.currentTarget) onClose();
-      }}
-    >
-      <div className="w-full max-w-3xl bg-surface rounded-md shadow-xl border border-borderc max-h-[90vh] overflow-hidden flex flex-col">
-        <div className="flex items-center justify-between px-5 py-3 border-b border-borderc">
-          <div className="font-semibold text-textPrimary">
-            {role ? `Edit role · ${role.label}` : "Create role"}
-          </div>
-          <button onClick={onClose} className="text-textSecondary hover:text-textPrimary text-lg">
-            ×
-          </button>
-        </div>
-
-        <div className="p-5 space-y-4 overflow-y-auto">
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <Field label="Role key (lowercase, _)">
-              <input
-                className="input font-mono disabled:bg-bg/50 disabled:text-textSecondary"
-                value={key}
-                disabled={!!role}
-                placeholder="e.g. front_desk_lead"
-                onChange={(e) => setKey(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, ""))}
-              />
-            </Field>
-            <Field label="Display label">
-              <input
-                className="input"
-                value={label}
-                placeholder="e.g. Front Desk Lead"
-                onChange={(e) => setLabel(e.target.value)}
-              />
-            </Field>
-          </div>
-          <Field label="Description">
-            <input
-              className="input"
-              value={description}
-              placeholder="What this role is for"
-              onChange={(e) => setDescription(e.target.value)}
-            />
-          </Field>
-
-          <div>
-            <div className="label mb-2">Permissions ({perms.size})</div>
-            <div className="space-y-3">
-              {Object.entries(catalog).map(([area, defs]) => {
-                const all = defs.every((d) => perms.has(d.key));
-                const some = defs.some((d) => perms.has(d.key));
-                return (
-                  <div key={area} className="border border-borderc rounded-sm p-3">
-                    <div className="flex items-center justify-between mb-2">
-                      <div className="text-sm font-bold text-brand-dark">{area}</div>
-                      <button
-                        type="button"
-                        className="text-xs font-semibold text-brand hover:underline"
-                        onClick={() => toggleArea(area, !all)}
-                      >
-                        {all ? "Clear all" : some ? "Select all" : "Select all"}
-                      </button>
-                    </div>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
-                      {defs.map((d) => {
-                        const on = perms.has(d.key);
-                        return (
-                          <label
-                            key={d.key}
-                            className={`flex items-start gap-2 px-2 py-1.5 rounded-sm cursor-pointer text-sm transition-colors ${
-                              on ? "bg-brand-soft" : "hover:bg-bg"
-                            }`}
-                          >
-                            <input
-                              type="checkbox"
-                              className="mt-0.5"
-                              checked={on}
-                              onChange={() => toggle(d.key)}
-                            />
-                            <div className="flex-1 min-w-0">
-                              <div className="font-medium text-textPrimary">{d.label}</div>
-                              <div className="text-[11px] text-textSecondary font-mono truncate">
-                                {d.key}
-                              </div>
-                            </div>
-                          </label>
-                        );
-                      })}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-
-          {err && <div className="text-danger text-sm">{err}</div>}
-        </div>
-
-        <div className="flex items-center justify-end gap-2 px-5 py-3 border-t border-borderc bg-bg/50">
-          <button
-            onClick={onClose}
-            className="px-4 h-9 text-sm font-semibold rounded-sm border-2 border-borderc text-textSecondary hover:border-textSecondary hover:text-textPrimary transition-colors"
-          >
-            Cancel
-          </button>
-          <button
-            onClick={() => save.mutate()}
-            disabled={save.isPending || !key.trim() || !label.trim()}
-            className="px-4 h-9 text-sm font-semibold rounded-sm bg-brand-dark text-cream border-2 border-brand-dark hover:opacity-90 transition-opacity disabled:opacity-40"
-          >
-            {save.isPending ? "Saving…" : role ? "Save changes" : "Create role"}
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-

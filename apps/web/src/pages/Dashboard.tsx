@@ -8,13 +8,16 @@ import {
   LogIn,
   LogOut,
   Receipt,
+  Tags,
   UserPlus,
   Wallet,
   X,
-} from "lucide-react";
+} from "@/lib/micons";
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
+import { useAuth } from "@/auth/AuthContext";
 import { Can } from "@/auth/Can";
+import { useRoomTypes } from "@/hooks/useRoomTypes";
 import { Loader } from "@/components/Loader";
 import { RoomActionPopover } from "@/components/RoomActionPopover";
 import { api } from "@/lib/api";
@@ -249,10 +252,10 @@ export default function Dashboard() {
             status chips that used to live on per-type strips. */}
         {groupByFloor(data.room_grid).map((floorGroup, floorIdx) => {
           const floorStats = rollupFloorStats(floorGroup.rooms);
+          // "Sellable" = free to let for TONIGHT. Held rooms count: they are
+          // empty now and only locked from a later date, which is why the
+          // headline separates them out rather than hiding them.
           const sellable = floorStats.available + floorStats.held;
-          const pct = floorStats.total > 0
-            ? Math.round((sellable / floorStats.total) * 100)
-            : 0;
           const chips: { label: string; count: number; dot: string }[] = [];
           if (floorStats.available > 0) chips.push({ label: "Available", count: floorStats.available, dot: "bg-[#ffdb13]" });
           if (floorStats.held > 0) chips.push({ label: "Held", count: floorStats.held, dot: "bg-warning" });
@@ -267,20 +270,36 @@ export default function Dashboard() {
               className={floorIdx === 0 ? "pb-2" : "mt-5 pt-4 border-t-2 border-brand-dark/15 pb-2"}
             >
               <div className="flex items-center justify-between gap-3 flex-wrap mb-2">
-                <div className="flex items-baseline gap-3">
+                {/* Headline answers the one question the desk asks at a
+                    glance: how many rooms can I still sell tonight?
+                    Deliberately NOT a percentage — the Occupancy card above
+                    already shows "50% occupied", and a second percentage
+                    measuring the inverse of the same rooms (25% sellable)
+                    read as a contradiction. "N of M" carries the same
+                    proportion without competing with it. */}
+                <div>
                   <div className="font-semibold text-brand-dark">
                     Floor {floorGroup.floor}
                   </div>
-                  <div className="flex items-baseline gap-1.5">
-                    <span className="text-xl font-bold text-brand">{sellable}</span>
-                    <span className="text-[11px] text-textSecondary">
-                      sellable · {pct}%
-                      {floorStats.held > 0 && (
-                        <span className="ml-1 text-warning font-semibold">
-                          ({floorStats.held} held)
-                        </span>
-                      )}
+                  <div
+                    className="flex items-baseline gap-1.5 mt-0.5"
+                    title={
+                      floorStats.held > 0
+                        ? `${sellable} of ${floorStats.total} rooms are free tonight — ${floorStats.held} of them is booked from a later date`
+                        : `${sellable} of ${floorStats.total} rooms are free to sell tonight`
+                    }
+                  >
+                    <span className="text-xl font-bold text-brand leading-none">
+                      {sellable}
                     </span>
+                    <span className="text-[11px] text-textSecondary">
+                      of {floorStats.total} free tonight
+                    </span>
+                    {floorStats.held > 0 && (
+                      <span className="text-[11px] text-warning font-semibold">
+                        · {floorStats.held} booked later
+                      </span>
+                    )}
                   </div>
                 </div>
                 <div className="flex items-center gap-1.5 flex-wrap">
@@ -507,32 +526,90 @@ function GetStartedCard() {
   const [dismissed, setDismissed] = useState(
     () => localStorage.getItem(ONBOARD_DISMISSED_KEY) === "1",
   );
+  const { profile } = useAuth();
+  const isAdmin = profile?.role === "admin";
+
+  // Live completion signals. Cheap reads, all cached elsewhere in the app.
+  const typesQ = useRoomTypes();
+  const roomsQ = useQuery({
+    queryKey: ["rooms", "all"],
+    queryFn: () => api.get<{ id: string }[]>("/rooms", {}),
+    staleTime: 60_000,
+    enabled: !dismissed,
+  });
+  const pubQ = useQuery({
+    queryKey: ["settings-public"],
+    queryFn: () => api.get<{ hotelGstin?: string | null }>("/settings/public"),
+    staleTime: 60_000,
+    enabled: !dismissed,
+  });
+  const staffQ = useQuery({
+    queryKey: ["staff"],
+    queryFn: () => api.get<{ id: string }[]>("/staff"),
+    staleTime: 60_000,
+    // /staff is admin-gated; other roles never fire this.
+    enabled: !dismissed && isAdmin,
+  });
+
   if (dismissed) return null;
 
   const steps = [
-    { to: "/rooms", label: "Add rooms", icon: <BedDouble className="w-4 h-4" /> },
-    { to: "/settings", label: "GST & hotel details", icon: <Receipt className="w-4 h-4" /> },
-    { to: "/settings", label: "Invite staff", icon: <UserPlus className="w-4 h-4" /> },
+    // Room types must exist before the first room can be created, so they
+    // lead the list.
+    {
+      to: "/rooms?tab=types",
+      label: "Add room types",
+      icon: <Tags className="w-4 h-4" />,
+      done: (typesQ.data?.length ?? 0) > 0,
+    },
+    {
+      to: "/rooms",
+      label: "Add rooms",
+      icon: <BedDouble className="w-4 h-4" />,
+      done: (roomsQ.data?.length ?? 0) > 0,
+    },
+    {
+      to: "/settings",
+      label: "GST & hotel details",
+      icon: <Receipt className="w-4 h-4" />,
+      done: !!pubQ.data?.hotelGstin?.trim(),
+    },
+    {
+      to: "/staff",
+      label: "Invite staff",
+      icon: <UserPlus className="w-4 h-4" />,
+      // The admin themselves is row one — "invited" means anyone beyond that.
+      done: (staffQ.data?.length ?? 0) > 1,
+    },
   ];
+  const doneCount = steps.filter((s) => s.done).length;
+
+  // Everything set up — the guide has served its purpose.
+  if (doneCount === steps.length) return null;
 
   return (
     <div className="card">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <h2 className="font-semibold text-brand-dark">Welcome to Stayvia — set up your hotel</h2>
+          <h2 className="font-semibold text-brand-dark">Welcome to Stayvia - set up your hotel</h2>
           <p className="text-xs text-textSecondary mt-0.5">
-            Three quick steps and your front desk is ready.
+            Four quick steps and your front desk is ready.
+            <span className="ml-1 font-semibold text-brand-dark">{doneCount} of 4 done.</span>
           </p>
           <div className="flex flex-wrap gap-2 mt-3">
             {steps.map((s) => (
               <Link
                 key={s.label}
                 to={s.to}
-                className="inline-flex items-center gap-1.5 border border-borderc rounded-sm px-3 py-1.5 text-sm font-medium text-brand-dark bg-surface hover:bg-brand-soft transition-colors"
+                className={`inline-flex items-center gap-1.5 border rounded-sm px-3 py-1.5 text-sm font-medium transition-colors ${
+                  s.done
+                    ? "border-success/40 bg-success/10 text-success"
+                    : "border-borderc bg-surface text-brand-dark hover:bg-brand-soft"
+                }`}
               >
-                {s.icon}
+                {s.done ? <CheckCircle2 className="w-4 h-4" /> : s.icon}
                 {s.label}
-                <ArrowRight className="w-3.5 h-3.5 text-textSecondary" />
+                {!s.done && <ArrowRight className="w-3.5 h-3.5 text-textSecondary" />}
               </Link>
             ))}
           </div>
@@ -629,7 +706,7 @@ function TodaysCollections({
         <div>
           <h2 className="font-semibold text-brand-dark">Today's Collections by Method</h2>
           <p className="text-xs text-textSecondary mt-0.5">
-            Money received today, split by payment mode — for the daily cash-up.
+            Money received today, split by payment mode - for the daily cash-up.
           </p>
         </div>
         <Wallet className="w-5 h-5 text-accentBlue" />

@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { format, formatDistanceToNow, isToday, isYesterday, startOfMonth, startOfWeek, startOfYear } from "date-fns";
-import { Activity as ActivityIcon, Calendar } from "lucide-react";
+import { Activity as ActivityIcon, Calendar } from "@/lib/micons";
 import { useMemo, useState } from "react";
 import { Loader } from "@/components/Loader";
 import { StickyBar } from "@/components/StickyBar";

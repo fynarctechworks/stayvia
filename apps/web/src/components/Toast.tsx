@@ -1,5 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from "react";
-import { CheckCircle2, AlertCircle, Info, X } from "lucide-react";
+import { CheckCircle2, AlertCircle, Info, X } from "@/lib/micons";
 
 type ToastVariant = "success" | "error" | "info";
 interface Toast {
@@ -64,10 +64,17 @@ export function useToast() {
 export function useNotificationToasts(unreadIds: string[] | undefined) {
   const { toast } = useToast();
   const seen = useRef<Set<string>>(new Set());
+  // Explicit first-load flag. Using `seen.size === 0` as the sentinel meant a
+  // desk that keeps its inbox clear — the normal state — never got a toast for
+  // its FIRST notification: poll 1 returned [] and left the set empty, so the
+  // next poll (now carrying a genuinely new id) still looked like a first load
+  // and recorded it silently. Only the second notification onward toasted.
+  const primed = useRef(false);
   useEffect(() => {
     if (!unreadIds) return;
-    if (seen.current.size === 0) {
-      // first load: just record without firing toasts
+    if (!primed.current) {
+      primed.current = true;
+      // First load: record what's already unread without firing toasts.
       unreadIds.forEach((id) => seen.current.add(id));
       return;
     }

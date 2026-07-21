@@ -1,4 +1,4 @@
-import { Download, ExternalLink, Loader2, Printer, X } from "lucide-react";
+import { Download, ExternalLink, Loader2, Printer, X } from "@/lib/micons";
 import { useEffect, useRef, useState } from "react";
 import { authHeader } from "@/lib/api";
 

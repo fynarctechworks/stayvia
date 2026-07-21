@@ -9,9 +9,9 @@ import {
   LogIn,
   LogOut,
   MessageSquare,
-  Sparkles,
+  SprayCan,
   XCircle,
-} from "lucide-react";
+} from "@/lib/micons";
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Loader } from "@/components/Loader";
@@ -51,8 +51,8 @@ const TYPE_META: Record<string, { icon: typeof Bell; label: string; tint: string
   reservation_cancelled: { icon: XCircle, label: "Cancelled", tint: "text-danger bg-danger/10" },
   guest_checked_in: { icon: LogIn, label: "Check-in", tint: "text-success bg-success/10" },
   guest_checked_out: { icon: LogOut, label: "Check-out", tint: "text-[#157f5f] bg-brass/10" },
-  housekeeping_assigned: { icon: Sparkles, label: "Housekeeping", tint: "text-accentBlue bg-accentBlue/10" },
-  housekeeping_completed: { icon: Sparkles, label: "Housekeeping", tint: "text-success bg-success/10" },
+  housekeeping_assigned: { icon: SprayCan, label: "Housekeeping", tint: "text-accentBlue bg-accentBlue/10" },
+  housekeeping_completed: { icon: SprayCan, label: "Housekeeping", tint: "text-success bg-success/10" },
   invoice_issued: { icon: FileText, label: "Invoice", tint: "text-brand bg-brand/10" },
   message_received: { icon: MessageSquare, label: "Message", tint: "text-accentBlue bg-accentBlue/10" },
   system: { icon: Bell, label: "System", tint: "text-textSecondary bg-bg" },

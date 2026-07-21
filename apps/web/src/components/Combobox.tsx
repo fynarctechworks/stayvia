@@ -1,5 +1,5 @@
 import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { ChevronDown, Check, X } from "lucide-react";
+import { ChevronDown, Check, X } from "@/lib/micons";
 
 // Search-as-you-type combobox with optional grouped options and a
 // "use custom value" affordance. Built for our state picker but

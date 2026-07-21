@@ -25,7 +25,7 @@ import {
   Receipt,
   Search,
   Wallet,
-} from "lucide-react";
+} from "@/lib/micons";
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/auth/AuthContext";
@@ -156,7 +156,7 @@ export default function Expenses() {
         <div>
           <h1 className="text-2xl font-bold text-brand-dark">Expenses</h1>
           <p className="text-xs text-textSecondary mt-0.5">
-            Property overheads — utilities, repairs, supplies, salaries
+            Property overheads - utilities, repairs, supplies, salaries
           </p>
         </div>
         {canManage && (
@@ -479,7 +479,7 @@ function ExpenseRowItem({ r }: { r: ExpenseRow }) {
           )}
         </div>
         <div className="min-w-0 text-xs">
-          <div className="text-brand-dark truncate">{r.vendorName ?? "—"}</div>
+          <div className="text-brand-dark truncate">{r.vendorName ?? "-"}</div>
           {r.vendorPhone && (
             <div className="text-[10px] text-textSecondary font-mono">
               {r.vendorPhone}
@@ -797,7 +797,7 @@ export function ExpenseModal({
                 value={form.notes}
                 onChange={(e) => set("notes", e.target.value)}
                 maxLength={1000}
-                placeholder="Optional context — quarterly settlement, advance against future work, etc."
+                placeholder="Optional context - quarterly settlement, advance against future work, etc."
               />
             </div>
             <div className="sm:col-span-2">

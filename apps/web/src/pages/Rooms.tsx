@@ -1,9 +1,11 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Pencil, Plus, Snowflake, Trash2, Tv, Wifi } from "lucide-react";
+import { Pencil, Plus, Snowflake, Trash2, Tv, Wifi } from "@/lib/micons";
 import { useEffect, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { useAuth } from "@/auth/AuthContext";
 import { useDialog } from "@/components/Dialog";
 import { Loader } from "@/components/Loader";
+import { RoomTypesManager } from "@/components/RoomTypesManager";
 import { useRoomTypes, labelForRoomType } from "@/hooks/useRoomTypes";
 import { api } from "@/lib/api";
 import { invalidateRoomData } from "@/lib/invalidate";
@@ -25,6 +27,13 @@ interface Room {
 
 export default function Rooms() {
   const { profile } = useAuth();
+  // Room-type management moved here from Settings — admins flip between
+  // the room grid and the type catalog with these tabs. ?tab=types deep-links
+  // straight to the catalog (used by the dashboard's get-started card).
+  const [searchParams] = useSearchParams();
+  const [view, setView] = useState<"rooms" | "types">(
+    searchParams.get("tab") === "types" ? "types" : "rooms",
+  );
   const [showAdd, setShowAdd] = useState(false);
   const [editing, setEditing] = useState<Room | null>(null);
   const [floor, setFloor] = useState<string>("");
@@ -86,11 +95,11 @@ export default function Rooms() {
           <div className="text-xs text-textSecondary mt-0.5">
             {totalRooms} room{totalRooms === 1 ? "" : "s"} across{" "}
             {byFloor.size === 0
-              ? "—"
+              ? "-"
               : `${byFloor.size} floor${byFloor.size === 1 ? "" : "s"}`}
           </div>
         </div>
-        {profile?.role === "admin" && (
+        {profile?.role === "admin" && view === "rooms" && (
           <button
             onClick={() => setShowAdd(true)}
             className="btn-primary inline-flex items-center gap-2"
@@ -100,6 +109,33 @@ export default function Rooms() {
         )}
       </div>
 
+      {profile?.role === "admin" && (
+        <div className="flex gap-1 border-b border-borderc">
+          {(
+            [
+              { id: "rooms", label: "Rooms" },
+              { id: "types", label: "Room Types" },
+            ] as const
+          ).map((t) => (
+            <button
+              key={t.id}
+              onClick={() => setView(t.id)}
+              className={`px-4 py-2 text-sm font-medium border-b-2 transition ${
+                view === t.id
+                  ? "border-gold text-navy"
+                  : "border-transparent text-textSecondary hover:text-navy"
+              }`}
+            >
+              {t.label}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {view === "types" && profile?.role === "admin" ? (
+        <RoomTypesManager />
+      ) : (
+      <>
       {/* Status chips — click to filter */}
       <div className="card !p-3">
         <div className="flex flex-wrap items-center gap-2">
@@ -222,6 +258,8 @@ export default function Rooms() {
             setEditing(null);
           }}
         />
+      )}
+      </>
       )}
     </div>
   );
@@ -406,7 +444,7 @@ function RoomModal({ room, onClose }: { room: Room | null; onClose: () => void }
       i.totalHistoricalReservations > 0
         ? ` This will detach ${i.totalHistoricalReservations} historical reservation link${
             i.totalHistoricalReservations === 1 ? "" : "s"
-          } — those past reservations will lose their room reference.`
+          } - those past reservations will lose their room reference.`
         : "";
     const ok2 = await dialog.confirm({
       title: `Delete room ${room.roomNumber}?`,
@@ -493,7 +531,7 @@ function RoomModal({ room, onClose }: { room: Room | null; onClose: () => void }
           <Field label="Type">
             {roomTypes.length === 0 ? (
               <div className="text-xs text-danger">
-                No room types defined. Add some in Settings → Room Types first.
+                No room types defined. Add some in the Room Types tab first.
               </div>
             ) : (
               <select
@@ -553,7 +591,7 @@ function RoomModal({ room, onClose }: { room: Room | null; onClose: () => void }
                 disabled={del.isPending || impact.isLoading}
                 title={
                   impact.data && !impact.data.canDelete
-                    ? "Room is currently in use — cannot delete"
+                    ? "Room is currently in use - cannot delete"
                     : "Delete this room"
                 }
               >

@@ -16,7 +16,7 @@ test.describe("cloud smoke", () => {
   test("signup page renders", async ({ page }) => {
     await page.goto("/signup");
     await expect(page.getByRole("heading", { name: /create your hotel/i })).toBeVisible();
-    await expect(page.getByRole("button", { name: /start free trial/i })).toBeVisible();
+    await expect(page.getByRole("button", { name: /send verification code/i })).toBeVisible();
   });
 
   test("login page renders", async ({ page }) => {

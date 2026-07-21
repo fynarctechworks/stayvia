@@ -1,6 +1,6 @@
 import { useMutation } from "@tanstack/react-query";
 import { format } from "date-fns";
-import { Printer, X } from "lucide-react";
+import { Printer, X } from "@/lib/micons";
 import { useEffect, useState } from "react";
 import { ApiError, api } from "@/lib/api";
 import { formatTime, inr } from "@/lib/utils";

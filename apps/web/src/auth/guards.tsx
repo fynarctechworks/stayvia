@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { Lock } from "lucide-react";
+import { Lock } from "@/lib/micons";
 import { Navigate, useLocation, useNavigate } from "react-router-dom";
 import type { Role } from "@stayvia/shared";
 import { Loader } from "@/components/Loader";

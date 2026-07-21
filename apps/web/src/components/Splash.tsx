@@ -23,9 +23,9 @@ export function Splash({ onDone, duration = 3500 }: { onDone: () => void; durati
       <div className="absolute inset-0 opacity-[0.18] [background:radial-gradient(circle_at_18%_15%,#3ecf8e_0,transparent_45%),radial-gradient(circle_at_82%_85%,#24b47e_0,transparent_55%)]" />
       <div className="relative flex flex-col items-center gap-5 animate-[splashIn_700ms_ease-out]">
         <img
-          src="/logo.jpg"
+          src="/logo.png"
           alt="Stayvia"
-          className="w-56 h-56 sm:w-64 sm:h-64 rounded-2xl object-contain bg-cream shadow-2xl ring-1 ring-brass/30"
+          className="w-56 h-56 sm:w-64 sm:h-64 object-contain"
         />
         <div className="text-center leading-tight">
           <div className="text-cream text-2xl font-semibold">Stayvia</div>

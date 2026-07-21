@@ -13,12 +13,11 @@ import {
   Plus,
   RefreshCw,
   Search,
-  Sparkles,
   Star,
   Tag,
   Users,
-} from "lucide-react";
-import type { LucideIcon } from "lucide-react";
+} from "@/lib/micons";
+import type { LucideIcon } from "@/lib/micons";
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Loader } from "@/components/Loader";
@@ -49,7 +48,7 @@ interface TagStyle {
 const TAG_STYLES: Record<string, TagStyle> = {
   first_time: {
     label: "First-time",
-    icon: Sparkles,
+    icon: Star,
     solidBg: "bg-brand",
     solidText: "text-textPrimary",
     tintBg: "bg-brand/15",
@@ -359,7 +358,7 @@ function GuestCard({ g, onOpen }: { g: Guest; onOpen: () => void }) {
       <div className="mt-3 pt-3 border-t border-borderc space-y-1.5 text-xs">
         <div className="flex items-center gap-2 text-textSecondary">
           <Mail className="w-3.5 h-3.5 shrink-0" />
-          <span className="truncate">{g.email ?? "—"}</span>
+          <span className="truncate">{g.email ?? "-"}</span>
         </div>
         <div className="flex items-center justify-between gap-2">
           <div className="flex items-center gap-2 text-textSecondary min-w-0">
@@ -372,7 +371,7 @@ function GuestCard({ g, onOpen }: { g: Guest; onOpen: () => void }) {
         </div>
         <div className="flex items-center gap-2 text-textSecondary">
           <MapPin className="w-3.5 h-3.5 shrink-0" />
-          <span className="truncate">{g.city ?? "—"}</span>
+          <span className="truncate">{g.city ?? "-"}</span>
         </div>
       </div>
     </div>

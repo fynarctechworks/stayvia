@@ -8,7 +8,7 @@ import {
   Lock,
   Mail,
   ShieldCheck,
-} from "lucide-react";
+} from "@/lib/micons";
 import { useAuth } from "@/auth/AuthContext";
 import { useDialog } from "@/components/Dialog";
 import { api } from "@/lib/api";
@@ -208,7 +208,7 @@ export default function Login() {
 
         {/* Logo + name, top-left. */}
         <div className="absolute top-10 left-10 xl:left-14 flex items-center gap-3 pointer-events-none">
-          <img src="/logo.jpg" alt="Stayvia" className="w-14 h-14 rounded-2xl object-contain bg-cream shadow-md ring-1 ring-brass/30" />
+          <img src="/logo.png" alt="Stayvia" className="w-14 h-14 object-contain" />
           <div className="leading-tight">
             <div className="text-cream font-semibold text-lg">Stayvia</div>
             <div className="text-[11px] font-normal text-brass tracking-[0.18em] uppercase">Hotel OS</div>
@@ -276,7 +276,7 @@ export default function Login() {
         </div>
         <div aria-hidden className="lg:hidden absolute inset-0 bg-brand-dark/55" />
         <img
-          src="/logo.jpg"
+          src="/logo.png"
           alt=""
           aria-hidden
           className="lg:hidden absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[80vw] max-w-sm object-contain opacity-[0.05] mix-blend-screen select-none pointer-events-none"
@@ -286,9 +286,9 @@ export default function Login() {
               brand aside). Logo on the green backdrop, then the card. */}
           <div className="lg:hidden flex flex-col items-center text-center mb-5">
             <img
-              src="/logo.jpg"
+              src="/logo.png"
               alt="Stayvia"
-              className="w-16 h-16 rounded-2xl object-contain bg-cream shadow-lg ring-1 ring-brass/30"
+              className="w-16 h-16 object-contain"
             />
             <div className="mt-3 text-cream font-semibold text-lg leading-tight">Stayvia</div>
             <div className="text-[11px] tracking-[0.18em] uppercase text-brass">Hotel OS</div>
@@ -438,30 +438,6 @@ export default function Login() {
               "Sign in"
             )}
           </button>
-
-          <p className="text-center text-xs text-textSecondary">
-            Trouble signing in?{" "}
-            {import.meta.env.VITE_ADMIN_CONTACT_EMAIL ? (
-              <a
-                // Open Gmail's web compose in a new tab — works in any
-                // browser without needing a system mail handler (which
-                // is often missing on Windows machines without Outlook
-                // configured, which silently breaks mailto: links).
-                href={`https://mail.google.com/mail/?view=cm&fs=1&to=${encodeURIComponent(
-                  import.meta.env.VITE_ADMIN_CONTACT_EMAIL,
-                )}&su=${encodeURIComponent("Stayvia login help")}&body=${encodeURIComponent(
-                  `Hi,\n\nI can't sign in to the Stayvia workspace.\n\nMy email: ${email || "(fill in)"}\nIssue: (please describe)\n\nThanks.`,
-                )}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-brand-dark font-semibold hover:underline"
-              >
-                Email {import.meta.env.VITE_ADMIN_CONTACT_EMAIL}
-              </a>
-            ) : (
-              "Contact your hotel administrator."
-            )}
-          </p>
 
           <p className="text-center text-xs text-textSecondary">
             New hotel?{" "}

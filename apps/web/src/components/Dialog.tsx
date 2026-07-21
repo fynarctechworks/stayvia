@@ -7,7 +7,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { AlertTriangle, Info, X } from "lucide-react";
+import { AlertTriangle, Info, X } from "@/lib/micons";
 
 type Tone = "default" | "danger" | "warning" | "success";
 

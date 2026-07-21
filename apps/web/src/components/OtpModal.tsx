@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Loader2, Mail, Phone, ShieldCheck, X } from "lucide-react";
+import { Loader2, Mail, Phone, ShieldCheck, X } from "@/lib/micons";
 import { api, ApiError } from "@/lib/api";
 
 interface Props {
@@ -13,10 +13,14 @@ interface Props {
   //     reservation-create endpoint can verify + consume atomically.
   //   - phone: pre-create OTP for a BRAND-NEW guest — neither guest nor
   //     reservation rows exist yet. The guest is only written after this
-  //     verifies, so an abandoned booking leaves no orphan record. SMS only.
+  //     verifies, so an abandoned booking leaves no orphan record. Email
+  //     delivery is possible too when the booking form captured one —
+  //     pass it via `email`; the OTP stays keyed by the phone.
   reservationId?: string;
   guestId?: string;
   phone?: string;
+  // Optional delivery address for the email channel in phone mode.
+  email?: string;
   open: boolean;
   onClose: () => void;
   // In reservationId mode the modal calls /otp/verify itself; onVerified
@@ -33,7 +37,7 @@ interface SendResp {
   devCode?: string;
 }
 
-export function OtpModal({ reservationId, guestId, phone, open, onClose, onVerified }: Props) {
+export function OtpModal({ reservationId, guestId, phone, email, open, onClose, onVerified }: Props) {
   const [step, setStep] = useState<"choose" | "verify">("choose");
   const [channel, setChannel] = useState<"sms" | "email">("sms");
   const [send, setSend] = useState<SendResp | null>(null);
@@ -75,7 +79,12 @@ export function OtpModal({ reservationId, guestId, phone, open, onClose, onVerif
     setBusy(true);
     setError(null);
     try {
-      const r = await api.post<SendResp>("/otp/send", { ...anchor, channel });
+      const r = await api.post<SendResp>("/otp/send", {
+        ...anchor,
+        channel,
+        // Phone-anchored email delivery: the form-typed email rides along.
+        ...(phone && channel === "email" && email ? { email } : {}),
+      });
       setSend(r);
       setSecondsLeft(r.expiresInSeconds);
       setStep("verify");
@@ -139,19 +148,26 @@ export function OtpModal({ reservationId, guestId, phone, open, onClose, onVerif
                 >
                   <Phone className="w-4 h-4" /> SMS
                 </button>
-                {/* Phone-anchored OTP (new guest, no row yet) is SMS-only. */}
-                {!phone && (
-                  <button
-                    type="button"
-                    onClick={() => setChannel("email")}
-                    className={`flex items-center gap-2 justify-center py-3 rounded-md border-2 transition-colors ${
-                      channel === "email" ? "border-brand bg-brand-soft text-brand-dark" : "border-borderc text-textSecondary hover:border-brand/40"
-                    }`}
-                  >
-                    <Mail className="w-4 h-4" /> Email
-                  </button>
-                )}
+                {/* New-guest (phone-anchored) email OTP needs the email the
+                    form captured; until one is typed the button is visible
+                    but disabled so staff knows the option exists. */}
+                <button
+                  type="button"
+                  disabled={!!phone && !email}
+                  onClick={() => setChannel("email")}
+                  className={`flex items-center gap-2 justify-center py-3 rounded-md border-2 transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${
+                    channel === "email" ? "border-brand bg-brand-soft text-brand-dark" : "border-borderc text-textSecondary hover:border-brand/40"
+                  }`}
+                >
+                  <Mail className="w-4 h-4" /> Email
+                </button>
               </div>
+              {!!phone && !email && (
+                <p className="text-xs text-textSecondary">
+                  To send the code by email, fill the guest's Email field on the
+                  booking form first.
+                </p>
+              )}
               {error && <div className="text-danger text-sm">{error}</div>}
               <button
                 type="button"

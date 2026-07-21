@@ -13,7 +13,7 @@ import {
   startOfWeek,
   subMonths,
 } from "date-fns";
-import { CalendarDays, ChevronLeft, ChevronRight, Gift, X } from "lucide-react";
+import { CalendarDays, ChevronLeft, ChevronRight, Gift, X } from "@/lib/micons";
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Loader } from "@/components/Loader";

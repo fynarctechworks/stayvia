@@ -20,6 +20,7 @@ const Housekeeping = lazy(() => import("@/pages/Housekeeping"));
 const Activity = lazy(() => import("@/pages/Activity"));
 const Reports = lazy(() => import("@/pages/Reports"));
 const Settings = lazy(() => import("@/pages/Settings"));
+const Staff = lazy(() => import("@/pages/Staff"));
 const Messages = lazy(() => import("@/pages/Messages"));
 const Notifications = lazy(() => import("@/pages/Notifications"));
 const Collections = lazy(() => import("@/pages/Collections"));
@@ -215,6 +216,22 @@ export default function App() {
               <AppShell>
                 <PermissionGuard any={["manage_settings", "manage_staff", "manage_roles", "manage_templates"]}>
                   <Settings />
+                </PermissionGuard>
+              </AppShell>
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/staff"
+          element={
+            <ProtectedRoute>
+              <AppShell>
+                {/* Staff page hosts BOTH tabs — staff list and roles &
+                    permissions — so either permission grants entry; the
+                    page itself hides the tab the user can't manage. */}
+                <PermissionGuard any={["manage_staff", "manage_roles"]}>
+                  <Staff />
                 </PermissionGuard>
               </AppShell>
             </ProtectedRoute>

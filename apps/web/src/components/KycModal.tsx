@@ -1,5 +1,5 @@
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { ShieldCheck, Upload } from "lucide-react";
+import { ShieldCheck, Upload } from "@/lib/micons";
 import { useState } from "react";
 import { api } from "@/lib/api";
 

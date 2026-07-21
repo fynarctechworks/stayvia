@@ -1,5 +1,5 @@
 import { format } from "date-fns";
-import { Printer, X } from "lucide-react";
+import { Printer, X } from "@/lib/micons";
 import { Fragment, useEffect } from "react";
 import { authHeader } from "@/lib/api";
 import { formatTime, inr } from "@/lib/utils";
@@ -348,7 +348,7 @@ export function CheckInReceiptModal({ data, onClose, variant = "checkin" }: Prop
                 />
               )}
               <div className="leading-tight">
-                <div className="text-[15px] font-bold text-brand-dark">{data.hotel.name}</div>
+                <div className="text-[15px] font-bold text-brand-dark uppercase">{data.hotel.name}</div>
                 <div className="text-[10px] text-textSecondary mt-0.5">
                   {data.hotel.address}
                   {(data.hotel.phone || data.hotel.ownerPhone) && (

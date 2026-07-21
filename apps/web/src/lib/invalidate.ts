@@ -57,15 +57,33 @@ export function invalidateReservationData(qc: QueryClient, opts: InvalidateOpts 
     qc.invalidateQueries({ queryKey: ["guest-outstanding"] });
   }
 
+  // Invoices. These were missing entirely: grepping apps/web showed nothing
+  // ever invalidated ["invoices"] or ["invoices-summary"]. The Invoices list
+  // caches with staleTime 30s, has no refetchInterval, and the app disables
+  // refetchOnWindowFocus — so issuing an invoice at check-out and navigating
+  // to /invoices within 30s showed a list without it, while the "Owing" tile
+  // still displayed the pre-payment figure.
+  qc.invalidateQueries({ queryKey: ["invoices"] });
+  qc.invalidateQueries({ queryKey: ["invoices-summary"] });
+
   // Reports — most are cached per-date-range and will refetch lazily anyway,
   // but invalidating ensures the next visit always sees fresh data.
-  qc.invalidateQueries({ queryKey: ["rpt-revenue"] });
-  qc.invalidateQueries({ queryKey: ["rpt-collections"] });
-  qc.invalidateQueries({ queryKey: ["rpt-occupancy"] });
+  //
+  // These MUST match the keys Reports.tsx actually registers. Four of them
+  // did not (rpt-revenue/rpt-collections/rpt-occupancy/rpt-room-perf vs the
+  // real rpt-rev/rpt-col/rpt-occ/rpt-rooms), so those invalidations were
+  // silent no-ops and Reports served stale numbers after every payment.
+  qc.invalidateQueries({ queryKey: ["rpt-rev"] });
+  qc.invalidateQueries({ queryKey: ["rpt-rev-collections"] });
+  qc.invalidateQueries({ queryKey: ["rpt-col"] });
+  qc.invalidateQueries({ queryKey: ["rpt-occ"] });
   qc.invalidateQueries({ queryKey: ["rpt-gst"] });
-  qc.invalidateQueries({ queryKey: ["rpt-room-perf"] });
+  qc.invalidateQueries({ queryKey: ["rpt-rooms"] });
   qc.invalidateQueries({ queryKey: ["rpt-credit"] });
   qc.invalidateQueries({ queryKey: ["rpt-guests"] });
+  qc.invalidateQueries({ queryKey: ["rpt-daily-ledger"] });
+  qc.invalidateQueries({ queryKey: ["rpt-invoices"] });
+  qc.invalidateQueries({ queryKey: ["rpt-invoices-summary"] });
 }
 
 // Lighter helper for mutations that only touch room state (housekeeping

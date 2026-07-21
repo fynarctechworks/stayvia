@@ -1,6 +1,6 @@
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { format } from "date-fns";
-import { ShieldAlert, X } from "lucide-react";
+import { ShieldAlert, X } from "@/lib/micons";
 import { useEffect, useState } from "react";
 import { ApiError, api } from "@/lib/api";
 import { inr } from "@/lib/utils";
@@ -73,7 +73,7 @@ export function EarlyCheckInModal({
     onError: (e: unknown) => {
       const msg =
         e instanceof ApiError && e.code === "ROOM_UNAVAILABLE"
-          ? `Cannot shift dates — ${e.message}`
+          ? `Cannot shift dates - ${e.message}`
           : e instanceof Error
             ? e.message
             : "Failed to shift dates";

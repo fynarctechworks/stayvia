@@ -23,10 +23,10 @@ import {
   LayoutDashboard,
   Search,
   Settings,
-  Sparkles,
+  SprayCan,
   User,
   UserPlus,
-} from "lucide-react";
+} from "@/lib/micons";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { api } from "@/lib/api";
@@ -96,7 +96,7 @@ const QUICK_ACTIONS: PaletteItem[] = [
   {
     id: "qa-housekeeping",
     group: "Quick actions",
-    icon: <Sparkles className="w-4 h-4" />,
+    icon: <SprayCan className="w-4 h-4" />,
     label: "Open Housekeeping board",
     href: "/housekeeping",
   },

@@ -21,7 +21,7 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { format } from "date-fns";
-import { CheckCircle2, FileText, Receipt, User, Wallet } from "lucide-react";
+import { CheckCircle2, FileText, Receipt, User, Wallet } from "@/lib/micons";
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useDialog } from "@/components/Dialog";
@@ -207,7 +207,7 @@ export default function Collections() {
         <div>
           <h1 className="text-2xl font-bold text-brand-dark">Collections</h1>
           <p className="text-sm text-textSecondary mt-0.5">
-            Money due from guests — issued invoices, advance pending on open
+            Money due from guests - issued invoices, advance pending on open
             stays, and "collect later" promises.
           </p>
         </div>

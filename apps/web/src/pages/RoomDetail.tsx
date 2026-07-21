@@ -8,7 +8,7 @@ import {
 } from "@stayvia/shared";
 import { useQuery } from "@tanstack/react-query";
 import { format } from "date-fns";
-import { ChevronLeft, Plus, Snowflake, Tv, Wifi, Wrench } from "lucide-react";
+import { ChevronLeft, Plus, Snowflake, Tv, Wifi, Wrench } from "@/lib/micons";
 import { useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { Can } from "@/auth/Can";
@@ -247,7 +247,7 @@ function RoomMaintenanceSection({
                     )}
                   </td>
                   <td className="px-4 py-3 text-right text-xs font-mono text-textSecondary">
-                    {r.costActual ? inr(r.costActual) : "—"}
+                    {r.costActual ? inr(r.costActual) : "-"}
                   </td>
                 </tr>
               ))}

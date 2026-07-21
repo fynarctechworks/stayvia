@@ -2,7 +2,6 @@ import type { Session } from "@supabase/supabase-js";
 import { useQueryClient } from "@tanstack/react-query";
 import { createContext, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { api } from "@/lib/api";
-import { UI_PREVIEW } from "@/lib/mock-data";
 import { supabase } from "@/lib/supabase";
 import type { Role } from "@stayvia/shared";
 
@@ -44,22 +43,10 @@ interface AuthCtx {
 
 const Ctx = createContext<AuthCtx | null>(null);
 
-const FAKE_SESSION = { access_token: "ui-preview", user: { id: "preview" } } as unknown as Session;
-const FAKE_PROFILE: Profile = {
-  id: "preview",
-  email: "admin@stayvia.local",
-  fullName: "Preview Admin",
-  role: "admin",
-  rbacRoleKey: "admin",
-  isGodMode: true,
-  permissions: [],
-  property: { id: "preview-property", name: "Preview Hotel" },
-};
-
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [session, setSession] = useState<Session | null>(UI_PREVIEW ? FAKE_SESSION : null);
-  const [profile, setProfile] = useState<Profile | null>(UI_PREVIEW ? FAKE_PROFILE : null);
-  const [loading, setLoading] = useState(!UI_PREVIEW);
+  const [session, setSession] = useState<Session | null>(null);
+  const [profile, setProfile] = useState<Profile | null>(null);
+  const [loading, setLoading] = useState(true);
   // True when the user has passed password auth but still owes a TOTP
   // challenge. While true, guards keep them out of the app.
   const [mfaPending, setMfaPending] = useState(false);
@@ -71,7 +58,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const lastUserIdRef = useRef<string | null>(null);
 
   useEffect(() => {
-    if (UI_PREVIEW) return;
     supabase.auth.getSession().then(async ({ data }) => {
       setSession((prev) => (prev?.user.id === data.session?.user.id ? prev : data.session));
       if (!data.session) {
@@ -113,7 +99,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const userId = session?.user.id;
   useEffect(() => {
-    if (UI_PREVIEW) return;
     if (!userId) return;
     // Don't load the profile until the second factor is satisfied — the
     // user isn't fully authenticated while a challenge is outstanding.
@@ -128,7 +113,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [userId, profile?.id, mfaPending]);
 
   async function signIn(email: string, password: string): Promise<{ mfaRequired: boolean }> {
-    if (UI_PREVIEW) return { mfaRequired: false };
     const { error } = await supabase.auth.signInWithPassword({ email, password });
     if (error) throw error;
 
@@ -182,7 +166,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // success the session is upgraded to AAL2 and we clear mfaPending so
   // the profile loads and guards let the user in.
   async function verifyMfa(code: string): Promise<void> {
-    if (UI_PREVIEW) return;
     const { data: factorsData, error: listErr } = await supabase.auth.mfa.listFactors();
     if (listErr) throw listErr;
     const totp = factorsData?.totp?.find((f) => f.status === "verified");
@@ -208,11 +191,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   async function signOut() {
-    if (UI_PREVIEW) {
-      setSession(null);
-      setProfile(null);
-      return;
-    }
     setMfaPending(false);
     await supabase.auth.signOut();
   }

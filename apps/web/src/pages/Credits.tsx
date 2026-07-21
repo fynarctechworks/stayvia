@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { formatDistanceToNow } from "date-fns";
-import { Plus, Search, Wallet, X } from "lucide-react";
+import { Plus, Search, Wallet, X } from "@/lib/micons";
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/auth/AuthContext";
@@ -174,7 +174,7 @@ export default function Credits() {
                   <td className="text-textSecondary text-xs">
                     {g.lastActivityAt
                       ? formatDistanceToNow(new Date(g.lastActivityAt), { addSuffix: true })
-                      : "—"}
+                      : "-"}
                     <div className="text-[10px]">
                       {g.entryCount} ledger entr{g.entryCount === 1 ? "y" : "ies"}
                     </div>

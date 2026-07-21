@@ -1,5 +1,5 @@
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { Plus, Trash2, X } from "lucide-react";
+import { Plus, Trash2, X } from "@/lib/micons";
 import { useEffect, useMemo, useState } from "react";
 import { ApiError, api } from "@/lib/api";
 import { inr } from "@/lib/utils";

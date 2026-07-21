@@ -25,7 +25,7 @@ import {
   TrendingUp,
   Users,
   Wallet,
-} from "lucide-react";
+} from "@/lib/micons";
 import Papa from "papaparse";
 import { Fragment, useEffect, useMemo, useState, type ReactNode } from "react";
 import { useNavigate } from "react-router-dom";
@@ -72,7 +72,7 @@ interface TabDef {
 // reachable via the URL (?tab=credit) and via the dropdown.
 const PRIMARY_TABS: TabDef[] = [
   { id: "occupancy", label: "Occupancy", caption: "Daily room fill rate", Icon: Percent },
-  { id: "daily", label: "Daily Report", caption: "Day book — rooms, money in & out", Icon: CalendarDays },
+  { id: "daily", label: "Daily Report", caption: "Day book - rooms, money in & out", Icon: CalendarDays },
   { id: "revenue", label: "Revenue", caption: "Earnings + room-type mix", Icon: TrendingUp },
   { id: "invoices", label: "Invoices", caption: "Every tax invoice on the property", Icon: Receipt },
   { id: "collections", label: "Collections", caption: "Money received by method", Icon: Coins },
@@ -251,10 +251,26 @@ export default function Reports() {
   const settingsPublic = useQuery({
     queryKey: ["settings-public"],
     queryFn: () =>
-      api.get<{ complimentaryGateEnabled?: boolean }>("/settings/public"),
+      api.get<{ complimentaryGateEnabled?: boolean; hideComplimentary?: boolean }>(
+        "/settings/public",
+      ),
     staleTime: 60_000,
   });
   const gateEnabled = !!settingsPublic.data?.complimentaryGateEnabled;
+  // Hiding off = complimentary bookings are public in every normal view, so
+  // the dedicated Complimentary report is redundant — drop the More toggle
+  // and its tabs entirely. Defaults to the hidden-mode layout until the
+  // settings load.
+  const compPublic = settingsPublic.data?.hideComplimentary === false;
+  const secondaryTabs = compPublic ? [] : SECONDARY_TABS;
+
+  // If the comp report disappears while staff is ON it (toggle flipped in
+  // another tab), snap back to the first primary report.
+  useEffect(() => {
+    if (compPublic && SECONDARY_TABS.some((t) => t.id === tab)) {
+      setTab(PRIMARY_TABS[0]!.id);
+    }
+  }, [compPublic, tab]);
 
   function applyPreset(p: Preset) {
     const r = p.range();
@@ -305,7 +321,7 @@ export default function Reports() {
 
       <TabBar
         primary={PRIMARY_TABS}
-        secondary={SECONDARY_TABS}
+        secondary={secondaryTabs}
         active={tab}
         onChange={setTab}
         secondaryVisible={secondaryUnlocked}
@@ -719,7 +735,7 @@ function OccupancyTab({ from, to }: { from: string; to: string }) {
         />
         <Kpi
           label="Lowest day"
-          value={low < 0 ? "—" : `${low}%`}
+          value={low < 0 ? "-" : `${low}%`}
           Icon={Hourglass}
           tone="warning"
         />
@@ -1188,7 +1204,7 @@ function InvoicesTab({ from, to }: { from: string; to: string }) {
                     </td>
                     <td>
                       <div className="font-mono text-xs text-textSecondary">
-                        {inv.reservationNumber ?? "—"}
+                        {inv.reservationNumber ?? "-"}
                       </div>
                       <div className="text-sm font-medium text-brand-dark truncate max-w-[18ch]">
                         {inv.guestName}
@@ -1294,7 +1310,7 @@ function CollectionsTab({ from, to }: { from: string; to: string }) {
       <div>
         <SectionHeader
           title="By payment method"
-          subtitle="Cash, UPI, card, bank transfers — how the money came in"
+          subtitle="Cash, UPI, card, bank transfers - how the money came in"
           right={
             <ExportBtn
               onClick={() => exportCsv(`collections-${from}-${to}.csv`, data.payments)}
@@ -1431,7 +1447,7 @@ function GstTab({ from, to }: { from: string; to: string }) {
 
       <div>
         <SectionHeader
-          title={`GST summary — ${data.month}`}
+          title={`GST summary - ${data.month}`}
           subtitle="Driven by invoice issued-date. Adjust the range with the date picker."
           right={
             <ExportBtn
@@ -1658,7 +1674,7 @@ function OutstandingTab() {
         <section>
           <SectionHeader
             title="Pending payments"
-            subtitle="Promised collections — mark them received once the money's in"
+            subtitle="Promised collections - mark them received once the money's in"
           />
           <div className="card !p-0 overflow-x-auto">
             <table className="table-base">
@@ -1729,7 +1745,7 @@ function OutstandingTab() {
       <section>
         <SectionHeader
           title="All unpaid invoices"
-          subtitle="Sorted by oldest first — chase these"
+          subtitle="Sorted by oldest first - chase these"
           right={
             <ExportBtn
               onClick={() => exportCsv(`outstanding.csv`, invoices)}
@@ -1943,7 +1959,7 @@ function DailyLedgerTab({ from, to }: { from: string; to: string }) {
                         </td>
                         <td className="text-right tabular-nums">{d.roomsOccupied}</td>
                         <td className="max-w-[220px] truncate text-textSecondary text-xs font-mono">
-                          {d.roomNumbers || "—"}
+                          {d.roomNumbers || "-"}
                         </td>
                         <td className="text-right font-mono tabular-nums">{inr(d.roomCharges)}</td>
                         <td className="text-right font-mono tabular-nums text-success">
@@ -2058,7 +2074,7 @@ function RoomsTab({ from, to }: { from: string; to: string }) {
         <Kpi label="Total bookings" value={totalBookings} Icon={CheckCircle2} />
         <Kpi
           label="Top performer"
-          value={top ? `Room ${top.roomNumber}` : "—"}
+          value={top ? `Room ${top.roomNumber}` : "-"}
           Icon={TrendingUp}
           tone="success"
           hint={top ? inr(top.revenue) : undefined}
@@ -2277,7 +2293,7 @@ function CreditTab({ from, to }: { from: string; to: string }) {
                     <td className="text-right font-mono text-danger tabular-nums">
                       {inr(r.balanceDue)}
                     </td>
-                    <td className="text-xs text-textSecondary">{r.creditNotes ?? "—"}</td>
+                    <td className="text-xs text-textSecondary">{r.creditNotes ?? "-"}</td>
                   </tr>
                 ))}
               </tbody>
@@ -2314,7 +2330,7 @@ function GuestsTab({ from, to }: { from: string; to: string }) {
         <Kpi label="Guests" value={data.length} Icon={Users} />
         <Kpi
           label="Top guest"
-          value={top?.fullName ?? "—"}
+          value={top?.fullName ?? "-"}
           Icon={TrendingUp}
           tone="success"
           hint={top ? `${top.stays} stays · ${inr(top.revenue)}` : undefined}
