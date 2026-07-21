@@ -17,6 +17,9 @@ export const settingsUpdateSchema = z.object({
   ownerPhone: z.string().optional().nullable().transform((v) => (v === "" ? null : v)),
   ownerNotifyEnabled: z.boolean().optional(),
   otpRequiredForCheckin: z.boolean().optional(),
+  hideComplimentary: z.boolean().optional(),
+  // Tagline under the hotel name on printed documents. "" hides it.
+  docTagline: z.string().max(60).optional(),
   wifiSsid: z.string().max(60).optional().nullable().transform((v) => (v === "" ? null : v)),
   wifiPassword: z.string().max(120).optional().nullable().transform((v) => (v === "" ? null : v)),
   hotelGstin: z.string().min(1).optional(),
@@ -102,7 +105,9 @@ export const staffCreateSchema = z.object({
   password: STRONG_PASSWORD,
   fullName: z.string().min(2),
   role: z.enum(ROLES),
-  phone: z.string().optional(),
+  // Required: staff phone is the OTP / WhatsApp contact for password
+  // changes, so an account without one dead-ends later.
+  phone: z.string().regex(/^[6-9]\d{9}$/, "Phone must be 10-digit Indian mobile"),
 });
 
 export const staffUpdateSchema = z.object({

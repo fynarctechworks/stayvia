@@ -43,6 +43,13 @@ export const settings = pgTable("settings", {
   // entirely (no code sent, no modal) and the create is accepted with
   // skipOtp. A property-wide policy, not a per-booking choice.
   otpRequiredForCheckin: boolean("otp_required_for_checkin").notNull().default(true),
+  // Complimentary feature switch. true = discreet flow active (comp
+  // bookings hidden from normal views, code-gated report). false = the
+  // feature is put away entirely (no comp button/source/report; existing
+  // comp rows show normally). Defaults FALSE so first-time hotels aren't
+  // confronted with a secret-bookings feature they never asked for —
+  // turning it on then requires setting the report access code.
+  hideComplimentary: boolean("hide_complimentary").notNull().default(false),
   wifiSsid: text("wifi_ssid"),
   wifiPassword: text("wifi_password"),
   hotelGstin: text("hotel_gstin").notNull(),
@@ -75,8 +82,11 @@ export const settings = pgTable("settings", {
     .notNull()
     .default("inclusive"),
 
-  docPrimaryColor: text("doc_primary_color").notNull().default("#0F3D2E"),
-  docAccentColor: text("doc_accent_color").notNull().default("#B08A4A"),
+  docPrimaryColor: text("doc_primary_color").notNull().default("#171717"),
+  docAccentColor: text("doc_accent_color").notNull().default("#24B47E"),
+  // Tagline printed under the hotel name on invoices/receipts. Empty
+  // string hides the line.
+  docTagline: text("doc_tagline").notNull().default("Hospitality & Stays"),
   docInvoiceTitle: text("doc_invoice_title").notNull().default("Tax Invoice"),
   docReceiptTitle: text("doc_receipt_title").notNull().default("Payment Receipt"),
   docFooterText: text("doc_footer_text").notNull().default("Thank you for staying with us."),

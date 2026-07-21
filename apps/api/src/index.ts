@@ -1,3 +1,8 @@
+// Must be the first import: patches Express 4's Layer so rejected promises
+// from async middleware/handlers reach errorHandler instead of becoming
+// process-killing unhandled rejections (Node >=15 default). Drop this when
+// the app moves to Express 5, which forwards async rejections natively.
+import "express-async-errors";
 import cors from "cors";
 import express from "express";
 import helmet from "helmet";
@@ -129,7 +134,16 @@ app.post(
 app.use(express.json({ limit: "64kb" }));
 app.use(pinoHttp({ logger }));
 
-app.get("/health", (_req, res) => res.json({ status: "ok", time: new Date().toISOString() }));
+// `version` is the commit the image was built from (stamped as a build ARG in
+// apps/api/Dockerfile). deploy.sh compares it against `git rev-parse HEAD` to
+// prove the running container is not a stale image.
+app.get("/health", (_req, res) =>
+  res.json({
+    status: "ok",
+    version: process.env.GIT_SHA ?? "unknown",
+    time: new Date().toISOString(),
+  }),
+);
 
 const v1 = express.Router();
 
@@ -218,3 +232,16 @@ async function shutdown(signal: string) {
 
 process.on("SIGTERM", () => shutdown("SIGTERM"));
 process.on("SIGINT", () => shutdown("SIGINT"));
+
+// Last-resort safety nets. Request-path rejections are handled by
+// express-async-errors above; anything landing here comes from background
+// work (redis subscriber, PDF browser, fire-and-forget notifies). All
+// durable state lives in Postgres, so logging and staying alive is safer
+// than killing every in-flight request.
+process.on("unhandledRejection", (err) => {
+  logger.error({ err }, "unhandled promise rejection");
+});
+process.on("uncaughtException", (err) => {
+  logger.fatal({ err }, "uncaught exception, shutting down");
+  shutdown("uncaughtException");
+});

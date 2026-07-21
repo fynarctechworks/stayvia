@@ -28,17 +28,21 @@ const sendSchema = z
     reservationId: z.string().uuid().optional(),
     guestId: z.string().uuid().optional(),
     phone: z.string().min(8).max(20).optional(),
+    // Delivery address for channel=email on a phone-anchored send: the
+    // brand-new guest has no row yet, so the email comes straight from the
+    // booking form. The OTP row stays keyed by the phone either way.
+    email: z.string().email().optional(),
     channel: z.enum(["sms", "email"]),
   })
   .refine((d) => [d.reservationId, d.guestId, d.phone].filter(Boolean).length === 1, {
     message: "Provide exactly one of reservationId, guestId or phone",
   })
-  .refine((d) => !d.phone || d.channel === "sms", {
-    message: "phone-anchored OTP only supports the sms channel",
+  .refine((d) => !d.phone || d.channel === "sms" || !!d.email, {
+    message: "phone-anchored email OTP needs the guest's email address",
   });
 
 router.post("/send", requireAuth, validate(sendSchema), async (req, res) => {
-  const { reservationId, guestId, phone, channel } = req.body as z.infer<typeof sendSchema>;
+  const { reservationId, guestId, phone, email, channel } = req.body as z.infer<typeof sendSchema>;
 
   // Resolve the target. Three paths:
   //   1. reservationId → look up reservation → guest
@@ -76,6 +80,10 @@ router.post("/send", requireAuth, validate(sendSchema), async (req, res) => {
   if (!target) {
     return fail(res, 400, "NO_TARGET", channel === "sms" ? "Guest has no phone on file" : "Guest has no email on file");
   }
+  // Where the code actually goes. Phone-anchored email OTP keeps the row
+  // keyed by the phone (reservation-create verifies against it) but
+  // delivers to the form-typed email.
+  const deliverTo = phone && channel === "email" ? email! : target;
 
   // Tiered throttling.
   // 1) Per-target cool-down: one OTP per minute per phone/email.
@@ -173,12 +181,12 @@ router.post("/send", requireAuth, validate(sendSchema), async (req, res) => {
   };
   if (channel === "sms") {
     const t = await renderTemplate(req.propertyId, "otp_guest_sms", otpVars);
-    await messaging.sendSms({ to: target, text: t.body });
+    await messaging.sendSms({ to: deliverTo, text: t.body });
   } else {
     // Email OTP uses the same body template since there's no separate email template for OTP
     const t = await renderTemplate(req.propertyId, "otp_guest_sms", otpVars);
     await messaging.sendEmail({
-      to: target,
+      to: deliverTo,
       subject: `${await hotelDisplayName(req.propertyId)} check-in code: ${code}`,
       text: t.body,
     });
@@ -200,7 +208,7 @@ router.post("/send", requireAuth, validate(sendSchema), async (req, res) => {
   return ok(res, {
     id: row!.id,
     channel,
-    target: maskTarget(target, channel),
+    target: maskTarget(deliverTo, channel),
     expiresInSeconds: env.OTP_TTL_SECONDS,
     devCode: env.NOTIFICATIONS_PROVIDER === "stub" ? code : undefined,
   });

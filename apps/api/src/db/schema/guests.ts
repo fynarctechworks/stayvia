@@ -33,6 +33,11 @@ export const guests = pgTable(
     idProofType: text("id_proof_type", { enum: ID_PROOF_TYPES }).notNull(),
     idProofNumberEncrypted: text("id_proof_number_encrypted").notNull(),
     idProofLast4: text("id_proof_last4").notNull(),
+    // Blind index over the FULL id number (migration 0010). Dedup keys off
+    // this instead of last4, which had only 10k values and made unrelated
+    // guests collide. Nullable: pre-0010 rows have no hash (the plaintext
+    // lives only inside the encrypted column, so SQL could not backfill it).
+    idProofHash: text("id_proof_hash"),
     address: text("address"),
     city: text("city"),
     state: text("state"),
@@ -75,9 +80,9 @@ export const guests = pgTable(
     propertyEmailUnique: uniqueIndex("uq_guests_property_email")
       .on(t.propertyId, sql`lower(${t.email})`)
       .where(sql`${t.email} IS NOT NULL AND ${t.email} <> ''`),
-    propertyIdProofUnique: uniqueIndex("uq_guests_property_idproof")
-      .on(t.propertyId, t.idProofType, t.idProofLast4)
-      .where(sql`${t.idProofLast4} IS NOT NULL AND ${t.idProofLast4} <> ''`),
+    propertyIdProofUnique: uniqueIndex("uq_guests_property_idproof_hash")
+      .on(t.propertyId, t.idProofType, t.idProofHash)
+      .where(sql`${t.idProofHash} IS NOT NULL`),
     fullNameSearch: index("idx_guests_full_name").using(
       "gin",
       sql`to_tsvector('english', ${t.fullName})`,

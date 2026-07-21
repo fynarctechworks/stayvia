@@ -80,6 +80,12 @@ async function sendEmailResend(msg: EmailMessage): Promise<SendResult> {
   try {
     const res = await fetch("https://api.resend.com/emails", {
       method: "POST",
+      // Bounded wait. undici's default headers timeout is 300s, so a provider
+      // that accepts the connection then stops responding held the request
+      // open for five minutes. Email carries PDF attachments, so allow more
+      // room than SMS but never unbounded. The catch below turns the abort
+      // into the { ok: false } every call site already handles.
+      signal: AbortSignal.timeout(20_000),
       headers: {
         Authorization: `Bearer ${env.RESEND_API_KEY}`,
         "Content-Type": "application/json",
@@ -160,6 +166,12 @@ async function sendWhatsAppLive(msg: SmsMessage): Promise<SendResult> {
           "content-type": "application/x-www-form-urlencoded",
         },
         body: params.toString(),
+        // Several call sites await this on the REQUEST path (login OTP,
+        // public signup OTP), so a hung Twilio must fail fast rather than
+        // pin an Express handler for undici's 300s default. Staff retrying a
+        // stalled login otherwise consumed a socket and a handler each, and
+        // the write limiter could not shed them because nothing completed.
+        signal: AbortSignal.timeout(10_000),
       },
     );
     const json = (await res.json().catch(() => ({}))) as {

@@ -25,7 +25,7 @@ import { rooms } from "../db/schema/rooms.js";
 import { invoices, payments } from "../db/schema/invoices.js";
 import { logActivity } from "../lib/activity.js";
 import { logger } from "../lib/logger.js";
-import { encrypt, last4 } from "../lib/crypto.js";
+import { encrypt, idProofHash, last4 } from "../lib/crypto.js";
 // Static import — ledger.ts pulls only db/schema, no cycle. Dynamic import()
 // fails inside the pkg-bundled sidecar (crashed the guest-detail endpoint).
 import { getGuestBalance } from "../lib/ledger.js";
@@ -217,19 +217,22 @@ router.get(
     if (email && email.trim() !== "") {
       conditions.push(sql`LOWER(${guests.email}) = LOWER(${email.trim()})`);
     }
-    if (id_number) {
-      const last4 = id_number.slice(-4);
-      // Pair ID number with its type — a 4-digit suffix shared across
-      // an Aadhaar and a Passport isn't the same person.
+    // Match on the blind index of the FULL number, not the last 4 digits —
+    // 10k possible suffixes meant this reported unrelated guests as
+    // duplicates and the desk was told to reuse a stranger's profile.
+    const probeIdHash = id_number ? idProofHash(id_number) : null;
+    if (probeIdHash) {
+      // Pair ID number with its type — the same number under an Aadhaar and
+      // a Passport is not the same person.
       if (id_type) {
         conditions.push(
           and(
             eq(guests.idProofType, id_type),
-            eq(guests.idProofLast4, last4),
+            eq(guests.idProofHash, probeIdHash),
           )!,
         );
       } else {
-        conditions.push(eq(guests.idProofLast4, last4));
+        conditions.push(eq(guests.idProofHash, probeIdHash));
       }
     }
     if (conditions.length === 0) {
@@ -244,6 +247,7 @@ router.get(
         email: guests.email,
         idProofType: guests.idProofType,
         idProofLast4: guests.idProofLast4,
+        idProofHash: guests.idProofHash,
       })
       .from(guests)
       .where(and(eq(guests.propertyId, req.propertyId), or(...conditions)))
@@ -262,8 +266,8 @@ router.get(
         reasons.push("email");
       }
       if (
-        id_number &&
-        r.idProofLast4 === id_number.slice(-4) &&
+        probeIdHash &&
+        r.idProofHash === probeIdHash &&
         (!id_type || r.idProofType === id_type)
       ) {
         reasons.push("id");
@@ -719,7 +723,7 @@ router.get(
 router.post(
   "/",
   requireAuth,
-  requirePermission("view_guests"),
+  requirePermission("edit_guests"),
   validate(guestCreateSchema),
   async (req, res) => {
     const input = req.body;
@@ -731,7 +735,11 @@ router.post(
       input.email && input.email.trim() !== ""
         ? input.email.trim().toLowerCase()
         : null;
-    const idLast4 = last4(input.idProofNumber);
+    // Compare on the blind index of the FULL id, not the last 4 digits —
+    // those have only 10k values, so unrelated guests collided and the
+    // second one could not be registered at all (migration 0010).
+    // last4 is still stored on the row, but only for display and search.
+    const idHash = idProofHash(input.idProofNumber);
 
     // Triple uniqueness check. Phone, email, and (id_type + id_last4)
     // each identify one human; sharing any of them across two guest
@@ -747,7 +755,7 @@ router.post(
     dupConditions.push(
       and(
         eq(guests.idProofType, input.idProofType),
-        eq(guests.idProofLast4, idLast4),
+        eq(guests.idProofHash, idHash),
       )!,
     );
     const dups = await db
@@ -758,6 +766,7 @@ router.post(
         email: guests.email,
         idProofType: guests.idProofType,
         idProofLast4: guests.idProofLast4,
+        idProofHash: guests.idProofHash,
       })
       .from(guests)
       .where(and(eq(guests.propertyId, req.propertyId), or(...dupConditions)))
@@ -773,10 +782,7 @@ router.post(
         ) {
           reasons.push("email");
         }
-        if (
-          d.idProofType === input.idProofType &&
-          d.idProofLast4 === idLast4
-        ) {
+        if (d.idProofType === input.idProofType && d.idProofHash === idHash) {
           reasons.push("id");
         }
       }
@@ -826,6 +832,7 @@ router.post(
             idProofType: input.idProofType,
             idProofNumberEncrypted: encrypt(input.idProofNumber),
             idProofLast4: last4(input.idProofNumber),
+            idProofHash: idProofHash(input.idProofNumber),
             address: input.address || null,
             city: input.city || null,
             state: input.state || null,
@@ -884,7 +891,7 @@ router.post(
 router.put(
   "/:id",
   requireAuth,
-  requirePermission("view_guests"),
+  requirePermission("edit_guests"),
   validate(guestUpdateSchema),
   async (req, res) => {
     const id = req.params.id!;
@@ -904,6 +911,8 @@ router.put(
       if (k === "idProofNumber" && typeof v === "string") {
         update.idProofNumberEncrypted = encrypt(v);
         update.idProofLast4 = last4(v);
+        // Re-saving a pre-0010 guest also backfills their blind index.
+        update.idProofHash = idProofHash(v);
       } else {
         update[k] = v;
       }
@@ -937,9 +946,9 @@ router.put(
       typeof input.idProofType === "string"
         ? (input.idProofType as import("@stayvia/shared").IdProofType)
         : undefined;
-    const nextIdLast4 =
+    const nextIdHash =
       typeof input.idProofNumber === "string"
-        ? last4(input.idProofNumber)
+        ? idProofHash(input.idProofNumber)
         : undefined;
 
     let updated: typeof guests.$inferSelect | null = null;
@@ -952,6 +961,7 @@ router.put(
             email: guests.email,
             idProofType: guests.idProofType,
             idProofLast4: guests.idProofLast4,
+            idProofHash: guests.idProofHash,
           })
           .from(guests)
           .where(and(eq(guests.id, id), eq(guests.propertyId, req.propertyId)))
@@ -997,14 +1007,15 @@ router.put(
           }
         }
 
-        // ID collision — when either ID type or number changed,
-        // re-probe against the (type, last4) pair.
+        // ID collision — when either ID type or number changed, re-probe on
+        // (type, blind-index-of-full-number). Probing on last4 rejected
+        // unrelated guests who merely shared four digits.
         const effIdType = nextIdType ?? before.idProofType;
-        const effIdLast4 = nextIdLast4 ?? before.idProofLast4;
+        const effIdHash = nextIdHash ?? before.idProofHash;
         const idChanged =
           (nextIdType !== undefined && nextIdType !== before.idProofType) ||
-          (nextIdLast4 !== undefined && nextIdLast4 !== before.idProofLast4);
-        if (idChanged && effIdLast4) {
+          (nextIdHash !== undefined && nextIdHash !== before.idProofHash);
+        if (idChanged && effIdHash) {
           const collision = await tx
             .select({ id: guests.id })
             .from(guests)
@@ -1012,7 +1023,7 @@ router.put(
               and(
                 eq(guests.propertyId, req.propertyId),
                 eq(guests.idProofType, effIdType),
-                eq(guests.idProofLast4, effIdLast4),
+                eq(guests.idProofHash, effIdHash),
               ),
             )
             .limit(1);
@@ -1120,7 +1131,7 @@ router.put(
 router.post(
   "/:id/kyc",
   requireAuth,
-  requirePermission("view_guests"),
+  requirePermission("upload_kyc"),
   upload.fields([
     { name: "front", maxCount: 1 },
     { name: "back", maxCount: 1 },
@@ -1207,7 +1218,7 @@ router.post(
 router.get(
   "/:id/kyc",
   requireAuth,
-  requirePermission("view_guests"),
+  requirePermission("view_kyc"),
   async (req, res) => {
     const id = req.params.id!;
     const found = await db
@@ -1239,7 +1250,7 @@ router.get(
 router.delete(
   "/:id/kyc/:field",
   requireAuth,
-  requirePermission("view_guests"),
+  requirePermission("upload_kyc"),
   async (req, res) => {
     const { id, field } = req.params as { id: string; field: string };
     const columnMap: Record<string, "guestPhoto" | "idProofPhotoFront" | "idProofPhotoBack"> = {
@@ -1283,7 +1294,7 @@ router.delete(
 router.patch(
   "/:id/tags",
   requireAuth,
-  requirePermission("view_guests"),
+  requirePermission("edit_guests"),
   validate(guestTagsSchema),
   async (req, res) => {
     const id = req.params.id!;
@@ -1512,7 +1523,7 @@ router.get(
 router.post(
   "/:id/notes",
   requireAuth,
-  requirePermission("view_guests"),
+  requirePermission("edit_guests"),
   validate(guestNoteCreateSchema),
   async (req, res) => {
     const id = req.params.id!;
@@ -1557,7 +1568,7 @@ router.get(
 router.post(
   "/:id/follow-ups",
   requireAuth,
-  requirePermission("view_guests"),
+  requirePermission("edit_guests"),
   validate(followUpCreateSchema),
   async (req, res) => {
     const id = req.params.id!;
@@ -1609,7 +1620,7 @@ router.post(
 router.patch(
   "/:id/follow-ups/:followUpId",
   requireAuth,
-  requirePermission("view_guests"),
+  requirePermission("edit_guests"),
   validate(followUpUpdateSchema),
   async (req, res) => {
     const { id, followUpId } = req.params as { id: string; followUpId: string };
@@ -1709,7 +1720,7 @@ router.get(
 router.post(
   "/:id/abandon-cleanup",
   requireAuth,
-  requirePermission("view_reservations"),
+  requirePermission("create_reservations"),
   async (req, res) => {
     const id = req.params.id!;
 

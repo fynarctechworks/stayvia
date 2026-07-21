@@ -6,6 +6,7 @@ import { guests } from "../db/schema/guests.js";
 import { reservationRooms, reservations } from "../db/schema/reservations.js";
 import { rooms } from "../db/schema/rooms.js";
 import { ok } from "../lib/response.js";
+import { getSettings } from "../lib/settings.js";
 import { requireAuth, requirePermission } from "../middleware/auth.js";
 import { validate } from "../middleware/validate.js";
 
@@ -39,6 +40,7 @@ router.get(
     //   checkInDate  <= lastDay  AND  checkOutDate >= firstDay
     // Day-use (short_stay) bookings have checkInDate === checkOutDate, so
     // the same overlap check still works.
+    const { hideComplimentary } = await getSettings(req.propertyId);
     const rows = await db
       .select({
         id: reservations.id,
@@ -71,9 +73,12 @@ router.get(
           eq(reservations.propertyId, req.propertyId),
           lte(reservations.checkInDate, lastDay),
           gte(reservations.checkOutDate, firstDay),
-          // Complimentary bookings stay off the calendar — they're only
-          // visible in the Complimentary report.
-          sql`${reservations.bookingSource} <> 'complimentary'`,
+          // Complimentary bookings stay off the calendar while the
+          // hideComplimentary setting is on — they're then only visible
+          // in the Complimentary report.
+          hideComplimentary
+            ? sql`${reservations.bookingSource} <> 'complimentary'`
+            : sql`true`,
         ),
       )
       .orderBy(reservations.checkInDate);

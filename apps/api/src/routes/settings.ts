@@ -4,10 +4,12 @@ import {
   settingsUpdateSchema,
   staffCreateSchema,
   staffUpdateSchema,
+  templateUpdateSchema,
   unlockSettingsCodeSchema,
 } from "@stayvia/shared";
-import { and, asc, count as sqlCount, eq, inArray, sql } from "drizzle-orm";
+import { and, asc, count as sqlCount, eq, inArray, isNull, or, sql } from "drizzle-orm";
 import { Router } from "express";
+import multer from "multer";
 import { db } from "../db/client.js";
 import { profiles } from "../db/schema/profiles.js";
 import { roles, userRoles } from "../db/schema/rbac.js";
@@ -15,6 +17,7 @@ import { reservationRooms, reservations } from "../db/schema/reservations.js";
 import { rooms } from "../db/schema/rooms.js";
 import { roomTypes, settings } from "../db/schema/settings.js";
 import { logActivity } from "../lib/activity.js";
+import { uploadPublicFile } from "../lib/storage.js";
 import { publishSettingsInvalidation } from "../lib/redis.js";
 import { fail, ok } from "../lib/response.js";
 import { invalidateSettings } from "../lib/settings.js";
@@ -28,6 +31,73 @@ import { requireAuth, requirePermission } from "../middleware/auth.js";
 import { validate } from "../middleware/validate.js";
 
 const router = Router();
+
+// Hotel logo upload. Small, image-only, memory-buffered — lands in the
+// public documents bucket so the URL works in the app shell, receipts and
+// PDF invoices without auth.
+const LOGO_MIMES = new Set(["image/jpeg", "image/png", "image/webp"]);
+const logoUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 2 * 1024 * 1024, files: 1 },
+  fileFilter: (_req, file, cb) => {
+    if (!LOGO_MIMES.has(file.mimetype)) {
+      cb(new Error("Only JPEG, PNG, or WEBP images are accepted"));
+      return;
+    }
+    cb(null, true);
+  },
+});
+
+router.post(
+  "/logo",
+  requireAuth,
+  requirePermission("manage_settings"),
+  logoUpload.single("logo"),
+  async (req, res) => {
+    if (!req.file) return fail(res, 400, "NO_FILE", "Attach an image as 'logo'");
+    const ext = req.file.mimetype === "image/png" ? "png" : req.file.mimetype === "image/webp" ? "webp" : "jpg";
+    // No label → random token suffix: every upload gets a fresh URL, which
+    // doubles as a cache-buster for the app shell and PDFs.
+    const url = await uploadPublicFile(
+      req.propertyId,
+      `branding/logo.${ext}`,
+      req.file.buffer,
+      req.file.mimetype,
+    );
+    if (!url) return fail(res, 502, "UPLOAD_FAILED", "Could not store the logo. Try again.");
+    await db
+      .update(settings)
+      .set({ hotelLogoUrl: url, updatedAt: new Date() })
+      .where(eq(settings.propertyId, req.propertyId));
+    invalidateSettings(req.propertyId);
+    await publishSettingsInvalidation(req.propertyId);
+    await logActivity({
+      propertyId: req.propertyId,
+      action: "settings_updated",
+      entityType: "settings",
+      entityId: req.propertyId,
+      description: "Hotel logo updated",
+      performedBy: req.user!.id,
+      ipAddress: req.ip,
+    });
+    return ok(res, { hotelLogoUrl: url });
+  },
+);
+
+router.delete(
+  "/logo",
+  requireAuth,
+  requirePermission("manage_settings"),
+  async (req, res) => {
+    await db
+      .update(settings)
+      .set({ hotelLogoUrl: null, updatedAt: new Date() })
+      .where(eq(settings.propertyId, req.propertyId));
+    invalidateSettings(req.propertyId);
+    await publishSettingsInvalidation(req.propertyId);
+    return ok(res, { hotelLogoUrl: null });
+  },
+);
 
 router.get("/", requireAuth, requirePermission("manage_settings"), async (req, res) => {
   const rows = await db
@@ -83,6 +153,9 @@ router.get("/public", requireAuth, async (req, res) => {
       // to decide whether to open the auth prompt before revealing
       // the secondary tabs.
       complimentaryUnlockCode: settings.complimentaryUnlockCode,
+      // When false, complimentary bookings are public — Reports shows
+      // the comp tabs inline with no More toggle and no code prompt.
+      hideComplimentary: settings.hideComplimentary,
     })
     .from(settings)
     .where(eq(settings.propertyId, req.propertyId))
@@ -107,6 +180,26 @@ router.put("/", requireAuth, requirePermission("manage_settings"), validate(sett
     .where(eq(settings.propertyId, req.propertyId))
     .limit(1);
   if (!rows.length) return fail(res, 404, "NOT_FOUND", "Settings not initialized");
+
+  // Hiding complimentary bookings requires the report access code to be
+  // set — otherwise a hidden comp booking would be reachable by nobody.
+  // Evaluate against the FINAL state (current row + incoming patch).
+  const current = rows[0]!;
+  const nextHide =
+    (input.hideComplimentary as boolean | undefined) ?? current.hideComplimentary;
+  const nextCode =
+    input.complimentaryUnlockCode !== undefined
+      ? (input.complimentaryUnlockCode as string | null)
+      : current.complimentaryUnlockCode;
+  if (nextHide && !nextCode) {
+    return fail(
+      res,
+      400,
+      "CODE_REQUIRED",
+      "Set a report access code before hiding complimentary bookings.",
+    );
+  }
+
   const update: Record<string, unknown> = { updatedAt: new Date() };
   for (const [k, v] of Object.entries(input)) if (v !== undefined) update[k] = v;
   const [updated] = await db
@@ -415,7 +508,7 @@ router.get("/templates", requireAuth, requirePermission("manage_templates"), asy
   return ok(res, { items });
 });
 
-router.put("/templates/:key", requireAuth, requirePermission("manage_templates"), async (req, res) => {
+router.put("/templates/:key", requireAuth, requirePermission("manage_templates"), validate(templateUpdateSchema), async (req, res) => {
   const key = req.params.key;
   if (!key || !(key in TEMPLATE_DEFAULTS)) {
     return fail(res, 400, "INVALID_KEY", "Unknown template key");
@@ -468,6 +561,36 @@ staffRouter.get("/", requireAuth, requirePermission("manage_staff"), async (req,
   return ok(res, rows);
 });
 
+// Resolve an RBAC role row by key WITHIN this hotel's namespace.
+//
+// `roles.key` is unique only per-namespace (two partial unique indexes: one
+// over shared rows where property_id IS NULL, one over (property_id, key)).
+// So several rows legitimately share the key 'frontdesk' — the shared system
+// role plus one copy-on-write fork per hotel that customised it. An unscoped
+// `where(eq(roles.key, key)).limit(1)` therefore picks a row at random and can
+// hand a new staff member ANOTHER hotel's role: getUserPermissions resolves
+// user_roles -> role_permissions by id alone and never re-checks property_id,
+// so that user would silently inherit the other tenant's permission set.
+//
+// A hotel-owned fork shadows the shared role of the same key — the same
+// precedence GET /rbac/roles applies when it dedupes the list.
+async function resolveRoleForProperty(key: string, propertyId: string) {
+  const rows = await db
+    .select({ id: roles.id, propertyId: roles.propertyId })
+    .from(roles)
+    .where(
+      and(
+        eq(roles.key, key),
+        or(isNull(roles.propertyId), eq(roles.propertyId, propertyId)),
+      ),
+    );
+  return (
+    rows.find((r) => r.propertyId !== null) ??
+    rows.find((r) => r.propertyId === null) ??
+    null
+  );
+}
+
 staffRouter.post("/", requireAuth, requirePermission("manage_staff"), validate(staffCreateSchema), async (req, res) => {
   const input = req.body as {
     email: string;
@@ -476,6 +599,20 @@ staffRouter.post("/", requireAuth, requirePermission("manage_staff"), validate(s
     role: "admin" | "frontdesk" | "housekeeping";
     phone?: string;
   };
+
+  // No-escalation invariant: manage_staff is advertised as "add / edit /
+  // deactivate staff", not "mint administrators". Without this check any
+  // custom role carrying manage_staff (e.g. a Duty Manager created so a
+  // supervisor can add receptionists) could create a second god-mode account
+  // with a password of their choosing.
+  if (input.role === "admin" && !req.user!.isGodMode) {
+    return fail(
+      res,
+      403,
+      "ROLE_ESCALATION",
+      "Only an administrator can create another administrator.",
+    );
+  }
 
   // Emails are platform-global (one Supabase identity per email, one hotel
   // per account in v1). A collision — whether the profile row belongs to
@@ -520,7 +657,7 @@ staffRouter.post("/", requireAuth, requirePermission("manage_staff"), validate(s
 
   // Map to RBAC user_roles. Falls back silently if the role row doesn't exist
   // (shouldn't happen — system roles are seeded — but don't block staff creation).
-  const [r] = await db.select({ id: roles.id }).from(roles).where(eq(roles.key, input.role)).limit(1);
+  const r = await resolveRoleForProperty(input.role, req.propertyId);
   if (r) {
     await db
       .insert(userRoles)
@@ -559,6 +696,17 @@ staffRouter.put(
     if (input.role && id === req.user!.id && input.role !== "admin") {
       return fail(res, 400, "SELF_DEMOTE", "You cannot change your own role away from admin");
     }
+    // Same no-escalation invariant as staff creation: manage_staff must not be
+    // a path to minting administrators, whether by creating a new account or
+    // promoting an existing one.
+    if (input.role === "admin" && !req.user!.isGodMode) {
+      return fail(
+        res,
+        403,
+        "ROLE_ESCALATION",
+        "Only an administrator can promote someone to administrator.",
+      );
+    }
     if (input.isActive === false && id === req.user!.id) {
       return fail(res, 400, "SELF_DEACTIVATE", "You cannot deactivate yourself");
     }
@@ -593,6 +741,26 @@ staffRouter.put(
       .where(and(eq(profiles.id, id), eq(profiles.propertyId, req.propertyId)))
       .returning();
     if (!updated) return fail(res, 404, "NOT_FOUND", "Staff not found");
+
+    // Keep RBAC in step with the legacy column. profiles.role is only used for
+    // requireRole and legacy display; requirePermission resolves through
+    // user_roles -> role_permissions. Writing only profiles.role let the two
+    // diverge in both directions: a demoted admin kept user_roles pointing at
+    // the '*' god-mode role and still passed every requirePermission gate,
+    // while a promotion granted requireRole("admin") — the sole guard on the
+    // whole billing router — without any RBAC grant behind it.
+    if (input.role !== undefined) {
+      const r = await resolveRoleForProperty(input.role, req.propertyId);
+      if (r) {
+        await db
+          .insert(userRoles)
+          .values({ userId: id, roleId: r.id, assignedBy: req.user!.id })
+          .onConflictDoUpdate({
+            target: userRoles.userId,
+            set: { roleId: r.id, assignedAt: new Date(), assignedBy: req.user!.id },
+          });
+      }
+    }
 
     const changes: string[] = [];
     if (input.fullName) changes.push("name");

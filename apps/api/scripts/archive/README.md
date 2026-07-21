@@ -1,5 +1,33 @@
 # Archived scripts
 
+> ## ⛔ DO NOT RUN ANY OF THESE
+>
+> Every script here predates multi-tenancy. They were written when the
+> database held exactly one hotel, so **none of them filter by
+> `property_id`** — running one against the current database applies its
+> effect to EVERY tenant at once.
+>
+> Concrete examples of what that means:
+>
+> * `delete-hotel-owner.ts` rewrites `created_by` / `issued_by` /
+>   `voided_by` / `received_by` / `performed_by` across `reservations`,
+>   `invoices`, `payments` and `activity_log` with no property predicate,
+>   and hardcodes one specific hotel's admin email as the destination —
+>   it would rewrite audit attribution for every hotel on the platform.
+> * `push-rbac.ts` issues `create table if not exists …` straight through
+>   a postgres client, applying schema **outside** `apps/api/migrations/`
+>   and outside the guard that blocks remote database targets. CLAUDE.md
+>   forbids exactly this.
+>
+> They are inert while nobody runs them, but they are still executable via
+> `tsx`/`node` against whatever `DATABASE_URL` happens to be in the
+> environment. Treat this directory as read-only history. Schema changes go
+> through a numbered migration + `npm run db:migrate`; one-off data fixes
+> need a fresh, property-scoped script in `scripts/` proper.
+>
+> Deleting this directory entirely is a reasonable call — git history
+> preserves everything below.
+
 One-shot scripts that already did their job. Kept here for historical
 reference but **not used by the running system**. If a build/deploy
 needs to bootstrap a brand-new database from scratch, prefer running

@@ -33,11 +33,11 @@ export const TEMPLATE_DEFAULTS: Record<TemplateKey, TemplateDefault> = {
   },
   payment_reminder_guest_sms: {
     body:
-      "🙏 Hello {guest_name},\n\nThis is a friendly reminder from {hotel} about a pending balance from your stay.\n\nAmount due: ₹{balance}\n\nWe'd appreciate it if you could settle this at your convenience. For any clarification, please reach us on {hotel_phone}.\n\nThank you,\n— {hotel}",
+      "🙏 Hello {guest_name},\n\nThis is a friendly reminder from {hotel} about a pending balance from your stay.\n\nAmount due: ₹{balance}\n\nWe'd appreciate it if you could settle this at your convenience. For any clarification, please reach us on {hotel_phone}.\n\nThank you,\n- {hotel}",
   },
   booking_advance_guest_sms: {
     body:
-      "🙏 Hello {guest_name},\n\nThank you for your booking with {hotel}.\n\nReservation: {reservation_number}\nCheck-in: {check_in_date}\nCheck-out: {check_out_date}\n\nAdvance received: ₹{advance_paid}\nBalance at check-in: ₹{balance}{receipt_block}\n\nWe look forward to hosting you.\n— {hotel}",
+      "🙏 Hello {guest_name},\n\nThank you for your booking with {hotel}.\n\nReservation: {reservation_number}\nCheck-in: {check_in_date}\nCheck-out: {check_out_date}\n\nAdvance received: ₹{advance_paid}\nBalance at check-in: ₹{balance}{receipt_block}\n\nWe look forward to hosting you.\n- {hotel}",
   },
   booking_advance_owner_sms: {
     body:
@@ -45,7 +45,7 @@ export const TEMPLATE_DEFAULTS: Record<TemplateKey, TemplateDefault> = {
   },
   review_prompt_guest_sms: {
     body:
-      "🙏 Hi {guest_name}, thank you for staying with {hotel}!\n\nWe'd love to hear about your experience. If you have 30 seconds, would you mind leaving us a review?\n\n{review_link}\n\nThank you,\n— {hotel}",
+      "🙏 Hi {guest_name}, thank you for staying with {hotel}!\n\nWe'd love to hear about your experience. If you have 30 seconds, would you mind leaving us a review?\n\n{review_link}\n\nThank you,\n- {hotel}",
   },
 };
 

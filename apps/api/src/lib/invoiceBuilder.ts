@@ -13,6 +13,7 @@
 
 import { combinedRoomTypeLabel, type RoomTypeLabelMap } from "./roomTypeLabel.js";
 import { calcGstBreakdown } from "./gst.js";
+import { roomBillableNights } from "./nights.js";
 import type { AdditionalCharge } from "../db/schema/invoices.js";
 import type { ReservationRoom } from "../db/schema/reservations.js";
 import type { Room } from "../db/schema/rooms.js";
@@ -246,15 +247,9 @@ export function buildInvoice(args: BuilderArgs): BuiltInvoice {
     // unsegmented rows (effective_from/to NULL).
     const rowFrom = rr.effectiveFrom ?? reservation.checkInDate;
     const rowTo = rr.effectiveTo ?? reservation.checkOutDate;
-    const rowNights = isShort
-      ? nights
-      : Math.max(
-          1,
-          Math.round(
-            (new Date(rowTo).getTime() - new Date(rowFrom).getTime()) /
-              (24 * 60 * 60 * 1000),
-          ),
-        );
+    // Overnight nights via the shared helper (single source of truth for room
+    // night counts); short-stay keeps its hours-based display quantity.
+    const rowNights = isShort ? nights : roomBillableNights(rr, reservation);
 
     // Decide whether to split this row into multiple breakdown lines.
     // We only split when:
@@ -315,6 +310,14 @@ export function buildInvoice(args: BuilderArgs): BuiltInvoice {
     const netRate = isShort ? netRoomSubtotal : netRoomSubtotal / rowNights;
     subtotal += netRoomSubtotal;
     totalGst += roomGst;
+    // A room booked mid-stay via Add Room is segmented (it has its own
+    // effective window) but is NOT a swap: no swapId, no swapped-from link, no
+    // swap history. Without this, the segmented branch below labels its line
+    // "· swapped" — swapSibling returns null for it, so swapTag falls back to
+    // the bare "swapped" string, printing a wrong word on a tax invoice.
+    const hasSwapHistory = !!(rr.id && (swapHopsByRowId?.get(rr.id)?.length ?? 0) > 0);
+    const isAddedRoom =
+      isSegmented && !rr.swapId && !rr.swappedFromRoomId && !hasSwapHistory;
     const sibling = swapSibling(rr.id ?? null, rr.swapId ?? null);
     const swapTag = sibling
       ? `swapped ${sibling.direction} Room ${sibling.roomNumber}`
@@ -343,11 +346,13 @@ export function buildInvoice(args: BuilderArgs): BuiltInvoice {
           : [];
     const inPlaceSwapPath =
       fromRooms.length > 0 ? [...fromRooms, rr.room.roomNumber].join(" → ") : null;
-    const overnightSuffix = isSegmented
-      ? `(${rowNights} night${rowNights === 1 ? "" : "s"}, ${formatShortDate(rowFrom)} → ${formatShortDate(rowTo)} · ${swapTag}${reasonSuffix})`
-      : inPlaceSwapPath
-        ? `(${rowNights} night${rowNights === 1 ? "" : "s"} · swapped Room ${inPlaceSwapPath})`
-        : `(${rowNights} nights)`;
+    const overnightSuffix = isAddedRoom
+      ? `(${rowNights} night${rowNights === 1 ? "" : "s"}, ${formatShortDate(rowFrom)} → ${formatShortDate(rowTo)} · added mid-stay)`
+      : isSegmented
+        ? `(${rowNights} night${rowNights === 1 ? "" : "s"}, ${formatShortDate(rowFrom)} → ${formatShortDate(rowTo)} · ${swapTag}${reasonSuffix})`
+        : inPlaceSwapPath
+          ? `(${rowNights} night${rowNights === 1 ? "" : "s"} · swapped Room ${inPlaceSwapPath})`
+          : `(${rowNights} nights)`;
     lineItems.push({
       description: isShort
         ? `Room ${rr.room.roomNumber} - ${displayType} (Day use · ${shortStayHours} hours)`
@@ -360,7 +365,15 @@ export function buildInvoice(args: BuilderArgs): BuiltInvoice {
       gstAmount: String(+roomGst.toFixed(2)),
       itemType: "room_charge",
     });
-    pushExtraBedLine(rr, roomUnits, rr.room.roomNumber);
+    // NOT roomUnits. For a day-use booking roomUnits is the HOUR count (it
+    // drives the room line's "6 hours" quantity), but the room itself is
+    // billed flat at storedRate — so passing it here multiplied the extra bed
+    // by the hours: a 6-hour stay with one ₹500 bed invoiced ₹3,000 as
+    // "Extra bed (1 × 6 days)". The combined-checkout path already bills that
+    // same bed once; this is the default per-room path, so the two disagreed
+    // 6× on identical data. An extra bed is one flat charge per night, and a
+    // day-use stay is one occasion.
+    pushExtraBedLine(rr, isShort ? 1 : rowNights, rr.room.roomNumber);
   }
 
   // Decide whether the extension deltas were actually merged. They are
@@ -369,15 +382,7 @@ export function buildInvoice(args: BuilderArgs): BuiltInvoice {
   // can't absorb the extra night, or mixed rates) they stay as
   // pass-through charges so the invoice math still adds up.
   const anyRoomCouldMerge = rooms.some((rr) => {
-    const rowFrom = rr.effectiveFrom ?? reservation.checkInDate;
-    const rowTo = rr.effectiveTo ?? reservation.checkOutDate;
-    const rowNights = Math.max(
-      1,
-      Math.round(
-        (new Date(rowTo).getTime() - new Date(rowFrom).getTime()) /
-          (24 * 60 * 60 * 1000),
-      ),
-    );
+    const rowNights = roomBillableNights(rr, reservation);
     return !isShort && extensionDeltas.length > 0 && rowNights > totalExtraNights;
   });
   const chargesToPrint = anyRoomCouldMerge

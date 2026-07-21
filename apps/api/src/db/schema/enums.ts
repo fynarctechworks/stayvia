@@ -37,27 +37,15 @@ export type IdProofType = (typeof ID_PROOF_TYPES)[number];
 //                     Surfaces in Collections as a follow-up.
 //   checked_in / checked_out — physical-presence states.
 //   cancelled / no_show — terminal negative states.
-export const RESERVATION_STATUSES = [
-  "inquiry",
-  "hold",
-  "pending_payment",
-  "confirmed",
-  "checked_in",
-  "checked_out",
-  "cancelled",
-  "no_show",
-] as const;
-export type ReservationStatus = (typeof RESERVATION_STATUSES)[number];
-
-// Statuses that block room inventory. Used by availability checks and
-// the dashboard "occupied vs reserved" logic. inquiry doesn't block;
-// hold and pending_payment do (they were promised a room).
-export const RESERVATION_BLOCKING_STATUSES: readonly ReservationStatus[] = [
-  "hold",
-  "pending_payment",
-  "confirmed",
-  "checked_in",
-];
+// Re-exported from @stayvia/shared rather than redeclared. The two copies had
+// silently diverged (the shared one was missing inquiry/hold/pending_payment
+// while backing the live list-query validator), and nothing could catch it
+// because each app imported its own.
+export {
+  RESERVATION_STATUSES,
+  RESERVATION_BLOCKING_STATUSES,
+  type ReservationStatus,
+} from "@stayvia/shared";
 
 export const INVOICE_STATUSES = ["issued", "paid", "partial", "voided"] as const;
 export type InvoiceStatus = (typeof INVOICE_STATUSES)[number];

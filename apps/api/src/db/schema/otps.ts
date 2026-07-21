@@ -1,7 +1,7 @@
 import { index, integer, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
 import { properties } from "./properties.js";
 
-export const OTP_PURPOSES = ["checkin", "guest_verify", "password_change"] as const;
+export const OTP_PURPOSES = ["checkin", "guest_verify", "password_change", "signup"] as const;
 export type OtpPurpose = (typeof OTP_PURPOSES)[number];
 
 export const OTP_CHANNELS = ["sms", "email"] as const;

@@ -8,6 +8,7 @@ import { reservationRooms, reservations } from "../db/schema/reservations.js";
 import { rooms } from "../db/schema/rooms.js";
 import { propertyDayEnd, propertyDayStart } from "../lib/propertyTime.js";
 import { ok } from "../lib/response.js";
+import { getSettings } from "../lib/settings.js";
 import { requireAuth } from "../middleware/auth.js";
 import { validate } from "../middleware/validate.js";
 
@@ -38,15 +39,18 @@ router.get(
     conds.push(eq(activityLog.propertyId, req.propertyId));
     if (date_from) conds.push(gte(activityLog.createdAt, propertyDayStart(date_from)));
     if (date_to) conds.push(lte(activityLog.createdAt, propertyDayEnd(date_to)));
-    // Hide entries tied to complimentary reservations — they're silent
-    // everywhere outside the Complimentary report. (entity_id is a uuid
-    // column, so the join below is always type-safe.)
-    conds.push(
-      sql`NOT (${activityLog.entityType} = 'reservation' AND EXISTS (
-        SELECT 1 FROM ${reservations} r
-        WHERE r.id = ${activityLog.entityId}
-          AND r.booking_source = 'complimentary'))`,
-    );
+    // Hide entries tied to complimentary reservations while the
+    // hideComplimentary setting is on — they're then silent everywhere
+    // outside the Complimentary report. (entity_id is a uuid column, so
+    // the join below is always type-safe.)
+    if ((await getSettings(req.propertyId)).hideComplimentary) {
+      conds.push(
+        sql`NOT (${activityLog.entityType} = 'reservation' AND EXISTS (
+          SELECT 1 FROM ${reservations} r
+          WHERE r.id = ${activityLog.entityId}
+            AND r.booking_source = 'complimentary'))`,
+      );
+    }
 
     const rows = await db
       .select({

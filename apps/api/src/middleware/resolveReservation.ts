@@ -78,7 +78,16 @@ export async function resolveReservationId(
   // per-hotel, so both the lookup and the cache key carry the tenant —
   // hotel B's RES-0005 can never resolve to hotel A's row.
   if (RES_NUMBER_RE.test(raw)) {
-    const key = `${req.propertyId}:${raw.toUpperCase()}`;
+    // Strip the legacy SLDT- prefix before looking anything up.
+    //
+    // The regex above accepts an optional SLDT- so old bookmarked links
+    // still match, but the raw string was then queried verbatim. Since
+    // lib/numbers.ts emits bare numbers (INV-0044, RCP-0003, RES-0002),
+    // a prefixed link searched for a value that cannot exist and every
+    // one of them 404'd — the compatibility branch did the exact
+    // opposite of what its comment claimed, in all three middlewares.
+    const number = raw.toUpperCase().replace(/^SLDT-/, "");
+    const key = `${req.propertyId}:${number}`;
     const cached = cacheGet(key);
     if (cached) {
       req.params.id = cached;
@@ -90,7 +99,7 @@ export async function resolveReservationId(
       .from(reservations)
       .where(
         and(
-          eq(reservations.reservationNumber, raw.toUpperCase()),
+          eq(reservations.reservationNumber, number),
           eq(reservations.propertyId, req.propertyId),
         ),
       )

@@ -198,6 +198,9 @@ export async function attachOrphanPaymentsAndRecompute(
       propertyId: payments.propertyId,
       receivedBy: payments.receivedBy,
       paymentDate: payments.paymentDate,
+      // Carried so a split preserves it. A 'pending' row is a promise to pay,
+      // not collected money — see the slice insert below.
+      status: payments.status,
     })
     .from(payments)
     .where(
@@ -427,7 +430,15 @@ export async function attachOrphanPaymentsAndRecompute(
         reservationId,
         amount: String(slice.amount.toFixed(2)),
         paymentMethod: op.paymentMethod,
-        status: "received",
+        // Inherit the source row's status — do NOT hard-code "received".
+        // The orphan query above accepts any non-voided row, which includes
+        // the 'pending' promise written by an unpaid skipInvoice checkout.
+        // Hard-coding "received" meant splitting such a row across two
+        // invoices minted real collected revenue out of the slices: the
+        // original stayed 'pending' while every part after the first counted
+        // toward totalPaid, silently reducing the guest's balance by money
+        // nobody had taken.
+        status: op.status,
         receivedBy: op.receivedBy,
         paymentDate: op.paymentDate,
         notes: splitNote,

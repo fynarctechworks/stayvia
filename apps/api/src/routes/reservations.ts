@@ -22,7 +22,7 @@ import {
 } from "@stayvia/shared";
 import { randomUUID } from "node:crypto";
 import { differenceInCalendarDays, format } from "date-fns";
-import { and, asc, desc, eq, gte, inArray, isNotNull, isNull, lte, ne, or, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gt, gte, inArray, isNotNull, isNull, lte, ne, or, sql } from "drizzle-orm";
 import { Router } from "express";
 import { z } from "zod";
 import { db } from "../db/client.js";
@@ -52,6 +52,7 @@ import {
 import { calcGstBreakdown, getGstRate } from "../lib/gst.js";
 import { loadGuestExtra } from "../lib/guestExtra.js";
 import { buildInvoice, selectChargesForScope } from "../lib/invoiceBuilder.js";
+import { roomBillableNights, sumRoomAmount } from "../lib/nights.js";
 import { PAYMENT_METHODS } from "../db/schema/enums.js";
 import { creditNoteNumber, invoiceNumber, nextDocNumber, reservationNumber } from "../lib/numbers.js";
 import { hashOtp } from "../lib/otp.js";
@@ -206,10 +207,11 @@ router.get(
         )`,
       );
     }
-    // Hide complimentary bookings from the main list by default — they
-    // live in Reports → Complimentary. The override flag is for admin
-    // tooling that needs to surface every reservation.
-    if (!include_complimentary) {
+    // Hide complimentary bookings from the main list when the hotel's
+    // hideComplimentary setting is on (default) — they then live only in
+    // Reports → Complimentary. The override flag is for admin tooling
+    // that needs to surface every reservation.
+    if (!include_complimentary && (await getSettings(req.propertyId)).hideComplimentary) {
       conditions.push(sql`${reservations.bookingSource} <> 'complimentary'`);
     }
 
@@ -558,7 +560,7 @@ router.get("/:id", requireAuth, requirePermission("view_reservations"), async (r
 router.post(
   "/",
   requireAuth,
-  requirePermission("view_reservations"),
+  requirePermission("create_reservations"),
   idempotent("reservations.create"),
   validate(reservationCreateSchema),
   async (req, res) => {
@@ -829,7 +831,7 @@ router.post(
           }
           const extra = input.specialRequests?.trim();
           if (extra) parts.push(extra);
-          return parts.length ? parts.join(" — ") : null;
+          return parts.length ? parts.join(" - ") : null;
         })();
 
         const [r] = await tx
@@ -934,7 +936,7 @@ router.post(
               ? input.advancePaymentMethod
               : "cash";
           const notes =
-            input.advancePaid > 0 ? "Advance at booking" : "Booking — no advance collected";
+            input.advancePaid > 0 ? "Advance at booking" : "Booking - no advance collected";
           await tx.insert(payments).values({
             receiptNumber: rcpNum,
             propertyId,
@@ -960,7 +962,7 @@ router.post(
             .where(and(eq(otps.id, otpRowIdToConsume), isNull(otps.consumedAt)))
             .returning({ id: otps.id });
           if (consumed.length === 0) {
-            throw new Error("OTP was already used — request a new code");
+            throw new Error("OTP was already used - request a new code");
           }
         }
 
@@ -978,7 +980,7 @@ router.post(
           res,
           409,
           "INSUFFICIENT_WALLET_BALANCE",
-          `Wallet balance is ₹${info?.available.toFixed(2) ?? "0"} — cannot apply ₹${info?.requested.toFixed(2) ?? "0"}.`,
+          `Wallet balance is ₹${info?.available.toFixed(2) ?? "0"} - cannot apply ₹${info?.requested.toFixed(2) ?? "0"}.`,
           info ?? undefined,
         );
       }
@@ -1155,10 +1157,13 @@ router.get(
 
     // Honour inclusive vs exclusive mode (see lib/gst.ts). The amount
     // assembled from rate × nights is treated as a gross total when the
-    // property is on inclusive pricing.
-    const newRoomAmount = +(
-      assigned.reduce((a, rm) => a + Number(rm.ratePerNight) * newNights, 0)
-    ).toFixed(2);
+    // property is on inclusive pricing. Billed from `today` to checkout —
+    // rooms are unsegmented at check-in (no swap can precede it), so the
+    // shared helper yields the same per-room night count for all of them.
+    const newRoomAmount = sumRoomAmount(assigned, {
+      checkInDate: today,
+      checkOutDate: current.checkOutDate,
+    });
 
     // Inherit the reservation's snapshotted GST rate + mode — DO NOT
     // re-derive from the slab. Adding nights to an existing booking
@@ -1217,7 +1222,7 @@ router.get(
 router.post(
   "/:id/early-check-in",
   requireAuth,
-  requirePermission("view_reservations"),
+  requirePermission("check_in"),
   async (req, res) => {
     const id = req.params.id!;
     const r = await db
@@ -1242,7 +1247,7 @@ router.post(
         res,
         400,
         "NOT_EARLY",
-        "Reservation is already due today or earlier — use the regular check-in endpoint.",
+        "Reservation is already due today or earlier - use the regular check-in endpoint.",
       );
     }
     if (current.checkOutDate <= today) {
@@ -1250,7 +1255,7 @@ router.post(
         res,
         400,
         "INVALID_DATES",
-        "Reservation has already passed — early check-in not possible.",
+        "Reservation has already passed - early check-in not possible.",
       );
     }
 
@@ -1297,12 +1302,12 @@ router.post(
           .from(reservationRooms)
           .where(eq(reservationRooms.reservationId, id));
 
-        // Mode-aware totals. `newRoomAmount` is the raw rate × nights;
-        // the breakdown helper extracts net subtotal vs grand total
-        // depending on inclusive/exclusive mode.
-        const newRoomAmount = +(
-          roomRates.reduce((a, rm) => a + Number(rm.ratePerNight) * newNights, 0)
-        ).toFixed(2);
+        // Mode-aware totals via the shared night helper. Rooms are
+        // unsegmented at check-in, so each bills today→checkout uniformly.
+        const newRoomAmount = sumRoomAmount(roomRates, {
+          checkInDate: today,
+          checkOutDate: current.checkOutDate,
+        });
 
         // Inherit reservation's snapshot — see /early-check-in/preview.
         const gstRate = Number(current.gstRate);
@@ -1366,7 +1371,7 @@ router.post(
 router.post(
   "/:id/check-in",
   requireAuth,
-  requirePermission("view_reservations"),
+  requirePermission("check_in"),
   idempotent("reservations.checkIn"),
   validate(checkInSchema),
   async (req, res) => {
@@ -1747,12 +1752,36 @@ async function handlePerRoomCheckout(args: {
 
   // Pre-build each invoice (math only, no DB writes yet) so we know the
   // total and can split the final payment proportionally.
+  // Group mid-stay SWAP LEGS onto a single invoice.
+  //
+  // targetRooms holds one entry per reservation_rooms ROW, and a segmented
+  // swap leaves two rows for what is one continuous occupancy (101 for the
+  // first night, 102 after the swap). Billing per row therefore issued the
+  // guest TWO tax invoices for one stay. Per-room invoicing exists so that
+  // separate occupants can each claim their own GST — a guest who merely
+  // changed rooms is one occupant and gets one bill.
+  //
+  // Rows in a swap chain share swap_id; anything else is its own group. In-
+  // place swaps (0036/0037) never split the row, so they are already single.
+  const groupMap = new Map<string, typeof targetRooms>();
+  for (const x of targetRooms) {
+    const key = x.rr.swapId ?? x.rr.id;
+    const existing = groupMap.get(key);
+    if (existing) existing.push(x);
+    else groupMap.set(key, [x]);
+  }
+  const targetGroups = [...groupMap.values()];
+  const groupRoomIds = targetGroups.map((g) => g.map((x) => x.room.id));
   const targetRoomIds = targetRooms.map((x) => x.room.id);
   // Resolved once for every room in the checkout (the .map below is sync) —
   // lets in-place swaps render "swapped from Room X" on the invoice line.
   const roomNumberById = await buildRoomNumberMap(resRooms);
   const swapHopsByRowId = await buildSwapHopsMap(resRooms.map((x) => x.rr.id));
-  const builts = targetRooms.map((rrm, idx) => {
+  const builts = targetGroups.map((group, idx) => {
+    // Representative row — guest attribution and display fall back to the
+    // FIRST leg of the chain (the room the stay started in).
+    const rrm = group[0]!;
+    const ids = groupRoomIds[idx]!;
     // Pin orphan (room-NULL) charges to the FIRST target room — they only
     // appear on one invoice so they don't double-count. selectChargesForScope
     // attaches orphans only when scope == remaining; for non-first rooms we
@@ -1761,11 +1790,11 @@ async function handlePerRoomCheckout(args: {
     // room we make scope == remaining so the orphans are picked up.
     const scopedCharges = selectChargesForScope({
       allCharges: charges,
-      scopeRoomIds: [rrm.room.id],
+      scopeRoomIds: ids,
       remainingUnInvoicedRoomIds:
         idx === 0
-          ? [rrm.room.id]
-          : [rrm.room.id, ...targetRoomIds.filter((id) => id !== rrm.room.id)],
+          ? ids
+          : [...ids, ...targetRoomIds.filter((id) => !ids.includes(id))],
     });
     const built = buildInvoice({
       reservation: {
@@ -1777,13 +1806,16 @@ async function handlePerRoomCheckout(args: {
         gstRate: r.gstRate,
         gstMode: r.gstMode,
       },
-      rooms: [{ ...rrm.rr, room: rrm.room }] as never,
+      // Every leg of the chain, so buildInvoice emits one line per segment
+      // (each priced from its own effective_from/effective_to window) on the
+      // single invoice.
+      rooms: group.map((x) => ({ ...x.rr, room: x.room })) as never,
       charges: scopedCharges,
       labelMap,
       roomNumberById,
       swapHopsByRowId,
     });
-    return { rrm, built };
+    return { rrm, group, ids, built };
   });
 
   const totalGrand = +builts.reduce((s, b) => s + b.built.grandTotal, 0).toFixed(2);
@@ -1870,7 +1902,7 @@ async function handlePerRoomCheckout(args: {
 
   await db.transaction(async (tx) => {
     for (let i = 0; i < builts.length; i++) {
-      const { rrm, built } = builts[i]!;
+      const { rrm, group, ids, built } = builts[i]!;
       const invoiceSeq = await nextDocNumber(tx, r.propertyId, "invoice");
       const invNum = invoiceNumber(settings.invoicePrefix, invoiceSeq);
 
@@ -1920,7 +1952,7 @@ async function handlePerRoomCheckout(args: {
           balanceDue: String(balanceOnThisInv),
           status: invStatusForRow,
           scope: "room" as const,
-          scopeRoomIds: [rrm.room.id],
+          scopeRoomIds: ids,
           issuedBy: req.user!.id,
         })
         .returning();
@@ -1938,7 +1970,10 @@ async function handlePerRoomCheckout(args: {
           checkedOutAt: new Date(),
           checkedOutBy: req.user!.id,
         })
-        .where(eq(reservationRooms.id, rrm.rr.id));
+        // Stamp EVERY leg in the chain, not just the representative row —
+        // a leg left without an invoice_id would be re-billed as
+        // "uninvoiced" by a later checkout.
+        .where(inArray(reservationRooms.id, group.map((x) => x.rr.id)));
 
       if (paymentOnThisInv > 0.009 && input.paymentMethod) {
         const rcpNum = await generateReceiptNumber(tx, r.propertyId);
@@ -1953,7 +1988,9 @@ async function handlePerRoomCheckout(args: {
           receivedBy: req.user!.id,
           notes:
             input.paymentNotes ??
-            (builts.length > 1 ? `Per-room share of check-out collection (Room ${rrm.room.roomNumber})` : null),
+            (builts.length > 1
+              ? `Per-room share of check-out collection (Room ${group.map((x) => x.room.roomNumber).join(" → ")})`
+              : null),
         });
       }
 
@@ -2150,7 +2187,7 @@ async function handlePerRoomCheckout(args: {
 router.post(
   "/:id/check-out",
   requireAuth,
-  requirePermission("view_reservations"),
+  requirePermission("check_out"),
   idempotent("reservations.checkOut"),
   validate(checkOutSchema),
   async (req, res) => {
@@ -2201,11 +2238,11 @@ router.post(
 
     const isShortStayInvoice = r[0]!.stayType === "short_stay";
     const shortStayHours = Number(r[0]!.durationHours ?? 0);
-    const nights = Number(r[0]!.numNights);
-    // For short_stay the room line is one flat charge (quantity 1, rate =
-    // the FLAT short-stay price stored on reservation_rooms.ratePerNight).
-    // For overnight we keep the original "rate × nights" line.
-    const roomUnits = isShortStayInvoice ? 1 : nights;
+    // Per-room billable units are computed INSIDE the room loop below, from
+    // that room's own segment window — see `unitsFor`. The reservation-level
+    // numNights is deliberately NOT read here: using it for every room (as
+    // this branch used to) bills a room that only covered part of the stay
+    // for the whole stay.
     const roomGstRate = Number(r[0]!.gstRate);
     const reservationGstMode = r[0]!.gstMode ?? "exclusive";
 
@@ -2245,6 +2282,10 @@ router.post(
     }> = [];
 
     for (const rr of billableRooms) {
+      // Segment nights via the shared helper — the same definition
+      // recalcReservation, the per-room checkout and the invoice preview use,
+      // so the combined bill can't disagree with them.
+      const roomUnits = isShortStayInvoice ? 1 : roomBillableNights(rr.rr, r[0]!);
       // In exclusive mode the stored rate IS the net price per unit.
       // In inclusive mode the stored rate is the gross per unit, so we
       // extract the per-unit net via the breakdown helper and store
@@ -2270,7 +2311,7 @@ router.post(
       );
       const description = isShortStayInvoice
         ? `Room ${rr.room.roomNumber} - ${displayType} (Day use · ${shortStayHours} hours)`
-        : `Room ${rr.room.roomNumber} - ${displayType} (${nights} nights)`;
+        : `Room ${rr.room.roomNumber} - ${displayType} (${roomUnits} night${roomUnits === 1 ? "" : "s"})`;
       lineItems.push({
         description,
         // 996311 — Room/unit accommodation services by hotels, inn, guest
@@ -2704,7 +2745,7 @@ router.post(
 router.post(
   "/:id/make-complimentary",
   requireAuth,
-  requirePermission("view_reservations"),
+  requirePermission("edit_reservations"),
   validate(makeComplimentarySchema),
   async (req, res) => {
     const id = req.params.id!;
@@ -2744,7 +2785,7 @@ router.post(
       current.creditNotes ? `Prior notes: ${current.creditNotes}` : null,
     ]
       .filter(Boolean)
-      .join(" — ");
+      .join(" - ");
 
     // Pure reclassification — no invoice or payment changes. Every revenue
     // query filters on bookingSource so this booking will silently fall
@@ -2803,7 +2844,8 @@ router.post(
 router.post(
   "/:id/cancel",
   requireAuth,
-  requirePermission("view_reservations"),
+  requirePermission("cancel_reservations"),
+  idempotent("reservations.cancel"),
   validate(cancelSchema),
   async (req, res) => {
     const id = req.params.id!;
@@ -2961,7 +3003,7 @@ router.post(
       if (cancellationFee > 0.009) {
         await tx.insert(additionalCharges).values({
           reservationId: id,
-          description: `Cancellation fee — ${cancellationReason}`,
+          description: `Cancellation fee - ${cancellationReason}`,
           quantity: 1,
           rate: String(cancellationFee.toFixed(2)),
           amount: String(cancellationFee.toFixed(2)),
@@ -3063,7 +3105,7 @@ router.post(
           propertyId: req.propertyId,
           type: "reservation_cancelled",
           title: "Reservation cancelled",
-          body: `${r[0]!.reservationNumber} · ${cancelGuest?.fullName ?? "Guest"}${cancelledRooms ? ` · Room ${cancelledRooms}` : ""} — ${cancellationReason}${moneyBits.length ? ` · ${moneyBits.join(" · ")}` : ""}`,
+          body: `${r[0]!.reservationNumber} · ${cancelGuest?.fullName ?? "Guest"}${cancelledRooms ? ` · Room ${cancelledRooms}` : ""} - ${cancellationReason}${moneyBits.length ? ` · ${moneyBits.join(" · ")}` : ""}`,
           href: `/reservations/${id}`,
           payload: { reservationId: id },
           recipientRoles: ["admin", "frontdesk", "housekeeping"],
@@ -3096,7 +3138,7 @@ router.post(
 router.post(
   "/:id/no-show",
   requireAuth,
-  requirePermission("view_reservations"),
+  requirePermission("cancel_reservations"),
   validate(noShowSchema),
   async (req, res) => {
     const id = req.params.id!;
@@ -3188,7 +3230,7 @@ router.post(
           propertyId: req.propertyId,
           type: "reservation_cancelled",
           title: "No-show",
-          body: `${r[0]!.reservationNumber} · ${nsGuest?.fullName ?? "Guest"}${nsRooms ? ` · Room ${nsRooms}` : ""} — ${note}${forfeitedAdvance > 0 ? ` · ₹${forfeitedAdvance.toFixed(2)} advance forfeited` : ""}`,
+          body: `${r[0]!.reservationNumber} · ${nsGuest?.fullName ?? "Guest"}${nsRooms ? ` · Room ${nsRooms}` : ""} - ${note}${forfeitedAdvance > 0 ? ` · ₹${forfeitedAdvance.toFixed(2)} advance forfeited` : ""}`,
           href: `/reservations/${id}`,
           payload: { reservationId: id },
           recipientRoles: ["admin", "frontdesk", "housekeeping"],
@@ -3205,7 +3247,7 @@ router.post(
 router.post(
   "/:id/swap-room",
   requireAuth,
-  requirePermission("view_reservations"),
+  requirePermission("manage_rooms_on_stay"),
   validate(swapRoomSchema),
   async (req, res) => {
     const id = req.params.id!;
@@ -3286,12 +3328,18 @@ router.post(
 router.post(
   "/:id/swap-room-segment",
   requireAuth,
-  requirePermission("view_reservations"),
+  requirePermission("manage_rooms_on_stay"),
   idempotent("reservations.swapRoomSegment"),
   validate(swapRoomSegmentSchema),
   async (req, res) => {
     const id = req.params.id!;
     const input = req.body as z.infer<typeof swapRoomSegmentSchema>;
+
+    // Rate-change note for the activity log — set by whichever branch
+    // (in-place or segmented) applies a renegotiated rate, so a swap that
+    // silently changes the price is visible in the audit trail.
+    let swapRateNote = "";
+    let swapRateMeta: { oldRate: number; newRate: number } | null = null;
 
     const r = await db
       .select()
@@ -3330,7 +3378,7 @@ router.post(
         res,
         409,
         "ROOM_INVOICED",
-        "That room is already invoiced — issue a credit note instead of swapping",
+        "That room is already invoiced - issue a credit note instead of swapping",
       );
     }
     if (seg.roomId === input.toRoomId) {
@@ -3392,6 +3440,10 @@ router.post(
         input.newRate !== undefined &&
         Math.abs(input.newRate - oldRate) > 0.009;
       const newRate = hasRateChange ? input.newRate! : oldRate;
+      if (hasRateChange) {
+        swapRateNote = ` · rate ₹${oldRate.toFixed(2)} -> ₹${newRate.toFixed(2)}/night`;
+        swapRateMeta = { oldRate, newRate };
+      }
 
       await db.transaction(async (tx) => {
         // 0037 — record this hop before we overwrite the row, so a
@@ -3531,6 +3583,10 @@ router.post(
         input.newRate !== undefined &&
         Math.abs(input.newRate - oldRate) > 0.009;
       const newSegRate = hasRateChange ? input.newRate! : oldRate;
+      if (hasRateChange) {
+        swapRateNote = ` · rate ₹${oldRate.toFixed(2)} -> ₹${newSegRate.toFixed(2)}/night`;
+        swapRateMeta = { oldRate, newRate: newSegRate };
+      }
 
       await db.transaction(async (tx) => {
         // 1. Close the old segment at the swap date.
@@ -3634,7 +3690,7 @@ router.post(
       action: "room_swap_segment",
       entityType: "reservation",
       entityId: id,
-      description: `${reservation.reservationNumber}: room swapped on ${input.effectiveDate} (${input.reason})`,
+      description: `${reservation.reservationNumber}: room swapped on ${input.effectiveDate} (${input.reason})${swapRateNote}`,
       performedBy: req.user!.id,
       ipAddress: req.ip,
       metadata: {
@@ -3642,6 +3698,7 @@ router.post(
         fromRoomId: seg.roomId,
         toRoomId: input.toRoomId,
         effectiveDate: input.effectiveDate,
+        ...(swapRateMeta ?? {}),
         reason: input.reason,
         markOldRoomStatus: input.markOldRoomStatus,
       },
@@ -3654,7 +3711,7 @@ router.post(
 router.post(
   "/:id/charges",
   requireAuth,
-  requirePermission("view_reservations"),
+  requirePermission("add_charge"),
   idempotent("reservations.addCharge"),
   validate(additionalChargeSchema),
   async (req, res) => {
@@ -3664,7 +3721,9 @@ router.post(
     // Tenant guard: the charge may only be added to a reservation in the
     // caller's property.
     const [resv] = await db
-      .select({ id: reservations.id })
+      // checkOutDate is needed below to tell a live room segment from a
+      // closed swap leg.
+      .select({ id: reservations.id, checkOutDate: reservations.checkOutDate })
       .from(reservations)
       .where(and(eq(reservations.id, id), eq(reservations.propertyId, req.propertyId)))
       .limit(1);
@@ -3675,11 +3734,28 @@ router.post(
     // every checkout billing scope.
     if (input.roomId) {
       const [link] = await db
-        .select({ roomId: reservationRooms.roomId })
+        .select({
+          roomId: reservationRooms.roomId,
+          effectiveTo: reservationRooms.effectiveTo,
+        })
         .from(reservationRooms)
         .where(and(eq(reservationRooms.reservationId, id), eq(reservationRooms.roomId, input.roomId)))
         .limit(1);
       if (!link) return fail(res, 404, "ROOM_NOT_FOUND", "Room not in this reservation");
+      // ...and at a room the guest is still IN. After a mid-stay swap the
+      // vacated room keeps a row bounded to end at the swap date. Attributing
+      // a new charge to that closed leg pins it to a segment nothing will
+      // bill going forward, so the money quietly disappears from the guest's
+      // running bill. The live leg runs to the reservation's checkout; NULL
+      // bounds mean unsegmented, which is always live.
+      if (link.effectiveTo !== null && link.effectiveTo < resv.checkOutDate) {
+        return fail(
+          res,
+          409,
+          "ROOM_NOT_ACTIVE",
+          "That room was swapped out earlier in this stay. Attribute the charge to the room the guest is in now, or leave it reservation-wide.",
+        );
+      }
     }
 
     const amount = +(input.quantity * input.rate).toFixed(2);
@@ -3716,7 +3792,7 @@ router.post(
 router.post(
   "/:id/extend",
   requireAuth,
-  requirePermission("view_reservations"),
+  requirePermission("extend_stay"),
   validate(extendReservationSchema),
   async (req, res) => {
     const id = req.params.id!;
@@ -3744,10 +3820,37 @@ router.post(
       return fail(res, 400, "INVALID_DATES", "New check-out must be after current check-out");
     }
 
-    const assigned = await db
-      .select({ roomId: reservationRooms.roomId, ratePerNight: reservationRooms.ratePerNight })
+    // LIVE segments only — a closed swap leg must not be extended.
+    //
+    // After a mid-stay swap the booking keeps a row per room: the vacated one
+    // bounded [check-in, swap date) and the current one [swap date, checkout).
+    // The guest is only in the latter. Extending the closed leg would:
+    //   * availability-check a room that is genuinely free, so an unrelated
+    //     booking on it could block this extension outright (409);
+    //   * multiply the rate delta by the room COUNT — a one-room stay that had
+    //     been swapped once would be charged the extension delta twice;
+    //   * re-block a sellable room for the new nights.
+    // A closed leg is any row whose window ends before the reservation's own
+    // checkout; the final leg ends exactly at it (NULL = whole stay).
+    const allRows = await db
+      .select({
+        roomId: reservationRooms.roomId,
+        ratePerNight: reservationRooms.ratePerNight,
+        effectiveTo: reservationRooms.effectiveTo,
+      })
       .from(reservationRooms)
       .where(eq(reservationRooms.reservationId, id));
+    const assigned = allRows.filter(
+      (rm) => rm.effectiveTo === null || rm.effectiveTo >= current.checkOutDate,
+    );
+    if (assigned.length === 0) {
+      return fail(
+        res,
+        409,
+        "NO_LIVE_ROOMS",
+        "This booking has no room running to its check-out date, so it can't be extended.",
+      );
+    }
 
     for (const rm of assigned) {
       const ok = await isRoomAvailable(req.propertyId, rm.roomId, current.checkOutDate, input.newCheckOutDate, id);
@@ -3846,11 +3949,15 @@ router.post(
           .insert(additionalCharges)
           .values({
             reservationId: id,
-            description: `Stay extension rate adjustment — ${extraNights} ${nightWord}${rateChange}${inclLabel}`,
+            description: `Stay extension rate adjustment -${extraNights} ${nightWord}${rateChange}${inclLabel}`,
             quantity: 1,
             rate: String(storedAmount.toFixed(2)),
             amount: String(storedAmount.toFixed(2)),
             gstRate: String(gstRate),
+            // System-owned: Undo Extension rolls this back together with the
+            // dates. Deleting it on its own would silently re-price the
+            // extension down to the room's stored rate.
+            source: "stay_extension",
             addedBy: req.user!.id,
           })
           .returning();
@@ -3893,6 +4000,31 @@ router.post(
         updatedAt: new Date(),
       })
       .where(eq(reservations.id, id));
+
+    // Widen the FINAL segment to the new checkout.
+    //
+    // On a swapped booking the live row is bounded [swap date, old checkout).
+    // Extending only moved the reservation's own checkout, leaving that row
+    // ending on the old date — so the added night belonged to no room at all:
+    // invoiceBuilder billed the segment its original night count (under-billing
+    // the extension), and the GiST stay_range still ended on the old date, so
+    // availability showed the room FREE for a night the guest is occupying and
+    // it could be sold out from under them.
+    //
+    // Only rows that ran to the old checkout are touched; closed legs keep
+    // their own bounds. Rows with NULL bounds need nothing — they follow the
+    // parent reservation. Updating effective_to also re-fires the
+    // stay_range sync trigger (migration 0011), so the exclusion constraint
+    // stays in step.
+    await db
+      .update(reservationRooms)
+      .set({ effectiveTo: input.newCheckOutDate })
+      .where(
+        and(
+          eq(reservationRooms.reservationId, id),
+          eq(reservationRooms.effectiveTo, current.checkOutDate),
+        ),
+      );
 
     await recalcReservation(id);
     const [updated] = await db
@@ -3941,7 +4073,7 @@ router.post(
 router.post(
   "/:id/extend-split",
   requireAuth,
-  requirePermission("view_reservations"),
+  requirePermission("extend_stay"),
   idempotent("reservations.extendSplit"),
   validate(extendSplitSchema),
   async (req, res) => {
@@ -4005,7 +4137,7 @@ router.post(
         res,
         400,
         "USE_FULL_EXTEND",
-        "All rooms picked — use POST /extend (full-reservation extension) instead of split",
+        "All rooms picked - use POST /extend (full-reservation extension) instead of split",
       );
     }
     // Block split when any picked room is already on an invoice — its
@@ -4069,8 +4201,8 @@ router.post(
       // by recalcReservation in a moment; we just need a valid initial
       // row (notNull columns + sane defaults).
       const composedSpecial = current.specialRequests
-        ? `Split from ${current.reservationNumber} — extended to ${input.newCheckOutDate}. Original notes: ${current.specialRequests}`
-        : `Split from ${current.reservationNumber} — extended to ${input.newCheckOutDate}`;
+        ? `Split from ${current.reservationNumber} - extended to ${input.newCheckOutDate}. Original notes: ${current.specialRequests}`
+        : `Split from ${current.reservationNumber} - extended to ${input.newCheckOutDate}`;
       const [created] = await tx
         .insert(reservations)
         .values({
@@ -4147,11 +4279,16 @@ router.post(
           const inclLabel = reservationGstMode === "inclusive" ? " (incl. GST)" : "";
           await tx.insert(additionalCharges).values({
             reservationId: newReservationId,
-            description: `Stay extension rate adjustment — ${extraNights} ${nightWord}${rateChange}${inclLabel}`,
+            description: `Stay extension rate adjustment -${extraNights} ${nightWord}${rateChange}${inclLabel}`,
             quantity: 1,
             rate: String(storedAmount.toFixed(2)),
             amount: String(storedAmount.toFixed(2)),
             gstRate: String(gstRate),
+            // Same rate-delta semantics as the plain extend path, so the same
+            // protection: deleting it alone re-prices the continued stay down
+            // to the room's stored rate. Staff correct the figure by EDITING
+            // the charge, not by removing it.
+            source: "stay_extension",
             addedBy: req.user!.id,
           });
         }
@@ -4322,7 +4459,7 @@ router.get(
 router.post(
   "/:id/extend-continue",
   requireAuth,
-  requirePermission("view_reservations"),
+  requirePermission("extend_stay"),
   idempotent("reservations.extendContinue"),
   validate(extendContinueSchema),
   async (req, res) => {
@@ -4385,7 +4522,7 @@ router.post(
           res,
           409,
           "TARGET_ON_RESERVATION",
-          "Target room is already part of this reservation — extend it instead",
+          "Target room is already part of this reservation - extend it instead",
           { roomId: mv.toRoomId },
         );
       }
@@ -4433,10 +4570,10 @@ router.post(
       return fail(res, 400, "OTP_REQUIRED", "Send a verification code to the guest first");
     }
     if (otpRow.expiresAt < new Date()) {
-      return fail(res, 400, "OTP_EXPIRED", "The code has expired — send a new one");
+      return fail(res, 400, "OTP_EXPIRED", "The code has expired - send a new one");
     }
     if (otpRow.attempts >= env.OTP_MAX_ATTEMPTS) {
-      return fail(res, 429, "TOO_MANY_ATTEMPTS", "Too many wrong attempts — send a new code");
+      return fail(res, 429, "TOO_MANY_ATTEMPTS", "Too many wrong attempts - send a new code");
     }
     if (otpRow.codeHash !== hashOtp(input.otpCode)) {
       await db
@@ -4464,7 +4601,7 @@ router.post(
         .where(and(eq(otps.id, otpRow.id), isNull(otps.consumedAt)))
         .returning({ id: otps.id });
       if (consumed.length === 0) {
-        throw new Error("OTP was already used — request a new code");
+        throw new Error("OTP was already used - request a new code");
       }
 
       const seq = await nextDocNumber(tx, current.propertyId, "reservation");
@@ -4495,7 +4632,7 @@ router.post(
           balanceDue: "0",
           status: "confirmed",
           bookingSource: current.bookingSource,
-          specialRequests: `Continuation of ${current.reservationNumber} — room change ${moveDesc}. Confirmed by guest via OTP.`,
+          specialRequests: `Continuation of ${current.reservationNumber} - room change ${moveDesc}. Confirmed by guest via OTP.`,
           createdBy: req.user!.id,
         })
         .returning();
@@ -4527,7 +4664,7 @@ router.post(
       action: "reservation_continued_room_change",
       entityType: "reservation",
       entityId: id,
-      description: `${current.reservationNumber} continued to ${input.newCheckOutDate} as ${newReservationNumber} with room change (${moveDesc}) — guest confirmed via OTP`,
+      description: `${current.reservationNumber} continued to ${input.newCheckOutDate} as ${newReservationNumber} with room change (${moveDesc}) - guest confirmed via OTP`,
       performedBy: req.user!.id,
       ipAddress: req.ip,
       metadata: {
@@ -4549,7 +4686,8 @@ router.post(
 router.post(
   "/:id/late-checkout",
   requireAuth,
-  requirePermission("view_reservations"),
+  requirePermission("extend_stay"),
+  idempotent("reservations.lateCheckout"),
   validate(lateCheckoutSchema),
   async (req, res) => {
     const id = req.params.id!;
@@ -4634,7 +4772,7 @@ router.post(
 router.post(
   "/:id/add-room",
   requireAuth,
-  requirePermission("view_reservations"),
+  requirePermission("manage_rooms_on_stay"),
   validate(addRoomSchema),
   async (req, res) => {
     const id = req.params.id!;
@@ -4643,6 +4781,7 @@ router.post(
       ratePerNight: number;
       soldAsType?: string | null;
       startDate?: string;
+      endDate?: string;
     };
 
     const r = await db
@@ -4677,8 +4816,24 @@ router.post(
     if (!isShortStay && startDate >= current.checkOutDate) {
       return fail(res, 400, "INVALID_DATES", "Start date must be before check-out date");
     }
+    // Optional early end for the added room (defaults to the parent's
+    // check-out). Must stay inside the parent stay and after the start.
+    const endDate = isShortStay ? current.checkOutDate : input.endDate ?? current.checkOutDate;
+    if (!isShortStay) {
+      if (endDate <= startDate) {
+        return fail(res, 400, "INVALID_DATES", "End date must be after the start date");
+      }
+      if (endDate > current.checkOutDate) {
+        return fail(
+          res,
+          400,
+          "INVALID_DATES",
+          "End date cannot go beyond the reservation's check-out. Extend the stay instead.",
+        );
+      }
+    }
 
-    // Probe window. Overnight uses [start, checkOut). Day-use widens
+    // Probe window. Overnight uses [start, end). Day-use widens
     // the end by one day so the empty-range corner case in
     // isRoomAvailable's daterange overlap is avoided.
     const probeEnd = isShortStay
@@ -4686,7 +4841,7 @@ router.post(
           new Date(new Date(current.checkInDate).getTime() + 86400000),
           "yyyy-MM-dd",
         )
-      : current.checkOutDate;
+      : endDate;
     const ok2 = await isRoomAvailable(req.propertyId, input.roomId, startDate, probeEnd, id);
     if (!ok2) {
       return fail(res, 409, "ROOM_UNAVAILABLE", "Room is not available for the selected period", {
@@ -4699,10 +4854,7 @@ router.post(
     // remaining nights.
     const addedNights = isShortStay
       ? 1
-      : differenceInCalendarDays(
-          new Date(current.checkOutDate),
-          new Date(startDate),
-        );
+      : differenceInCalendarDays(new Date(endDate), new Date(startDate));
     const addedRoomAmount = +(input.ratePerNight * addedNights).toFixed(2);
 
     // Inherit the reservation's snapshotted GST rate + mode. Adding a
@@ -4744,6 +4896,12 @@ router.post(
             : ("confirmed" as const),
         checkedInAt: current.status === "checked_in" ? new Date() : null,
         checkedInBy: current.status === "checked_in" ? req.user!.id : null,
+        // Segment bounds when the added room covers a SUB-range of the
+        // parent stay. NULL means "whole stay" — same convention as swap
+        // segments — and the segment-aware invoice builder then bills
+        // exactly the covered nights instead of the parent's full range.
+        effectiveFrom: !isShortStay && startDate !== current.checkInDate ? startDate : null,
+        effectiveTo: !isShortStay && endDate !== current.checkOutDate ? endDate : null,
       });
       await tx
         .update(reservations)
@@ -4800,7 +4958,11 @@ async function recalcReservation(id: string) {
   const current = r[0];
 
   const assigned = await db
-    .select({ ratePerNight: reservationRooms.ratePerNight })
+    .select({
+      ratePerNight: reservationRooms.ratePerNight,
+      effectiveFrom: reservationRooms.effectiveFrom,
+      effectiveTo: reservationRooms.effectiveTo,
+    })
     .from(reservationRooms)
     .where(eq(reservationRooms.reservationId, id));
   const charges = await db
@@ -4808,14 +4970,6 @@ async function recalcReservation(id: string) {
     .from(additionalCharges)
     .where(eq(additionalCharges.reservationId, id));
 
-  // For short-stay, ratePerNight on reservation_rooms holds the FLAT
-  // short-stay price for the chosen duration. The recalc multiplies by 1
-  // (not by night count) so dates-edit / room-rate-edit on day-use bookings
-  // recompute correctly. Overnight stays still multiply by nights.
-  const isShortStay = current.stayType === "short_stay";
-  const nights = isShortStay
-    ? 1
-    : differenceInCalendarDays(new Date(current.checkOutDate), new Date(current.checkInDate));
   // Mode-aware math, snapshotted from the reservation row so a later
   // settings flip doesn't rewrite history.
   //   exclusive: stored room rate IS net; sum gives net subtotal.
@@ -4825,7 +4979,10 @@ async function recalcReservation(id: string) {
   // (the schema predates inclusive mode), so they get treated as
   // exclusive regardless of the reservation's mode.
   const reservationGstMode = current.gstMode ?? "exclusive";
-  const roomAmount = assigned.reduce((a, rm) => a + Number(rm.ratePerNight) * nights, 0);
+  // Per-room segment nights via the shared helper — the ONE definition every
+  // total goes through, so recalc, checkout, preview and the invoice builder
+  // can never disagree about how many nights a room is billed for.
+  const roomAmount = sumRoomAmount(assigned, current);
 
   // ALWAYS inherit the reservation's snapshotted GST rate. Re-deriving
   // from the slab on every recalc made the rate drift whenever the
@@ -4872,7 +5029,7 @@ async function hasInvoice(reservationId: string) {
 router.patch(
   "/:id/rooms/:roomId",
   requireAuth,
-  requirePermission("view_reservations"),
+  requirePermission("edit_reservations"),
   validate(editRoomRateSchema),
   async (req, res) => {
     const { id, roomId } = req.params as { id: string; roomId: string };
@@ -4915,7 +5072,9 @@ router.patch(
 router.patch(
   "/:id/charges/:chargeId",
   requireAuth,
-  requirePermission("view_reservations"),
+  // Money-mutation: gated on the edit permission, not mere view access —
+  // charge edits are a classic cash-skim vector.
+  requirePermission("edit_reservations"),
   validate(editChargeSchema),
   async (req, res) => {
     const { id, chargeId } = req.params as { id: string; chargeId: string };
@@ -4967,7 +5126,7 @@ router.patch(
       action: "charge_edited",
       entityType: "reservation",
       entityId: id,
-      description: `Charge edited: ${input.description ?? existing[0]!.description} ₹${newAmount}`,
+      description: `Charge edited: ${input.description ?? existing[0]!.description} ₹${Number(existing[0]!.amount).toFixed(2)} -> ₹${newAmount}`,
       performedBy: req.user!.id,
       ipAddress: req.ip,
       metadata: { chargeId, ...input },
@@ -4976,15 +5135,205 @@ router.patch(
   },
 );
 
+// Roll a stay extension all the way back to the originally-booked checkout.
+//
+// Extending writes three things that only make sense together: the dates
+// (check_out_date / plannedCheckOutAt / num_nights), the marker that says a
+// reservation was ever extended (original_check_out_date), and a rate-delta
+// charge. Nothing previously undid them as a unit — staff deleted the charge
+// expecting an undo and got a silently under-billed, still-extended stay.
+//
+// Reverts to original_check_out_date, NOT to "one extend ago": that column is
+// stamped once on the first extend and never overwritten, so it holds the true
+// original even after several extends. Every stay_extension charge on the
+// booking is removed with it, since each extend may have added one.
+router.post(
+  "/:id/undo-extension",
+  requireAuth,
+  requirePermission("extend_stay"),
+  idempotent("reservations.undoExtension"),
+  async (req, res) => {
+    const id = req.params.id!;
+
+    const [current] = await db
+      .select()
+      .from(reservations)
+      .where(and(eq(reservations.id, id), eq(reservations.propertyId, req.propertyId)))
+      .limit(1);
+    if (!current) return fail(res, 404, "NOT_FOUND", "Reservation not found");
+
+    if (!current.originalCheckOutDate) {
+      return fail(res, 400, "NOT_EXTENDED", "This booking has not been extended");
+    }
+    // Same guard the extend and date-edit routes use: once a tax invoice
+    // exists the billed nights are fixed, and shortening the stay behind it
+    // would leave the invoice contradicting the reservation.
+    if (await hasInvoice(id)) {
+      return fail(
+        res,
+        400,
+        "INVOICE_EXISTS",
+        "Cannot undo the extension after an invoice is generated. Void the invoice first.",
+      );
+    }
+    if (current.status === "checked_out" || current.status === "cancelled") {
+      return fail(
+        res,
+        409,
+        "STAY_CLOSED",
+        "This stay is already closed — the extension can no longer be undone.",
+      );
+    }
+
+    const restoredCheckOut = current.originalCheckOutDate;
+    // Guard against undoing INTO the past for a guest who is still in-house:
+    // the restored checkout must not precede the day they are on now.
+    const today = propertyToday();
+    if (current.status === "checked_in" && restoredCheckOut < today) {
+      return fail(
+        res,
+        409,
+        "ALREADY_PAST",
+        `The original checkout (${restoredCheckOut}) has already passed. Edit the dates directly instead.`,
+      );
+    }
+
+    // Segments must survive the rollback.
+    //
+    // A mid-stay swap that happened DURING the extended nights leaves the new
+    // room's segment starting on or after the restored checkout — undoing
+    // would strand it entirely outside the stay, leaving a room block for
+    // nights the booking no longer covers (and, for the live leg, silently
+    // detaching the room the guest is currently in). There is no safe
+    // automatic answer to that: the swap has to be dealt with first. Refuse
+    // rather than corrupt.
+    const segRows = await db
+      .select({
+        effectiveFrom: reservationRooms.effectiveFrom,
+        effectiveTo: reservationRooms.effectiveTo,
+        roomId: reservationRooms.roomId,
+      })
+      .from(reservationRooms)
+      .where(eq(reservationRooms.reservationId, id));
+    const stranded = segRows.filter(
+      (rr) => rr.effectiveFrom !== null && rr.effectiveFrom >= restoredCheckOut,
+    );
+    if (stranded.length > 0) {
+      return fail(
+        res,
+        409,
+        "SEGMENT_OUTSIDE_RESTORED_STAY",
+        `A room was swapped on or after ${restoredCheckOut}, so undoing the extension would leave that room outside the stay. Undo the room swap first, or edit the dates directly.`,
+      );
+    }
+
+    // Shift the staff-chosen checkout TIME back by the same whole-day delta,
+    // mirroring how extend rolled it forward — the header prefers
+    // plannedCheckOutAt over checkOutDate, so leaving it stale would keep
+    // showing the extended date.
+    let restoredPlannedCheckOutAt: Date | undefined;
+    if (current.plannedCheckOutAt) {
+      const dayMs = 24 * 60 * 60 * 1000;
+      const deltaDays = Math.round(
+        (new Date(restoredCheckOut).getTime() - new Date(current.checkOutDate).getTime()) / dayMs,
+      );
+      restoredPlannedCheckOutAt = new Date(
+        new Date(current.plannedCheckOutAt).getTime() + deltaDays * dayMs,
+      );
+    }
+
+    const removed = await db.transaction(async (tx) => {
+      const deleted = await tx
+        .delete(additionalCharges)
+        .where(
+          and(
+            eq(additionalCharges.reservationId, id),
+            eq(additionalCharges.source, "stay_extension"),
+          ),
+        )
+        .returning({ id: additionalCharges.id, amount: additionalCharges.amount });
+
+      // Pull any segment that ran past the restored checkout back to it —
+      // the mirror of the widening `extend` performs. Left alone, the live
+      // leg would still claim nights the booking no longer covers, keeping
+      // the room blocked in availability and mis-priced on the invoice.
+      // Rows starting at/after the boundary were rejected above, so every
+      // row reaching here still has at least one night inside the stay.
+      await tx
+        .update(reservationRooms)
+        .set({ effectiveTo: restoredCheckOut })
+        .where(
+          and(
+            eq(reservationRooms.reservationId, id),
+            gt(reservationRooms.effectiveTo, restoredCheckOut),
+          ),
+        );
+
+      await tx
+        .update(reservations)
+        .set({
+          checkOutDate: restoredCheckOut,
+          ...(restoredPlannedCheckOutAt
+            ? { plannedCheckOutAt: restoredPlannedCheckOutAt }
+            : {}),
+          // Clear the marker too, so the room breakdown stops rendering an
+          // "Extended" split. Leaving it set produced a degenerate
+          // "ORIGINAL 20→25 · EXTENDED 25→25 · 0n" row.
+          originalCheckOutDate: null,
+          updatedAt: new Date(),
+        })
+        .where(and(eq(reservations.id, id), eq(reservations.propertyId, req.propertyId)));
+
+      return deleted;
+    });
+
+    // Re-derives num_nights, subtotal, GST and balance from the restored
+    // dates and the surviving charges.
+    const totals = await recalcReservation(id);
+
+    await logActivity({
+      propertyId: req.propertyId,
+      action: "reservation_extension_undone",
+      entityType: "reservation",
+      entityId: id,
+      description: `${current.reservationNumber} extension undone — checkout restored to ${restoredCheckOut}${
+        removed.length
+          ? ` (${removed.length} extension charge${removed.length === 1 ? "" : "s"} removed)`
+          : ""
+      }`,
+      performedBy: req.user!.id,
+      ipAddress: req.ip,
+      metadata: {
+        previousCheckOut: current.checkOutDate,
+        restoredCheckOut,
+        removedChargeIds: removed.map((c) => c.id),
+      },
+    });
+    await invalidateDashboard(req.propertyId);
+
+    return ok(res, {
+      success: true,
+      restoredCheckOut,
+      removedCharges: removed.length,
+      ...totals,
+    });
+  },
+);
+
 router.delete(
   "/:id/charges/:chargeId",
   requireAuth,
-  requirePermission("view_reservations"),
+  // delete_charge is deliberately NOT in the front-desk role — deleting a
+  // charge after collecting cash for it is the classic skim.
+  requirePermission("delete_charge"),
   async (req, res) => {
     const { id, chargeId } = req.params as { id: string; chargeId: string };
 
     const [resv] = await db
-      .select({ id: reservations.id })
+      .select({
+        id: reservations.id,
+        originalCheckOutDate: reservations.originalCheckOutDate,
+      })
       .from(reservations)
       .where(and(eq(reservations.id, id), eq(reservations.propertyId, req.propertyId)))
       .limit(1);
@@ -4993,6 +5342,35 @@ router.delete(
     if (await hasInvoice(id)) {
       return fail(res, 400, "INVOICE_EXISTS", "Cannot delete charges after invoice is generated");
     }
+
+    // System-owned charges can't be deleted on their own.
+    //
+    // A stay-extension charge holds ONLY the difference between the room's
+    // stored rate and the agreed extension rate — the extra night itself is
+    // billed on the room line. Removing it therefore does not undo anything;
+    // it silently re-prices the extension down to the old room rate while the
+    // stay stays extended, because the dates live on the reservation. Staff
+    // reached for it expecting an undo and quietly under-billed instead.
+    const [target] = await db
+      .select({
+        source: additionalCharges.source,
+        description: additionalCharges.description,
+      })
+      .from(additionalCharges)
+      .where(and(eq(additionalCharges.id, chargeId), eq(additionalCharges.reservationId, id)))
+      .limit(1);
+    if (!target) return fail(res, 404, "NOT_FOUND", "Charge not found");
+    if (target.source === "stay_extension") {
+      return fail(
+        res,
+        409,
+        "SYSTEM_CHARGE",
+        resv.originalCheckOutDate
+          ? "This is part of the stay extension. Use Undo Extension to roll back the dates and this charge together, or edit the amount if only the rate was wrong."
+          : "This charge is part of a stay extension and can't be deleted on its own. Edit the amount instead if the rate was wrong.",
+      );
+    }
+
     const [deleted] = await db
       .delete(additionalCharges)
       .where(and(eq(additionalCharges.id, chargeId), eq(additionalCharges.reservationId, id)))
@@ -5005,7 +5383,7 @@ router.delete(
       action: "charge_deleted",
       entityType: "reservation",
       entityId: id,
-      description: `Charge deleted: ${deleted.description}`,
+      description: `Charge deleted: ${deleted.description} ₹${Number(deleted.amount).toFixed(2)}`,
       performedBy: req.user!.id,
       ipAddress: req.ip,
     });
@@ -5016,7 +5394,7 @@ router.delete(
 router.patch(
   "/:id/dates",
   requireAuth,
-  requirePermission("view_reservations"),
+  requirePermission("edit_reservations"),
   validate(editDatesSchema),
   async (req, res) => {
     const id = req.params.id!;
@@ -5207,16 +5585,9 @@ router.get(
       // total.
       const rowFrom = rr.rr.effectiveFrom ?? r[0]!.checkInDate;
       const rowTo = rr.rr.effectiveTo ?? r[0]!.checkOutDate;
-      const rowNights = isShortStayPreview
-        ? 1
-        : Math.max(
-            1,
-            Math.round(
-              (new Date(rowTo).getTime() - new Date(rowFrom).getTime()) /
-                (24 * 60 * 60 * 1000),
-            ),
-          );
-      const rowUnits = isShortStayPreview ? 1 : rowNights;
+      // Shared helper — one definition of room nights (short-stay returns 1).
+      const rowNights = roomBillableNights(rr.rr, r[0]!);
+      const rowUnits = rowNights;
 
       const lineGross = +(storedRate * rowUnits).toFixed(2);
       const lineBreakdown = calcGstBreakdown(lineGross, roomGstRate, previewGstMode);
@@ -5242,6 +5613,12 @@ router.get(
       // were broken. Falls back to a plain "swapped" tag when the
       // sibling isn't resolvable (data race or pre-0019 legacy row).
       const isSegmented = !!(rr.rr.effectiveFrom || rr.rr.effectiveTo);
+      // Mid-stay Add Room: segmented but NOT a swap. Without this it prints
+      // "· swapped" (swapSibling returns null → bare fallback) on a room the
+      // guest never swapped into.
+      const previewHasHistory = (previewSwapHops.get(rr.rr.id)?.length ?? 0) > 0;
+      const isAddedRoom =
+        isSegmented && !rr.rr.swapId && !rr.rr.swappedFromRoomId && !previewHasHistory;
       const sibling = swapSibling(rr.rr.id, rr.rr.swapId);
       const swapTag = sibling
         ? `swapped ${sibling.direction} Room ${sibling.roomNumber}`
@@ -5269,11 +5646,13 @@ router.get(
           : null;
       const description = isShortStayPreview
         ? `Room ${rr.room.roomNumber} - ${displayType} (Day use · ${shortStayHoursPreview} hours)`
-        : isSegmented
-          ? `Room ${rr.room.roomNumber} - ${displayType} (${rowNights} night${rowNights === 1 ? "" : "s"}, ${rowFrom} → ${rowTo} · ${swapTag}${reasonSuffix})`
-          : previewSwapPath
-            ? `Room ${rr.room.roomNumber} - ${displayType} (${nights} night${nights === 1 ? "" : "s"} · swapped Room ${previewSwapPath})`
-            : `Room ${rr.room.roomNumber} - ${displayType} (${nights} nights)`;
+        : isAddedRoom
+          ? `Room ${rr.room.roomNumber} - ${displayType} (${rowNights} night${rowNights === 1 ? "" : "s"}, ${rowFrom} → ${rowTo} · added mid-stay)`
+          : isSegmented
+            ? `Room ${rr.room.roomNumber} - ${displayType} (${rowNights} night${rowNights === 1 ? "" : "s"}, ${rowFrom} → ${rowTo} · ${swapTag}${reasonSuffix})`
+            : previewSwapPath
+              ? `Room ${rr.room.roomNumber} - ${displayType} (${nights} night${nights === 1 ? "" : "s"} · swapped Room ${previewSwapPath})`
+              : `Room ${rr.room.roomNumber} - ${displayType} (${nights} nights)`;
       lineItems.push({
         id: `preview-${rr.room.id}-${String(rowFrom)}`,
         invoiceId: "preview",
@@ -5437,7 +5816,7 @@ const advancePaymentSchema = z.object({
 router.post(
   "/:id/payments",
   requireAuth,
-  requirePermission("view_reservations"),
+  requirePermission("record_payments"),
   idempotent("reservations.advancePayment"),
   validate(advancePaymentSchema),
   async (req, res) => {
@@ -5570,7 +5949,7 @@ const applyCreditSchema = z.object({
 router.post(
   "/:id/apply-wallet-credit",
   requireAuth,
-  requirePermission("view_reservations"),
+  requirePermission("record_payments"),
   idempotent("reservations.applyWalletCredit"),
   validate(applyCreditSchema),
   async (req, res) => {
@@ -5616,7 +5995,7 @@ router.post(
         if (capped <= 0.009) {
           conflictRef.value = {
             code: "INSUFFICIENT_WALLET_BALANCE",
-            message: `Wallet balance is ₹${walletBalance.toFixed(2)} — nothing to apply.`,
+            message: `Wallet balance is ₹${walletBalance.toFixed(2)} - nothing to apply.`,
             details: { walletBalance, currentBalance },
           };
           throw new Error("ABORT");
@@ -6092,6 +6471,7 @@ router.post(
   "/:id/rooms/:roomId/check-out",
   requireAuth,
   requirePermission("check_out"),
+  idempotent("reservations.perRoomCheckOut"),
   validate(perRoomCheckoutSchema),
   async (req, res) => {
     const { id, roomId } = req.params as { id: string; roomId: string };
@@ -6465,6 +6845,7 @@ router.post(
   "/:id/invoice",
   requireAuth,
   requirePermission("check_out"),
+  idempotent("reservations.issueInvoice"),
   validate(issueInvoiceSchema),
   async (req, res) => {
     const id = req.params.id!;
@@ -6507,7 +6888,7 @@ router.post(
           res,
           409,
           "ALREADY_INVOICED",
-          "This room already has an invoice — void & reissue if you need to regenerate",
+          "This room already has an invoice - void & reissue if you need to regenerate",
         );
       }
       scopeRoomIds = [input.roomId];
@@ -6522,7 +6903,7 @@ router.post(
           res,
           409,
           "ALREADY_INVOICED",
-          "Every room already has its own invoice — nothing left to combine",
+          "Every room already has its own invoice - nothing left to combine",
         );
       }
       if (input.roomIds && input.roomIds.length > 0) {
@@ -6836,7 +7217,7 @@ router.post(
         res,
         409,
         "INVOICE_PARTIALLY_PAID",
-        "Some invoices are partly paid. Finish collecting (or refund) so every bill is fully settled, then reissue with credit notes — a credit note can only reverse a fully-settled invoice.",
+        "Some invoices are partly paid. Finish collecting (or refund) so every bill is fully settled, then reissue with credit notes - a credit note can only reverse a fully-settled invoice.",
       );
     }
 
@@ -6903,7 +7284,7 @@ router.post(
         res,
         409,
         "NOT_MULTI_ROOM",
-        "Reissue needs at least 2 rooms — a single-room booking has only one possible bill.",
+        "Reissue needs at least 2 rooms - a single-room booking has only one possible bill.",
       );
     }
 
@@ -7195,7 +7576,7 @@ router.post(
               scope: old.scope,
               scopeRoomIds: old.scopeRoomIds,
               issuedBy: req.user!.id,
-              notes: `Credit note reversing ${old.invoiceNumber} — reissued as ${successorList}`,
+              notes: `Credit note reversing ${old.invoiceNumber} - reissued as ${successorList}`,
             })
             .returning();
           // Mirror the original's line items as negatives so the credit
@@ -7249,7 +7630,7 @@ router.post(
       entityType: "reservation",
       entityId: id,
       description:
-        `${resv.reservationNumber}: invoices reissued as ${input.mode} — ` +
+        `${resv.reservationNumber}: invoices reissued as ${input.mode} -` +
         `${useCreditNotes ? "credit-noted" : "voided"} ${replacedInvoiceNumbers.join(", ")}, issued ${newInvoiceNumbers.join(", ")}`,
       performedBy: req.user!.id,
       ipAddress: req.ip,

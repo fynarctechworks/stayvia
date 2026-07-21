@@ -11,6 +11,7 @@ import { reservationCoGuests, reservationRooms, type Reservation } from "../db/s
 import { rooms } from "../db/schema/rooms.js";
 import { roomTypes } from "../db/schema/settings.js";
 import type { Settings } from "../db/schema/settings.js";
+import { env } from "../config/env.js";
 import { logger } from "./logger.js";
 import { combinedRoomTypeLabel } from "./roomTypeLabel.js";
 
@@ -104,11 +105,35 @@ async function getBrowser() {
       throw new Error("PDF rendering unavailable: puppeteer is not bundled with this build");
     }
     const puppeteer = mod.default ?? mod;
-    browserPromise = puppeteer.launch({
+    // The launch promise is memoised so concurrent renders share one browser.
+    // Two things must clear that memo, or a single bad moment disables PDF
+    // generation for every hotel on this process until someone restarts it:
+    //
+    //  1. A REJECTED launch. Caching a rejected promise means every later
+    //     render re-awaits the same rejection forever — one transient failure
+    //     (or an OOM-killed Chromium at first use) is permanent.
+    //  2. A CRASHED browser. Without a 'disconnected' handler the memo holds a
+    //     handle to a dead process and every newPage() throws
+    //     "Protocol error / Target closed".
+    //
+    // Neither is visible to monitoring, because /health never touches Puppeteer.
+    browserPromise = (puppeteer.launch({
       headless: true,
       executablePath: process.env.PUPPETEER_EXECUTABLE_PATH,
       args: ["--no-sandbox", "--disable-setuid-sandbox"],
-    }) as Promise<Browser>;
+    }) as Promise<Browser>)
+      .then((browser) => {
+        browser.on("disconnected", () => {
+          logger.warn("chromium disconnected — will relaunch on next render");
+          browserPromise = null;
+        });
+        return browser;
+      })
+      .catch((err) => {
+        // Drop the memo so the NEXT request gets a fresh launch attempt.
+        browserPromise = null;
+        throw err;
+      });
   }
   return browserPromise;
 }
@@ -195,6 +220,7 @@ function asPaper(s: string): PaperFormat {
 interface DocLayout {
   primary: string;
   accent: string;
+  tagline: string;
   invoiceTitle: string;
   receiptTitle: string;
   footerText: string;
@@ -212,6 +238,7 @@ function layoutFromSettings(s: Settings): DocLayout {
   return {
     primary: s.docPrimaryColor,
     accent: s.docAccentColor,
+    tagline: s.docTagline,
     invoiceTitle: s.docInvoiceTitle,
     receiptTitle: s.docReceiptTitle,
     footerText: s.docFooterText,
@@ -229,21 +256,44 @@ function layoutFromSettings(s: Settings): DocLayout {
 // Puppeteer wait strategy: `networkidle0` lets the remote logo finish loading.
 const PAGE_WAIT_UNTIL: "networkidle0" | "load" = "networkidle0";
 
-// Pass-through: the hardened Chromium page (hardenPage: https/data-only,
-// aborted otherwise, bounded by setContent's 15s) fetches the logo itself, so
-// we never introduce an unbounded server-side fetch / SSRF on the render path.
+// Inline the hotel logo as a data: URI. The hardened Chromium page only
+// loads data:/https: images, which silently broke logos served from the
+// LOCAL Supabase stack (http://127.0.0.1:54321). Fetching server-side and
+// inlining fixes that and removes the render-time network wait in prod.
+// SSRF containment: only URLs on our own Supabase origin are fetched —
+// anything else is passed through untouched (the page's https-only rule
+// still applies to it).
+const LOGO_INLINE_MAX_BYTES = 5 * 1024 * 1024;
 async function inlineLogo(logoUrl: string | null): Promise<string | null> {
-  return logoUrl;
+  if (!logoUrl || logoUrl.startsWith("data:")) return logoUrl;
+  try {
+    const target = new URL(logoUrl);
+    const own = new URL(env.SUPABASE_URL);
+    if (target.origin !== own.origin) return logoUrl;
+    const res = await fetch(logoUrl, { signal: AbortSignal.timeout(5000) });
+    if (!res.ok) return logoUrl;
+    const contentType = res.headers.get("content-type") ?? "";
+    if (!contentType.startsWith("image/")) return null;
+    const buf = Buffer.from(await res.arrayBuffer());
+    if (buf.length === 0 || buf.length > LOGO_INLINE_MAX_BYTES) return logoUrl;
+    return `data:${contentType};base64,${buf.toString("base64")}`;
+  } catch (err) {
+    logger.warn(
+      { err: err instanceof Error ? err.message : err },
+      "logo inline fetch failed - rendering without inlining",
+    );
+    return logoUrl;
+  }
 }
 
 function commonStyles(L: DocLayout) {
   return `
     * { box-sizing: border-box; }
     @page { margin: 0; }
-    html, body { background: #FAF7F0; }
+    html, body { background: #FFFFFF; }
     body {
       font-family: 'Helvetica Neue', -apple-system, 'Segoe UI', Roboto, sans-serif;
-      color: #1C2620;
+      color: #171717;
       margin: 0;
       padding: 28px 32px;
       font-size: 11.5px;
@@ -284,7 +334,7 @@ function commonStyles(L: DocLayout) {
       background: #FFFFFF;
       border-radius: 10px;
       padding: 4px;
-      box-shadow: 0 0 0 1px ${L.accent}55, 0 2px 4px rgba(15,61,46,0.08);
+      box-shadow: 0 0 0 1px ${L.accent}55, 0 2px 4px rgba(23,23,23,0.08);
       display: grid; place-items: center;
     }
     .brand .logo-tile img { width: 100%; height: 100%; object-fit: contain; }
@@ -292,6 +342,7 @@ function commonStyles(L: DocLayout) {
       margin: 0;
       font-size: 22px;
       color: ${L.primary};
+      text-transform: uppercase;
       letter-spacing: 0.3px;
       font-weight: 700;
     }
@@ -303,8 +354,8 @@ function commonStyles(L: DocLayout) {
       margin-top: 2px;
       font-weight: 600;
     }
-    .addr { margin-top: 6px; color: #4A554F; font-size: 11px; }
-    .gstin { font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 10.5px; color: #4A554F; margin-top: 2px; }
+    .addr { margin-top: 6px; color: #707070; font-size: 11px; }
+    .gstin { font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 10.5px; color: #707070; margin-top: 2px; }
 
     .meta { text-align: right; min-width: 32%; }
     .meta .doc-label {
@@ -326,7 +377,7 @@ function commonStyles(L: DocLayout) {
       margin-top: 8px;
       letter-spacing: 0.5px;
     }
-    .meta .doc-date { font-size: 11px; color: #4A554F; margin-top: 2px; }
+    .meta .doc-date { font-size: 11px; color: #707070; margin-top: 2px; }
     .meta .status-pill {
       display: inline-block;
       margin-top: 6px;
@@ -345,7 +396,7 @@ function commonStyles(L: DocLayout) {
     .info-card {
       flex: 1;
       background: #FFFFFF;
-      border: 1px solid #E2DCCD;
+      border: 1px solid #DFDFDF;
       border-top: 3px solid ${L.accent};
       border-radius: 5px;
       padding: 12px 14px;
@@ -359,7 +410,7 @@ function commonStyles(L: DocLayout) {
       margin-bottom: 6px;
     }
     .info-card .name { font-weight: 700; color: ${L.primary}; font-size: 13px; }
-    .info-card .sub { color: #4A554F; margin-top: 2px; }
+    .info-card .sub { color: #707070; margin-top: 2px; }
     .info-card .mono { font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 11px; }
 
     /* Section heading */
@@ -401,11 +452,11 @@ function commonStyles(L: DocLayout) {
     .items thead th:last-child { border-top-right-radius: 4px; }
     .items tbody td {
       padding: 9px 10px;
-      border-bottom: 1px solid #E8E2D3;
+      border-bottom: 1px solid #DFDFDF;
       font-size: 11px;
       vertical-align: top;
     }
-    .items tbody tr:nth-child(even) td { background: #FBF8F0; }
+    .items tbody tr:nth-child(even) td { background: #FAFAFA; }
     .items .num { text-align: right; }
     .items .mono { font-family: 'JetBrains Mono', ui-monospace, monospace; }
     .items .desc-main { font-weight: 600; color: ${L.primary}; }
@@ -417,8 +468,8 @@ function commonStyles(L: DocLayout) {
       border-collapse: collapse;
     }
     .totals td { padding: 5px 10px; border: none; font-size: 11px; }
-    .totals tr.sub td { color: #4A554F; }
-    .totals tr.tax td { color: #4A554F; }
+    .totals tr.sub td { color: #707070; }
+    .totals tr.tax td { color: #707070; }
     .totals tr.divider td { border-top: 1px dashed ${L.accent}; padding-top: 8px; }
     .totals tr.grand td {
       border-top: 2px solid ${L.primary};
@@ -429,13 +480,13 @@ function commonStyles(L: DocLayout) {
       color: ${L.primary};
       background: #FFFFFF;
     }
-    .totals tr.paid td { color: #2E7D32; padding-top: 8px; }
+    .totals tr.paid td { color: #24B47E; padding-top: 8px; }
     .totals tr.balance td {
       font-weight: 700;
       font-size: 12.5px;
       color: #B23A2E;
     }
-    .totals tr.balance td.paid { color: #2E7D32; }
+    .totals tr.balance td.paid { color: #24B47E; }
 
     /* Hero amount (receipts) */
     .amount-box {
@@ -484,10 +535,10 @@ function commonStyles(L: DocLayout) {
       margin-top: 22px;
       padding: 12px 14px;
       background: #FFFFFF;
-      border: 1px solid #E2DCCD;
+      border: 1px solid #DFDFDF;
       border-left: 3px solid ${L.accent};
       font-size: 10.5px;
-      color: #4A554F;
+      color: #707070;
       white-space: pre-wrap;
       border-radius: 0 4px 4px 0;
     }
@@ -512,7 +563,7 @@ function commonStyles(L: DocLayout) {
     }
     .footer .thanks {
       font-size: 10.5px;
-      color: #4A554F;
+      color: #707070;
       max-width: 60%;
     }
     .footer .thanks .signoff {
@@ -526,7 +577,7 @@ function commonStyles(L: DocLayout) {
       margin-top: 36px;
       border-top: 1px solid ${L.accent};
       padding-top: 4px;
-      color: #4A554F;
+      color: #707070;
       font-size: 10px;
       letter-spacing: 0.2em;
       text-transform: uppercase;
@@ -536,7 +587,7 @@ function commonStyles(L: DocLayout) {
       left: 32px; right: 32px; bottom: 12px;
       text-align: center;
       font-family: 'JetBrains Mono', ui-monospace, monospace;
-      color: #B0AB99;
+      color: #9A9A9A;
       font-size: 8.5px;
       letter-spacing: 0.2em;
     }
@@ -557,7 +608,7 @@ function brandHeader(
       ${L.showLogo && L.logoUrl ? `<div class="logo-tile"><img src="${esc(L.logoUrl)}" alt="logo" /></div>` : ""}
       <div>
         <h1>${esc(hotelName)}</h1>
-        <div class="tagline">Hospitality &amp; Stays</div>
+        ${L.tagline.trim() ? `<div class="tagline">${esc(L.tagline)}</div>` : ""}
         <div class="addr">${esc(hotelAddress)}</div>
         ${phones.length ? `<div class="addr">${phones.map((p) => esc(p)).join(" &nbsp;·&nbsp; ")}</div>` : ""}
         ${hotelGstin ? `<div class="gstin">GSTIN&nbsp;·&nbsp;${esc(hotelGstin)}</div>` : ""}
@@ -765,7 +816,7 @@ function renderInvoiceHtml(data: {
       <td>${formatIstDate(new Date(p.paymentDate))}</td>
       <td class="capitalize">
         ${p.paymentMethod.replace("_", " ")}
-        <span style="color:#6B6358;font-size:9.5px;text-transform:none;letter-spacing:0;margin-left:4px;">
+        <span style="color:#707070;font-size:9.5px;text-transform:none;letter-spacing:0;margin-left:4px;">
           · ${esc(tag)}
         </span>
       </td>
@@ -773,7 +824,7 @@ function renderInvoiceHtml(data: {
     </tr>`;
         })
         .join("")
-    : `<tr><td colspan="3" style="color:#999;text-align:center;padding:14px;">No payments yet</td></tr>`;
+    : `<tr><td colspan="3" style="color:#9A9A9A;text-align:center;padding:14px;">No payments yet</td></tr>`;
 
   const balanceClass = Number(invoice.balanceDue) <= 0.009 ? "paid" : "";
 
@@ -799,8 +850,8 @@ ${L.showLogo && L.logoUrl ? `<div class="watermark"><img src="${esc(L.logoUrl)}"
 
   ${
     roomBill
-      ? `<div style="margin:8px 0 4px;padding:7px 11px;border:1px solid #d8c9a8;background:#fbf6ea;border-radius:5px;font-size:10px;color:#6b6358;line-height:1.4;">
-           Room-wise split of tax invoice <strong>${esc(roomBill.parentInvoiceNumber)}</strong> — provided for the customer's reference.
+      ? `<div style="margin:8px 0 4px;padding:7px 11px;border:1px solid #DFDFDF;background:#FAFAFA;border-radius:5px;font-size:10px;color:#707070;line-height:1.4;">
+           Room-wise split of tax invoice <strong>${esc(roomBill.parentInvoiceNumber)}</strong> - provided for the customer's reference.
            The full tax invoice for the stay is ${esc(roomBill.parentInvoiceNumber)}; this split is not a separate tax invoice.
          </div>`
       : ""
@@ -819,7 +870,7 @@ ${L.showLogo && L.logoUrl ? `<div class="watermark"><img src="${esc(L.logoUrl)}"
       ${invoice.guestGstin ? `<div class="sub mono">GSTIN: ${esc(invoice.guestGstin)}</div>` : ""}
       ${
         data.guestExtra?.coGuests && data.guestExtra.coGuests.length > 0
-          ? `<div style="margin-top:8px;padding-top:6px;border-top:1px dashed #D6D2C4;">
+          ? `<div style="margin-top:8px;padding-top:6px;border-top:1px dashed #C7C7C7;">
               <div class="label" style="font-size:9px;">Also occupying</div>
               ${data.guestExtra.coGuests
                 .map(
@@ -867,7 +918,7 @@ ${L.showLogo && L.logoUrl ? `<div class="watermark"><img src="${esc(L.logoUrl)}"
             ? formatIstDateTime(new Date(stay.plannedCheckOutAt))
             : format(new Date(stay.checkOutDate + "T00:00:00"), "dd MMM yyyy");
         const checkOutLine = `<div class="sub">Check-out: <strong>${checkOutRendered}</strong></div>`;
-        const durationLine = `<div class="sub" style="color:#6B6358;">${
+        const durationLine = `<div class="sub" style="color:#707070;">${
           isShort
             ? `Day use · ${Number(stay.durationHours ?? 0)} hour${Number(stay.durationHours ?? 0) === 1 ? "" : "s"}`
             : `${stay.numNights} night${stay.numNights === 1 ? "" : "s"}`
@@ -942,12 +993,12 @@ ${L.showLogo && L.logoUrl ? `<div class="watermark"><img src="${esc(L.logoUrl)}"
               // and the guest understand it's a payment toward an
               // ongoing booking that hasn't been invoiced yet.
               const left = c.invoiceNumber
-                ? `${esc(c.invoiceNumber)} <span style="color:#6B6358;">(${esc(c.reservationNumber)})</span>`
-                : `${esc(c.reservationNumber)} <span style="color:#6B6358;font-style:italic;">(advance, not invoiced yet)</span>`;
+                ? `${esc(c.invoiceNumber)} <span style="color:#707070;">(${esc(c.reservationNumber)})</span>`
+                : `${esc(c.reservationNumber)} <span style="color:#707070;font-style:italic;">(advance, not invoiced yet)</span>`;
               return `
               <tr>
-                <td style="padding:3px 6px;border-bottom:1px solid #EEE8DA;">${left}</td>
-                <td style="padding:3px 6px;border-bottom:1px solid #EEE8DA;text-align:right;font-family:'JetBrains Mono',monospace;">${inr(c.amount, L.currency)}</td>
+                <td style="padding:3px 6px;border-bottom:1px solid #EFEFEF;">${left}</td>
+                <td style="padding:3px 6px;border-bottom:1px solid #EFEFEF;text-align:right;font-family:'JetBrains Mono',monospace;">${inr(c.amount, L.currency)}</td>
               </tr>`;
             })
             .join("");
@@ -957,11 +1008,11 @@ ${L.showLogo && L.logoUrl ? `<div class="watermark"><img src="${esc(L.logoUrl)}"
             ? `booking${companionCollections.length === 1 ? "" : "s"}`
             : `invoice${companionCollections.length === 1 ? "" : "s"}`;
           return `
-  <div style="margin-top:10px;padding:8px 10px;border-left:2px solid #B08A4A;background:#FAF7F0;font-size:10.5px;page-break-inside:avoid;">
-    <div style="font-weight:600;color:#0F3D2E;text-transform:uppercase;letter-spacing:0.06em;font-size:10px;margin-bottom:2px;">
+  <div style="margin-top:10px;padding:8px 10px;border-left:2px solid #24B47E;background:#FAFAFA;font-size:10.5px;page-break-inside:avoid;">
+    <div style="font-weight:600;color:#171717;text-transform:uppercase;letter-spacing:0.06em;font-size:10px;margin-bottom:2px;">
       Also collected today
     </div>
-    <div style="color:#6B6358;font-size:10px;margin-bottom:4px;">
+    <div style="color:#707070;font-size:10px;margin-bottom:4px;">
       Settled at the same visit, against other ${subtitleNoun} for this guest.
     </div>
     <table style="width:100%;border-collapse:collapse;font-size:10.5px;">
@@ -1168,7 +1219,7 @@ function renderReceiptHtml(data: {
   return `<!doctype html>
 <html><head><meta charset="utf-8"><style>${commonStyles(L)}
   /* Slip layout (matches on-screen CheckInReceiptModal) */
-  .slip { color: #1C2620; }
+  .slip { color: #171717; }
   .slip-header {
     display: flex; justify-content: space-between; align-items: flex-start;
     gap: 12px; padding-bottom: 12px;
@@ -1177,12 +1228,12 @@ function renderReceiptHtml(data: {
   .slip-header .hotel { display: flex; gap: 10px; align-items: flex-start; }
   .slip-header .hotel-logo {
     width: 48px; height: 48px; border-radius: 6px; padding: 2px;
-    background: #FAF7F0; box-shadow: inset 0 0 0 1px ${L.primary}33;
+    background: #FFFFFF; box-shadow: inset 0 0 0 1px ${L.primary}33;
     object-fit: contain;
   }
-  .slip-header .hotel-name { font-size: 15px; font-weight: 700; color: ${L.primary}; line-height: 1.1; }
-  .slip-header .hotel-sub { font-size: 10px; color: #6B7C72; margin-top: 2px; line-height: 1.35; }
-  .slip-header .hotel-gstin { font-size: 10px; color: #6B7C72; font-family: 'SF Mono', Menlo, monospace; margin-top: 2px; }
+  .slip-header .hotel-name { font-size: 15px; font-weight: 700; color: ${L.primary}; text-transform: uppercase; line-height: 1.1; }
+  .slip-header .hotel-sub { font-size: 10px; color: #707070; margin-top: 2px; line-height: 1.35; }
+  .slip-header .hotel-gstin { font-size: 10px; color: #707070; font-family: 'SF Mono', Menlo, monospace; margin-top: 2px; }
   .slip-header .meta { text-align: right; }
   .pill {
     display: inline-block; font-size: 10px; letter-spacing: 0.2em; text-transform: uppercase;
@@ -1190,22 +1241,22 @@ function renderReceiptHtml(data: {
     border: 1px solid ${L.accent}; border-radius: 999px; padding: 2px 10px;
   }
   .res-no { font-size: 13px; font-weight: 700; color: ${L.primary}; font-family: 'SF Mono', Menlo, monospace; margin-top: 6px; }
-  .doc-date-small { font-size: 10px; color: #6B7C72; }
+  .doc-date-small { font-size: 10px; color: #707070; }
 
   .cards { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 12px; }
   .card {
-    border: 1px solid #E5DFCB; border-radius: 4px;
+    border: 1px solid #DFDFDF; border-radius: 4px;
     background: rgba(250, 247, 240, 0.5); padding: 10px;
   }
-  .card-label { font-size: 9px; letter-spacing: 0.1em; text-transform: uppercase; font-weight: 600; color: #6B7C72; }
+  .card-label { font-size: 9px; letter-spacing: 0.1em; text-transform: uppercase; font-weight: 600; color: #707070; }
   .card-name { font-weight: 600; color: ${L.primary}; margin-top: 2px; }
   .card-sub { font-family: 'SF Mono', Menlo, monospace; font-size: 11px; margin-top: 2px; }
-  .card-id { font-size: 10px; color: #6B7C72; margin-top: 4px; text-transform: capitalize; }
+  .card-id { font-size: 10px; color: #707070; margin-top: 4px; text-transform: capitalize; }
   .stay-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-top: 4px; }
   .stay-tag { font-size: 9px; letter-spacing: 0.1em; text-transform: uppercase; font-weight: 700; color: ${L.accent}; }
   .stay-date { font-size: 12px; font-weight: 600; color: ${L.primary}; line-height: 1.1; }
-  .stay-time { font-size: 10px; color: #6B7C72; line-height: 1.1; margin-top: 2px; }
-  .stay-occ { font-size: 10px; color: #6B7C72; margin-top: 6px; }
+  .stay-time { font-size: 10px; color: #707070; line-height: 1.1; margin-top: 2px; }
+  .stay-occ { font-size: 10px; color: #707070; margin-top: 6px; }
 
   .section-cap { font-size: 10px; letter-spacing: 0.2em; text-transform: uppercase; font-weight: 700; color: ${L.accent}; margin: 16px 0 6px; }
 
@@ -1214,14 +1265,14 @@ function renderReceiptHtml(data: {
     text-align: left; padding: 5px 0; font-weight: 600; color: ${L.primary};
     border-bottom: 1px solid ${L.primary}55;
   }
-  table.rooms-allotted td { padding: 5px 0; border-bottom: 1px solid #E5DFCB; }
+  table.rooms-allotted td { padding: 5px 0; border-bottom: 1px solid #DFDFDF; }
   table.rooms-allotted .num { text-align: right; font-family: 'SF Mono', Menlo, monospace; }
   table.rooms-allotted .roomno { font-family: 'SF Mono', Menlo, monospace; font-weight: 700; }
   table.rooms-allotted .cap { text-transform: capitalize; }
 
   .amount-banner {
     margin-top: 14px; padding: 14px; border-radius: 6px; text-align: center;
-    background: ${L.primary}; color: #FAF7F0;
+    background: ${L.primary}; color: #FFFFFF;
   }
   .amount-banner .cap {
     font-size: 9px; letter-spacing: 0.25em; text-transform: uppercase; font-weight: 700; color: ${L.accent};
@@ -1234,25 +1285,25 @@ function renderReceiptHtml(data: {
   .totals-wrap { margin-top: 14px; display: flex; justify-content: flex-end; }
   table.totals-slip { width: 280px; font-size: 11px; border-collapse: collapse; }
   table.totals-slip td { padding: 4px 0; }
-  table.totals-slip td.lbl { color: #6B7C72; }
+  table.totals-slip td.lbl { color: #707070; }
   table.totals-slip td.num { text-align: right; font-family: 'SF Mono', Menlo, monospace; }
   table.totals-slip tr.gt td {
     border-top: 1px solid ${L.primary}55;
     padding-top: 7px; font-weight: 700; color: ${L.primary};
   }
-  table.totals-slip tr.paid td { color: #2F7D4F; }
+  table.totals-slip tr.paid td { color: #24B47E; }
   table.totals-slip tr.bal td { color: #B23A2E; font-weight: 700; }
 
   .welcome-note {
-    margin-top: 16px; padding-top: 10px; border-top: 1px solid #E5DFCB;
-    font-size: 10px; color: #6B7C72; line-height: 1.6;
+    margin-top: 16px; padding-top: 10px; border-top: 1px solid #DFDFDF;
+    font-size: 10px; color: #707070; line-height: 1.6;
   }
 
   .sigs { display: flex; justify-content: space-between; gap: 12px; margin-top: 24px; }
   .sig-line {
-    font-size: 10px; color: #6B7C72;
+    font-size: 10px; color: #707070;
     padding-top: 28px;
-    border-top: 1px solid #B4BCB8;
+    border-top: 1px solid #B2B2B2;
     min-width: 140px; display: inline-block;
   }
 </style></head>
@@ -1281,7 +1332,7 @@ ${L.showLogo && L.logoUrl ? `<div class="watermark"><img src="${esc(L.logoUrl)}"
       <div class="res-no">${esc(reservation.reservationNumber)}</div>
       <div class="doc-date-small">${formatIstDateTime24(new Date(payment.paymentDate))}</div>
       ${payment.receiptNumber ? `<div class="doc-date-small" style="font-family:'SF Mono',Menlo,monospace;margin-top:2px;">${esc(payment.receiptNumber)}</div>` : ""}
-      <div style="font-size:8px;color:#9AA59E;margin-top:4px;">${esc(titleLabel)}</div>
+      <div style="font-size:8px;color:#9A9A9A;margin-top:4px;">${esc(titleLabel)}</div>
     </div>
   </div>
 
@@ -1302,7 +1353,7 @@ ${L.showLogo && L.logoUrl ? `<div class="watermark"><img src="${esc(L.logoUrl)}"
       ${guest.gstin ? `<div class="card-sub" style="margin-top:2px;">GSTIN: ${esc(guest.gstin)}</div>` : ""}
       ${
         coGuests && coGuests.length > 0
-          ? `<div style="margin-top:6px;padding-top:6px;border-top:1px dashed #D6D2C4;">
+          ? `<div style="margin-top:6px;padding-top:6px;border-top:1px dashed #C7C7C7;">
               <div class="card-label" style="font-size:8px;">Also occupying</div>
               ${coGuests
                 .map(
@@ -1517,9 +1568,15 @@ export async function renderReceiptPdf(data: {
     .from(reservationRooms)
     .innerJoin(rooms, eq(rooms.id, reservationRooms.roomId))
     .where(eq(reservationRooms.reservationId, data.reservation.id));
+  // Scoped to THIS hotel. Unfiltered, this was the only `from(roomTypes)` in
+  // the API with no where-clause: room-type slugs are unique per property, so
+  // two hotels both using 'deluxe' meant whichever row Postgres returned last
+  // won the map — printing another tenant's room label onto a guest-facing
+  // receipt. It also scanned every hotel's room types on every render.
   const typeRows = await db
     .select({ slug: roomTypes.slug, label: roomTypes.label })
-    .from(roomTypes);
+    .from(roomTypes)
+    .where(eq(roomTypes.propertyId, data.reservation.propertyId));
   const labelMap = new Map(typeRows.map((r) => [r.slug, r.label]));
   const roomsForRender = roomRows.map((rm) => ({
     roomNumber: rm.roomNumber,

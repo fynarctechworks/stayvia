@@ -35,6 +35,31 @@ function razorpayConfigured(): boolean {
 
 type RazorpayResult<T> = { ok: true; data: T } | { ok: false; error: string };
 
+// Provider calls sit on the request path, so they get an explicit timeout —
+// undici's 300s default would otherwise pin an Express handler on a hung
+// Razorpay.
+const RAZORPAY_TIMEOUT_MS = 10_000;
+
+async function razorpayGet<T>(path: string): Promise<RazorpayResult<T>> {
+  const auth = Buffer.from(`${env.RAZORPAY_KEY_ID}:${env.RAZORPAY_KEY_SECRET}`).toString("base64");
+  try {
+    const res = await fetch(`${RAZORPAY_BASE}${path}`, {
+      method: "GET",
+      headers: { authorization: `Basic ${auth}` },
+      signal: AbortSignal.timeout(RAZORPAY_TIMEOUT_MS),
+    });
+    const json = (await res.json().catch(() => ({}))) as {
+      error?: { code?: string; description?: string };
+    };
+    if (!res.ok) {
+      return { ok: false, error: json.error?.description ?? `HTTP ${res.status}` };
+    }
+    return { ok: true, data: json as T };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : "unknown" };
+  }
+}
+
 async function razorpayPost<T>(
   path: string,
   body: Record<string, unknown>,
@@ -48,6 +73,7 @@ async function razorpayPost<T>(
         "content-type": "application/json",
       },
       body: JSON.stringify(body),
+      signal: AbortSignal.timeout(RAZORPAY_TIMEOUT_MS),
     });
     const json = (await res.json().catch(() => ({}))) as {
       error?: { code?: string; description?: string };
@@ -103,6 +129,41 @@ router.post("/subscribe", async (req, res) => {
   }
   const sub = await loadSubscriptionRow(req.propertyId);
   if (!sub) return fail(res, 404, "NOT_FOUND", "No subscription record for this hotel");
+
+  // Reuse an existing Razorpay subscription rather than minting another.
+  //
+  // This route had no such check, so every click created a NEW subscription on
+  // the same customer and overwrote razorpaySubscriptionId. Webhooks for the
+  // displaced id then hit the "unknown subscription id → ignored" branch
+  // forever, permanently desyncing local state from Razorpay while the
+  // abandoned subscription stayed live and billable. Easy to trigger: opening
+  // Checkout and closing it, or — worse — the Billing page shows the
+  // Subscribe/Renew button for every non-active status, so an admin whose card
+  // failed clicked "Renew" and got a SECOND subscription instead of resuming
+  // the first.
+  if (sub.razorpaySubscriptionId) {
+    const existing = await razorpayGet<{ id: string; status: string }>(
+      `/subscriptions/${sub.razorpaySubscriptionId}`,
+    );
+    // Live states worth resuming. 'cancelled'/'completed'/'expired' are
+    // terminal at Razorpay, so those legitimately need a fresh subscription.
+    const RESUMABLE = new Set(["created", "authenticated", "active", "pending", "halted"]);
+    if (existing.ok && RESUMABLE.has(existing.data.status)) {
+      logger.info(
+        {
+          propertyId: req.propertyId,
+          razorpaySubscriptionId: sub.razorpaySubscriptionId,
+          status: existing.data.status,
+        },
+        "reusing existing razorpay subscription",
+      );
+      return ok(res, {
+        subscriptionId: sub.razorpaySubscriptionId,
+        keyId: env.RAZORPAY_KEY_ID,
+        reused: true,
+      });
+    }
+  }
 
   // 1. Razorpay customer (once per hotel). fail_existing=0 returns the
   //    existing customer for this email instead of erroring.
@@ -173,6 +234,12 @@ router.post("/cancel", async (req, res) => {
     return fail(res, 502, "BILLING_PROVIDER_ERROR", "Could not cancel the subscription. Try again.");
   }
 
+  // Status flips to 'cancelled', but the gate now treats a cancelled row as
+  // ACTIVE until currentPeriodEnd passes (see isSubscriptionActive). We asked
+  // Razorpay for cancel_at_cycle_end=1, and both the confirm dialog and the
+  // success toast promise "access until the end of the current paid period" —
+  // previously the very next request 402'd, destroying weeks of paid access
+  // the hotel had already bought.
   await db
     .update(subscriptions)
     .set({ status: "cancelled", updatedAt: new Date() })
@@ -207,6 +274,10 @@ const WEBHOOK_STATUS_MAP: Record<string, SubscriptionStatus> = {
   "subscription.activated": "active",
   "subscription.charged": "active",
   "subscription.halted": "past_due",
+  // Razorpay's "payment failed, retrying" state. Absent from this map it
+  // fell into the `if (!status) return ignored` branch below, so a hotel in
+  // dunning kept full access for the entire retry window.
+  "subscription.pending": "past_due",
   "subscription.cancelled": "cancelled",
   "subscription.completed": "expired",
 };
@@ -243,7 +314,12 @@ export async function razorpayWebhook(req: Request, res: Response) {
   if (!status || !razorpaySubscriptionId) return ok(res, { ignored: true });
 
   const [sub] = await db
-    .select({ id: subscriptions.id, propertyId: subscriptions.propertyId })
+    .select({
+      id: subscriptions.id,
+      propertyId: subscriptions.propertyId,
+      status: subscriptions.status,
+      currentPeriodEnd: subscriptions.currentPeriodEnd,
+    })
     .from(subscriptions)
     .where(eq(subscriptions.razorpaySubscriptionId, razorpaySubscriptionId))
     .limit(1);
@@ -253,12 +329,50 @@ export async function razorpayWebhook(req: Request, res: Response) {
     return ok(res, { ignored: true });
   }
 
-  // Idempotent by construction: the update sets absolute values derived
-  // from the event, so redelivery converges on the same row state.
+  // Redelivery of the SAME event converges on the same row state, because
+  // the patch is absolute rather than incremental. Redelivery OUT OF ORDER
+  // does not, and that is what Razorpay's retry queue actually produces: a
+  // subscription.charged that failed at T0 and succeeds on retry at T2 would
+  // blindly overwrite the subscription.halted correctly applied at T1,
+  // silently unlocking a hotel whose renewal failed. The same shape
+  // re-activates a hotel whose cancellation already landed.
+  //
+  // Guard: an activation is only applied when it carries a period end NEWER
+  // than the one on file. A stale delivery necessarily carries an older or
+  // equal one, so it is dropped. (Terminal transitions — halted, cancelled,
+  // expired — are always applied: failing closed is the safe direction.)
+  const periodStart = epochToDate(entity?.current_start);
+  const periodEnd = epochToDate(entity?.current_end);
+  // Only guard states Razorpay has already moved the hotel OUT of. Those are
+  // the ones a replayed activation would wrongly revive. A 'trialing' or
+  // 'active' row must NOT be guarded: a hotel whose trial lapsed and is now
+  // paying legitimately sends an activation whose period end can equal a
+  // leftover currentPeriodEnd, and dropping that would lock out a paying
+  // customer — the failure mode strictly worse than the one being prevented.
+  const REVIVABLE = new Set(["past_due", "cancelled", "expired"]);
+  if (
+    status === "active" &&
+    REVIVABLE.has(sub.status) &&
+    sub.currentPeriodEnd &&
+    periodEnd
+  ) {
+    if (periodEnd.getTime() <= sub.currentPeriodEnd.getTime()) {
+      logger.warn(
+        {
+          event,
+          razorpaySubscriptionId,
+          propertyId: sub.propertyId,
+          storedPeriodEnd: sub.currentPeriodEnd.toISOString(),
+          eventPeriodEnd: periodEnd.toISOString(),
+        },
+        "razorpay webhook: stale activation ignored (out-of-order delivery)",
+      );
+      return ok(res, { ignored: true, reason: "stale" });
+    }
+  }
+
   const patch: Partial<typeof subscriptions.$inferInsert> = { status, updatedAt: new Date() };
   if (status === "active") {
-    const periodStart = epochToDate(entity?.current_start);
-    const periodEnd = epochToDate(entity?.current_end);
     if (periodStart) patch.currentPeriodStart = periodStart;
     if (periodEnd) patch.currentPeriodEnd = periodEnd;
   }

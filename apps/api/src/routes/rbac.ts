@@ -36,11 +36,18 @@ function visibleRoles(propertyId: string) {
 
 // --- Roles ---
 router.get("/roles", requireAuth, async (req, res) => {
-  const rows = await db
+  const allRows = await db
     .select()
     .from(roles)
     .where(visibleRoles(req.propertyId))
     .orderBy(asc(roles.label));
+  // A hotel-owned fork (copy-on-write edit of a system role) SHADOWS the
+  // shared role with the same key — show only the fork so the list reads
+  // as "one Front Desk role" that simply became editable.
+  const ownedKeys = new Set(
+    allRows.filter((r) => r.propertyId !== null).map((r) => r.key),
+  );
+  const rows = allRows.filter((r) => r.propertyId !== null || !ownedKeys.has(r.key));
   // Attach permission keys per role (only the visible ones).
   const roleIds = rows.map((r) => r.id);
   const allPerms = roleIds.length
@@ -167,26 +174,159 @@ router.patch(
       .limit(1);
     if (!role.length) return fail(res, 404, "NOT_FOUND", "Role not found");
 
-    // System roles (admin/frontdesk/housekeeping) are shared across every
-    // hotel — editing one would change another tenant's permissions.
+    // Admin is never editable — it's the god-mode escape hatch.
+    if (role[0]!.key === "admin") {
+      return fail(res, 403, "LOCKED", "The admin role cannot be edited");
+    }
+
+    // Shared system roles get COPY-ON-WRITE: editing one silently forks it
+    // into a hotel-owned role with the same key, re-points this hotel's
+    // staff to the fork, and applies the edit there. Other hotels keep the
+    // untouched shared role; the roles list hides the shared row once a
+    // fork with the same key exists.
+    let targetId = id;
+    let targetLabel = role[0]!.label;
     if (role[0]!.isSystem || role[0]!.propertyId === null) {
-      return fail(res, 403, "LOCKED", "System roles cannot be edited");
+      const shared = role[0]!;
+      const forkId = await db.transaction(async (tx) => {
+        const [existingFork] = await tx
+          .select()
+          .from(roles)
+          .where(and(eq(roles.propertyId, req.propertyId), eq(roles.key, shared.key)))
+          .limit(1);
+        if (existingFork) return existingFork.id;
+
+        const [fork] = await tx
+          .insert(roles)
+          .values({
+            key: shared.key,
+            label: shared.label,
+            description: shared.description,
+            isSystem: false,
+            propertyId: req.propertyId,
+          })
+          .returning();
+        const sharedPerms = await tx
+          .select({ key: rolePermissions.permissionKey })
+          .from(rolePermissions)
+          .where(eq(rolePermissions.roleId, shared.id));
+        if (sharedPerms.length) {
+          await tx.insert(rolePermissions).values(
+            sharedPerms.map((p) => ({ roleId: fork!.id, permissionKey: p.key })),
+          );
+        }
+        // Re-point THIS hotel's staff from the shared role to the fork so
+        // the edit actually applies to them.
+        const staff = await tx
+          .select({ id: profiles.id })
+          .from(profiles)
+          .where(eq(profiles.propertyId, req.propertyId));
+        if (staff.length) {
+          await tx
+            .update(userRoles)
+            .set({ roleId: fork!.id })
+            .where(
+              and(
+                eq(userRoles.roleId, shared.id),
+                inArray(
+                  userRoles.userId,
+                  staff.map((s) => s.id),
+                ),
+              ),
+            );
+        }
+        return fork!.id;
+      });
+      targetId = forkId;
     }
 
     const patch: Record<string, unknown> = { updatedAt: new Date() };
-    if (input.label !== undefined) patch.label = input.label;
+    if (input.label !== undefined) {
+      patch.label = input.label;
+      targetLabel = input.label;
+    }
     if (input.description !== undefined) patch.description = input.description;
-    await db.update(roles).set(patch).where(eq(roles.id, id));
+    await db.update(roles).set(patch).where(eq(roles.id, targetId));
 
     if (input.permissions !== undefined) {
       const validKeys = new Set(PERMISSION_CATALOG.map((p) => p.key));
       const cleanPerms = input.permissions.filter((k) => validKeys.has(k));
       // Replace strategy: simpler than diffing.
-      await db.delete(rolePermissions).where(eq(rolePermissions.roleId, id));
+      await db.delete(rolePermissions).where(eq(rolePermissions.roleId, targetId));
       if (cleanPerms.length) {
         await db.insert(rolePermissions).values(
-          cleanPerms.map((k) => ({ roleId: id, permissionKey: k })),
+          cleanPerms.map((k) => ({ roleId: targetId, permissionKey: k })),
         );
+      }
+    }
+
+    // Auto-collapse: a hotel fork that ends up IDENTICAL to the shared
+    // system default is pointless and would show a misleading "Custom"
+    // badge. Re-point staff back to the shared role and drop the fork, so
+    // the list honestly reads "System" again. This doubles as reset-to-
+    // default: untick your customisations and save.
+    const [targetRow] = await db.select().from(roles).where(eq(roles.id, targetId)).limit(1);
+    if (targetRow && targetRow.propertyId !== null) {
+      const [sharedTwin] = await db
+        .select()
+        .from(roles)
+        .where(and(eq(roles.key, targetRow.key), isNull(roles.propertyId)))
+        .limit(1);
+      if (sharedTwin) {
+        const forkPerms = (
+          await db
+            .select({ key: rolePermissions.permissionKey })
+            .from(rolePermissions)
+            .where(eq(rolePermissions.roleId, targetRow.id))
+        )
+          .map((p) => p.key)
+          .sort();
+        const sharedPerms = (
+          await db
+            .select({ key: rolePermissions.permissionKey })
+            .from(rolePermissions)
+            .where(eq(rolePermissions.roleId, sharedTwin.id))
+        )
+          .map((p) => p.key)
+          .sort();
+        const identical =
+          targetRow.label === sharedTwin.label &&
+          (targetRow.description ?? "") === (sharedTwin.description ?? "") &&
+          forkPerms.length === sharedPerms.length &&
+          forkPerms.every((k, i) => k === sharedPerms[i]);
+        if (identical) {
+          await db.transaction(async (tx) => {
+            const staff = await tx
+              .select({ id: profiles.id })
+              .from(profiles)
+              .where(eq(profiles.propertyId, req.propertyId));
+            if (staff.length) {
+              await tx
+                .update(userRoles)
+                .set({ roleId: sharedTwin.id })
+                .where(
+                  and(
+                    eq(userRoles.roleId, targetRow.id),
+                    inArray(
+                      userRoles.userId,
+                      staff.map((s) => s.id),
+                    ),
+                  ),
+                );
+            }
+            await tx.delete(roles).where(eq(roles.id, targetRow.id));
+          });
+          await logActivity({
+            propertyId: req.propertyId,
+            action: "role_updated",
+            entityType: "role",
+            entityId: sharedTwin.id,
+            description: `Role "${targetLabel}" reset to system default`,
+            performedBy: req.user!.id,
+            ipAddress: req.ip,
+          });
+          return ok(res, { success: true, roleId: sharedTwin.id, resetToSystem: true });
+        }
       }
     }
 
@@ -194,13 +334,13 @@ router.patch(
       propertyId: req.propertyId,
       action: "role_updated",
       entityType: "role",
-      entityId: id,
-      description: `Role "${role[0]!.label}" updated`,
+      entityId: targetId,
+      description: `Role "${targetLabel}" updated${targetId !== id ? " (customised from system role)" : ""}`,
       performedBy: req.user!.id,
       ipAddress: req.ip,
     });
 
-    return ok(res, { success: true });
+    return ok(res, { success: true, roleId: targetId });
   },
 );
 
@@ -285,6 +425,20 @@ router.put(
     // Prevent self-demotion from admin to avoid lockout.
     if (req.user!.id === userId && req.user!.role === "admin" && r[0]!.key !== "admin") {
       return fail(res, 400, "SELF_LOCKOUT", "Admins cannot demote themselves");
+    }
+
+    // No-escalation invariant. The guard above only blocks self-DEMOTION;
+    // self-PROMOTION passed both of its conditions, so a holder of a custom
+    // role carrying manage_staff could assign themselves the shared 'admin'
+    // role (its id is readable from GET /rbac/roles, which needs only
+    // requireAuth) and come back god-mode on the next request.
+    if (r[0]!.key === "admin" && !req.user!.isGodMode) {
+      return fail(
+        res,
+        403,
+        "ROLE_ESCALATION",
+        "Only an administrator can assign the administrator role.",
+      );
     }
 
     // Upsert user_roles

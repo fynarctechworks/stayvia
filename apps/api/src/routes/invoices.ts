@@ -1,4 +1,4 @@
-import { editInvoiceSchema } from "@stayvia/shared";
+import { editInvoiceSchema, invoiceListQuerySchema } from "@stayvia/shared";
 import { and, desc, eq, gte, inArray, lte, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import { Router } from "express";
@@ -10,7 +10,7 @@ import { reservationRooms, reservations } from "../db/schema/reservations.js";
 import { rooms } from "../db/schema/rooms.js";
 import { logActivity } from "../lib/activity.js";
 import { loadGuestExtra } from "../lib/guestExtra.js";
-import { propertyDayEnd, propertyDayStart } from "../lib/propertyTime.js";
+import { propertyDateString, propertyDayEnd, propertyDayStart } from "../lib/propertyTime.js";
 import { renderInvoicePdf } from "../lib/pdf.js";
 import { recomputeReservationBalance } from "../lib/reservationBalance.js";
 import { invalidateDashboard } from "../lib/redis.js";
@@ -27,7 +27,7 @@ const router = Router();
 // links can be shared without leaking UUIDs.
 router.param("id", resolveInvoiceId as never);
 
-router.get("/", requireAuth, requirePermission("view_invoices"), async (req, res) => {
+router.get("/", requireAuth, requirePermission("view_invoices"), validate(invoiceListQuerySchema, "query"), async (req, res) => {
   const { status, date_from, date_to, scope, q } = req.query as Record<
     string,
     string | undefined
@@ -38,14 +38,17 @@ router.get("/", requireAuth, requirePermission("view_invoices"), async (req, res
   const conditions = [];
   conditions.push(eq(invoices.propertyId, req.propertyId));
   // Invoices belonging to complimentary reservations are hidden from
-  // the Invoices page — they live only in the Complimentary report.
-  conditions.push(
-    sql`NOT EXISTS (
-      SELECT 1 FROM ${reservations} rc
-      WHERE rc.id = ${invoices.reservationId}
-        AND rc.property_id = ${req.propertyId}
-        AND rc.booking_source = 'complimentary')`,
-  );
+  // the Invoices page while hideComplimentary is on — they then live
+  // only in the Complimentary report.
+  if ((await getSettings(req.propertyId)).hideComplimentary) {
+    conditions.push(
+      sql`NOT EXISTS (
+        SELECT 1 FROM ${reservations} rc
+        WHERE rc.id = ${invoices.reservationId}
+          AND rc.property_id = ${req.propertyId}
+          AND rc.booking_source = 'complimentary')`,
+    );
+  }
   if (status) conditions.push(eq(invoices.status, status as never));
   if (date_from) conditions.push(gte(invoices.createdAt, propertyDayStart(date_from)));
   if (date_to) conditions.push(lte(invoices.createdAt, propertyDayEnd(date_to)));
@@ -123,7 +126,7 @@ router.get("/", requireAuth, requirePermission("view_invoices"), async (req, res
 // Totals across ALL invoices matching the filters — not just the current
 // page. Mirrors the filter logic in `GET /` exactly so the summary tiles
 // on the Reports → Invoices tab stay accurate as staff paginate.
-router.get("/summary", requireAuth, requirePermission("view_invoices"), async (req, res) => {
+router.get("/summary", requireAuth, requirePermission("view_invoices"), validate(invoiceListQuerySchema, "query"), async (req, res) => {
   const { status, date_from, date_to, scope, q } = req.query as Record<
     string,
     string | undefined
@@ -132,13 +135,15 @@ router.get("/summary", requireAuth, requirePermission("view_invoices"), async (r
   const conditions = [];
   conditions.push(eq(invoices.propertyId, req.propertyId));
   // Comp invoices are hidden from the Invoices page (see GET / above).
-  conditions.push(
-    sql`NOT EXISTS (
-      SELECT 1 FROM ${reservations} rc
-      WHERE rc.id = ${invoices.reservationId}
-        AND rc.property_id = ${req.propertyId}
-        AND rc.booking_source = 'complimentary')`,
-  );
+  if ((await getSettings(req.propertyId)).hideComplimentary) {
+    conditions.push(
+      sql`NOT EXISTS (
+        SELECT 1 FROM ${reservations} rc
+        WHERE rc.id = ${invoices.reservationId}
+          AND rc.property_id = ${req.propertyId}
+          AND rc.booking_source = 'complimentary')`,
+    );
+  }
   if (status) conditions.push(eq(invoices.status, status as never));
   if (date_from) conditions.push(gte(invoices.createdAt, propertyDayStart(date_from)));
   if (date_to) conditions.push(lte(invoices.createdAt, propertyDayEnd(date_to)));
@@ -202,7 +207,7 @@ router.get("/summary", requireAuth, requirePermission("view_invoices"), async (r
 // into a CSV. CA-grade detail: every field that ends up on the printed
 // invoice is here, plus audit fields (issued-by, voided-by, reissue
 // chain) that aren't on the bill but matter for reconciliation.
-router.get("/export", requireAuth, requirePermission("view_invoices"), async (req, res) => {
+router.get("/export", requireAuth, requirePermission("view_invoices"), validate(invoiceListQuerySchema, "query"), async (req, res) => {
   try {
   const { status, date_from, date_to, scope, q } = req.query as Record<
     string,
@@ -212,13 +217,15 @@ router.get("/export", requireAuth, requirePermission("view_invoices"), async (re
   const conditions = [];
   conditions.push(eq(invoices.propertyId, req.propertyId));
   // Comp invoices are hidden from the export too (see GET / above).
-  conditions.push(
-    sql`NOT EXISTS (
-      SELECT 1 FROM ${reservations} rc
-      WHERE rc.id = ${invoices.reservationId}
-        AND rc.property_id = ${req.propertyId}
-        AND rc.booking_source = 'complimentary')`,
-  );
+  if ((await getSettings(req.propertyId)).hideComplimentary) {
+    conditions.push(
+      sql`NOT EXISTS (
+        SELECT 1 FROM ${reservations} rc
+        WHERE rc.id = ${invoices.reservationId}
+          AND rc.property_id = ${req.propertyId}
+          AND rc.booking_source = 'complimentary')`,
+    );
+  }
   if (status) conditions.push(eq(invoices.status, status as never));
   if (date_from) conditions.push(gte(invoices.createdAt, propertyDayStart(date_from)));
   if (date_to) conditions.push(lte(invoices.createdAt, propertyDayEnd(date_to)));
@@ -449,7 +456,13 @@ router.get("/export", requireAuth, requirePermission("view_invoices"), async (re
     const paymentSummary = myPays
       .map(
         (p) =>
-          `${p.receiptNumber ?? "—"} ${p.method} ${p.amount} on ${new Date(p.paymentDate).toISOString().slice(0, 10)}`,
+          // Property day, not the UTC day. The collections and daily-ledger
+          // reports bucket the same rows by DATE(payment_date AT TIME ZONE
+          // 'Asia/Kolkata'), so formatting via toISOString() put any payment
+          // taken during the night-audit window (00:00-05:30 IST) on a
+          // different day in the CSV than in the day book — an owner
+          // reconciling the two could never make them tie out.
+          `${p.receiptNumber ?? "-"} ${p.method} ${p.amount} on ${propertyDateString(new Date(p.paymentDate))}`,
       )
       .join(" | ");
     const methods = Array.from(new Set(myPays.map((p) => p.method))).join(", ");
@@ -923,6 +936,16 @@ router.patch(
       issueDate: original.issueDate,
     };
 
+    // GST mode is a per-reservation snapshot — buildInvoice reads
+    // reservation.gstMode when it issues the invoice, so an edit must resolve
+    // it the same way or it will silently re-price the bill.
+    const [parentRes] = await db
+      .select({ gstMode: reservations.gstMode })
+      .from(reservations)
+      .where(eq(reservations.id, original.reservationId))
+      .limit(1);
+    const gstMode = parentRes?.gstMode ?? "exclusive";
+
     const updated = await db.transaction(async (tx) => {
       const patch: Record<string, unknown> = { updatedAt: new Date() };
       if (input.issueDate !== undefined) patch.issueDate = input.issueDate;
@@ -944,7 +967,25 @@ router.patch(
           const amount = +(li.rate * li.quantity).toFixed(2);
           // CGST + SGST split equally from the line's GST rate. Same model
           // as initial invoice creation.
-          const gstAmount = +(amount * (li.gstRate / 100)).toFixed(2);
+          //
+          // `amount` is the NET line value: buildInvoice stores net in both
+          // `rate` and `amount` for BOTH modes, and EditInvoiceModal seeds the
+          // form straight from `li.rate`. So `amount * rate%` is only correct
+          // under exclusive mode. Under the product DEFAULT (inclusive, where
+          // GST is a percentage of the GROSS — see lib/gst.ts), the gross has
+          // to be reconstructed first:
+          //     gross = net / (1 - r)   =>   gst = gross * r = net * r / (1 - r)
+          // Without this, re-saving an UNTOUCHED inclusive invoice shrank it:
+          // a ₹10,000 stay @12% (net 8,800 / GST 1,200) came back as
+          // 8,800 + 1,056 = ₹9,856 — under-billing the guest and under-
+          // reporting output GST by ₹144 every time someone fixed a typo on
+          // the billed-to name, and writing a negative balanceDue on an
+          // already-paid invoice.
+          const r = li.gstRate / 100;
+          const gstAmount =
+            gstMode === "inclusive" && r < 1
+              ? +((amount * r) / (1 - r)).toFixed(2)
+              : +(amount * r).toFixed(2);
           const halfGst = +(gstAmount / 2).toFixed(2);
           subtotal += amount;
           totalCgst += halfGst;
@@ -976,7 +1017,15 @@ router.patch(
         // payments and wallet credit.
         const carriedPaid = Number(original.totalPaid);
         const carriedWalletCredit = Number(original.walletCreditApplied);
-        const balanceDue = +(grandTotal - carriedPaid - carriedWalletCredit).toFixed(2);
+        // Clamped at 0, matching recomputeInvoiceTotals. An edit that lowers
+        // the total below what has already been collected is an overpayment
+        // (handled as wallet credit / refund elsewhere), not a negative
+        // amount owed — persisting a negative balanceDue put the Invoices
+        // list and the summary tiles into a state nothing else could read.
+        const balanceDue = +Math.max(
+          0,
+          grandTotal - carriedPaid - carriedWalletCredit,
+        ).toFixed(2);
         const status =
           balanceDue <= 0.009
             ? "paid"

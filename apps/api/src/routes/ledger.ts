@@ -120,7 +120,7 @@ router.post(
       action: "ledger_adjustment",
       entityType: "guest",
       entityId: id,
-      description: `Wallet ${amount > 0 ? "credit" : "debit"} ₹${Math.abs(amount).toFixed(2)} — ${note}`,
+      description: `Wallet ${amount > 0 ? "credit" : "debit"} ₹${Math.abs(amount).toFixed(2)} - ${note}`,
       performedBy: req.user!.id,
       ipAddress: req.ip,
       metadata: { ledgerEntryId: entry.id, signed: amount },

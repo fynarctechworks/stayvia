@@ -23,7 +23,19 @@ export const ID_PROOF_TYPES = [
 ] as const;
 export type IdProofType = (typeof ID_PROOF_TYPES)[number];
 
+// Single source of truth — apps/api/src/db/schema/enums.ts re-exports this.
+//
+// The two copies had diverged: this one was missing `inquiry`, `hold` and
+// `pending_payment`, and because it backs reservationListQuerySchema, the API
+// rejected GET /reservations?status=hold with a 400 even though the DB stores
+// the value. Those are exactly the rows an operator needs to triage — a `hold`
+// silently consuming inventory, a `pending_payment` awaiting a deposit — and
+// the list could not filter for them. Typecheck could never catch it, since
+// each app imported its own copy.
 export const RESERVATION_STATUSES = [
+  "inquiry",
+  "hold",
+  "pending_payment",
   "confirmed",
   "checked_in",
   "checked_out",
@@ -31,6 +43,23 @@ export const RESERVATION_STATUSES = [
   "no_show",
 ] as const;
 export type ReservationStatus = (typeof RESERVATION_STATUSES)[number];
+
+// Statuses that block room inventory. Used by availability checks and the
+// dashboard "occupied vs reserved" logic. `inquiry` does not block.
+//
+// `hold` is deliberately NOT here. The status was declared to auto-expire via
+// a scheduled `holds_expire` job that was never written, and no
+// hold_expires_at column exists on reservations or in any migration — so
+// nothing could ever transition a row out of it. As a blocking status that
+// made any held room permanently unsellable and revenue-blocked until a human
+// noticed and hand-edited the row. Until the feature is actually finished
+// (deadline column + a sweep, scoped per property_id), a hold must not consume
+// inventory.
+export const RESERVATION_BLOCKING_STATUSES: readonly ReservationStatus[] = [
+  "pending_payment",
+  "confirmed",
+  "checked_in",
+];
 
 export const INVOICE_STATUSES = ["issued", "paid", "partial", "voided"] as const;
 export type InvoiceStatus = (typeof INVOICE_STATUSES)[number];

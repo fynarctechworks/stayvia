@@ -1,5 +1,5 @@
 import { endOfMonth, format, parseISO, startOfMonth } from "date-fns";
-import { propertyDayEnd, propertyDayStart } from "../lib/propertyTime.js";
+import { propertyDateString, propertyDayEnd, propertyDayStart } from "../lib/propertyTime.js";
 import { and, desc, eq, gte, inArray, lte, ne, sql } from "drizzle-orm";
 import { Router } from "express";
 import { db } from "../db/client.js";
@@ -10,7 +10,7 @@ import { reservationRooms, reservations } from "../db/schema/reservations.js";
 import { rooms } from "../db/schema/rooms.js";
 import { logActivity } from "../lib/activity.js";
 import { messaging } from "../lib/messaging.js";
-import { fail, ok } from "../lib/response.js";
+import { fail, HttpError, ok } from "../lib/response.js";
 import { getSettings } from "../lib/settings.js";
 import { renderTemplate } from "../lib/templates.js";
 import { requireAuth, requirePermission } from "../middleware/auth.js";
@@ -22,15 +22,63 @@ const router = Router();
 // single-day window ("Today") excluded everything after 00:00.
 // fromStr/toStr are the raw yyyy-MM-dd strings for ::date casts in SQL
 // (formatting the Date back would shift a day on a non-IST server).
+// Longest window any report legitimately needs. Occupancy and daily-ledger
+// both materialise one row/object PER DAY in the range (in SQL via
+// generate_series and again in JS), so an unbounded span is a memory bomb:
+// `?date_from=1000-01-01&date_to=9999-12-31` allocated ~3.2M day strings plus
+// 3.2M result objects. A heap OOM is NOT catchable by the process-level
+// handlers in index.ts, so one authenticated request took down the API for
+// every hotel on the instance — and readLimiter allowed 100/min of them.
+const MAX_RANGE_DAYS = 400;
+
+const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+
+// Date params are property-local calendar dates. `to` is inclusive of
+// its WHOLE day — the old parseISO gave midnight for both ends, so a
+// single-day window ("Today") excluded everything after 00:00.
+// fromStr/toStr are the raw yyyy-MM-dd strings for ::date casts in SQL
+// (formatting the Date back would shift a day on a non-IST server).
+//
+// Validation lives here rather than in per-route Zod schemas because nine
+// report routes share this helper. Previously the raw strings went straight
+// into `generate_series(${fromStr}::date, …)` and into propertyDayStart's
+// string concatenation, so `?date_from=hello` produced either a Postgres
+// "invalid input syntax for type date" or an Invalid Date whose .toISOString()
+// threw a RangeError — an unhandled 500 either way.
 function rangeDefaults(req: { query: Record<string, string | undefined> }) {
-  const fromStr = req.query.date_from ?? format(startOfMonth(new Date()), "yyyy-MM-dd");
-  const toStr = req.query.date_to ?? format(endOfMonth(new Date()), "yyyy-MM-dd");
-  return {
-    from: propertyDayStart(fromStr),
-    to: propertyDayEnd(toStr),
-    fromStr,
-    toStr,
-  };
+  const rawFrom = req.query.date_from;
+  const rawTo = req.query.date_to;
+  for (const [name, v] of [
+    ["date_from", rawFrom],
+    ["date_to", rawTo],
+  ] as const) {
+    if (v !== undefined && !DATE_RE.test(v)) {
+      throw new HttpError(400, "VALIDATION_ERROR", `${name} must be a date in YYYY-MM-DD form`);
+    }
+  }
+
+  const fromStr = rawFrom ?? format(startOfMonth(new Date()), "yyyy-MM-dd");
+  const toStr = rawTo ?? format(endOfMonth(new Date()), "yyyy-MM-dd");
+
+  const from = propertyDayStart(fromStr);
+  const to = propertyDayEnd(toStr);
+  // Catches real-looking but invalid dates that pass the regex ("2026-02-31").
+  if (Number.isNaN(from.getTime()) || Number.isNaN(to.getTime())) {
+    throw new HttpError(400, "VALIDATION_ERROR", "date_from / date_to is not a real date");
+  }
+  if (to.getTime() < from.getTime()) {
+    throw new HttpError(400, "VALIDATION_ERROR", "date_to must not be before date_from");
+  }
+  const spanDays = Math.ceil((to.getTime() - from.getTime()) / 86_400_000);
+  if (spanDays > MAX_RANGE_DAYS) {
+    throw new HttpError(
+      400,
+      "RANGE_TOO_LARGE",
+      `Date range is too large (${spanDays} days). Maximum is ${MAX_RANGE_DAYS} days.`,
+    );
+  }
+
+  return { from, to, fromStr, toStr };
 }
 
 router.get("/occupancy", requireAuth, requirePermission("view_reports"), async (req, res) => {
@@ -346,10 +394,21 @@ router.get("/gst-summary", requireAuth, requirePermission("view_reports"), async
     to = propertyDayEnd(date_to);
     label = `${format(parseISO(date_from), "dd MMM yyyy")} → ${format(parseISO(date_to), "dd MMM yyyy")}`;
   } else {
-    const anchor = month ? parseISO(`${month}-01`) : new Date();
-    from = startOfMonth(anchor);
-    to = endOfMonth(anchor);
-    label = format(anchor, "yyyy-MM");
+    // Property-local month bounds, matching the date_from/date_to branch above.
+    //
+    // startOfMonth/endOfMonth on a bare Date use the SERVER's timezone, and the
+    // API container sets no TZ (none in apps/api/Dockerfile or
+    // deploy/docker-compose.prod.yml), so in production it runs UTC. That
+    // shifted the whole GST filing window by +5:30 at both ends: an invoice
+    // raised at 02:00 IST on 1 June fell OUT of June's CGST/SGST rollup and a
+    // 1 July one fell IN. These figures get filed, so the drift is not cosmetic.
+    const anchorMonth = month ?? propertyDateString(new Date()).slice(0, 7);
+    const monthStartStr = `${anchorMonth}-01`;
+    // Last day of the month, derived without leaving property time.
+    const lastDay = endOfMonth(parseISO(monthStartStr));
+    from = propertyDayStart(monthStartStr);
+    to = propertyDayEnd(format(lastDay, "yyyy-MM-dd"));
+    label = anchorMonth;
   }
 
   // GST summary excludes invoices tied to complimentary reservations.

@@ -1,11 +1,13 @@
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { Router } from "express";
+import { roomListQuerySchema } from "@stayvia/shared";
 import { z } from "zod";
 import { db } from "../db/client.js";
 import { maintenanceIssues } from "../db/schema/maintenance.js";
 import { rooms } from "../db/schema/rooms.js";
 import { logActivity } from "../lib/activity.js";
 import { invalidateDashboard } from "../lib/redis.js";
+import { canTransitionRoomStatus } from "../lib/roomStatus.js";
 import { fail, ok } from "../lib/response.js";
 import { requireAuth, requirePermission } from "../middleware/auth.js";
 import { validate } from "../middleware/validate.js";
@@ -30,7 +32,7 @@ const notesUpdate = z.object({
   notes: z.string().max(500).nullable(),
 });
 
-router.get("/", requireAuth, async (req, res) => {
+router.get("/", requireAuth, validate(roomListQuerySchema, "query"), async (req, res) => {
   const { floor, status } = req.query as Record<string, string | undefined>;
   const conditions = [eq(rooms.propertyId, req.propertyId)];
   if (floor !== undefined) conditions.push(eq(rooms.floor, Number(floor)));
@@ -73,7 +75,7 @@ router.get("/", requireAuth, async (req, res) => {
   );
 });
 
-router.patch("/:roomId", requireAuth, validate(statusUpdate), async (req, res) => {
+router.patch("/:roomId", requireAuth, requirePermission("update_housekeeping"), validate(statusUpdate), async (req, res) => {
   const roomId = req.params.roomId!;
   const { status, reason } = req.body as {
     status: string;
@@ -92,15 +94,9 @@ router.patch("/:roomId", requireAuth, validate(statusUpdate), async (req, res) =
   // one hop. The inspection chain (clean → inspected → available)
   // was removed in migration 0034; the only valid transitions left
   // are the operational ones around occupancy + maintenance.
-  const validTransitions: Record<string, string[]> = {
-    dirty: ["available", "maintenance"],
-    available: ["dirty", "maintenance"],
-    occupied: [],
-    reserved: [],
-    maintenance: ["available", "dirty"],
-  };
-  const allowed = validTransitions[room.status] ?? [];
-  if (!allowed.includes(status)) {
+  // The map lives in lib/roomStatus.ts because PATCH /rooms/:id/status
+  // must enforce exactly the same rules.
+  if (!canTransitionRoomStatus(room.status, status)) {
     return fail(
       res,
       409,
@@ -157,7 +153,7 @@ router.post(
   },
 );
 
-router.patch("/:roomId/notes", requireAuth, validate(notesUpdate), async (req, res) => {
+router.patch("/:roomId/notes", requireAuth, requirePermission("update_housekeeping"), validate(notesUpdate), async (req, res) => {
   const roomId = req.params.roomId!;
   const { notes } = req.body as { notes: string | null };
   const trimmed = notes && notes.trim() ? notes.trim() : null;

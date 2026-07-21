@@ -1,7 +1,8 @@
-import { randomBytes } from "node:crypto";
+import { createHmac, randomBytes } from "node:crypto";
 import { createRequire } from "node:module";
 import { dirname, join } from "node:path";
 import { asc } from "drizzle-orm";
+import { env } from "../config/env.js";
 import { db } from "../db/client.js";
 import { properties } from "../db/schema/properties.js";
 import { logger } from "./logger.js";
@@ -194,6 +195,31 @@ export function storageFolderLabel(
   return `${safe || fallback}-${uniquePart}`;
 }
 
+// Same lazy self-provisioning as the expense/docs buckets — a fresh
+// Supabase project (local CLI stack or new cloud project) starts with no
+// buckets at all, and the first KYC upload used to die with "Bucket not
+// found".
+let kycBucketEnsured = false;
+async function ensureKycBucket() {
+  if (kycBucketEnsured) return;
+  const { data: buckets, error: listErr } = await supabaseAdmin.storage.listBuckets();
+  if (listErr) {
+    logger.warn({ err: listErr.message }, "storage listBuckets failed");
+    return;
+  }
+  if (!buckets?.some((b) => b.name === BUCKET)) {
+    const { error: createErr } = await supabaseAdmin.storage.createBucket(BUCKET, {
+      public: false,
+    });
+    if (createErr) {
+      logger.warn({ err: createErr.message }, "kyc bucket create failed");
+      return;
+    }
+    logger.info("created kyc-docs bucket");
+  }
+  kycBucketEnsured = true;
+}
+
 export async function uploadKycPhoto(
   // Tenant that owns the file — becomes the first path segment.
   propertyId: string,
@@ -203,6 +229,7 @@ export async function uploadKycPhoto(
   side: KycSide,
   file: { buffer: Buffer; mimetype: string },
 ): Promise<string> {
+  await ensureKycBucket();
   // Sanitize first — caller already validated MIME + size, but this is the
   // last line of defense.
   let safe: { buffer: Buffer; mimetype: string };
@@ -431,6 +458,31 @@ export async function uploadPublicPdf(
 // as room gallery images (Phase 1 amenities work). Same bucket, same
 // public-URL pattern — the caller decides the content type. The property
 // prefix is prepended in-function so every caller inherits the namespacing.
+// Unguessable-but-stable path token.
+//
+// The bucket is PUBLIC, so the object path is the only thing standing between
+// a guest document and anyone on the internet. The customer label alone was
+// not enough: paths looked like
+//   <propertyId>/invoices/INV-0044-Ajay-9347868290.pdf
+// and every component is knowable to someone who has received one invoice —
+// the property UUID from their own link, the invoice number by decrementing
+// (they are sequential per hotel), and another guest's name + phone by simply
+// knowing that person. That yields their full tax invoice: address, GSTIN,
+// stay dates, payment history and every co-guest's ID details.
+//
+// A purely random token would fix that but break the stable-path property the
+// label was introduced for — regenerating a receipt would orphan the old
+// object instead of overwriting it, and nothing persists the previous path.
+// So the token is an HMAC over the logical path instead: deterministic (same
+// document → same path → clean overwrite, operators keep the readable name)
+// but unguessable without ENCRYPTION_KEY, which never leaves the server.
+function pathToken(propertyId: string, pathInBucket: string): string {
+  return createHmac("sha256", env.ENCRYPTION_KEY)
+    .update(`docpath:v1:${propertyId}/${pathInBucket}`)
+    .digest("hex")
+    .slice(0, 24);
+}
+
 export async function uploadPublicFile(
   propertyId: string,
   pathInBucket: string,
@@ -439,23 +491,26 @@ export async function uploadPublicFile(
   label?: string,
 ): Promise<string | null> {
   try {
-    // Named documents get the customer tag (stable path — regenerations
-    // overwrite); unnamed ones keep a random token so public paths stay
-    // unguessable.
-    const obfuscatedPath = `${propertyId}/${withSuffix(
-      pathInBucket,
-      label && label.length > 0 ? label : randomBytes(8).toString("hex"),
-    )}`;
+    // Named documents keep the customer tag so operators can still browse the
+    // bucket by guest — but the keyed token is ALWAYS appended, so the label
+    // is a convenience, never the thing protecting the file.
+    const token = pathToken(propertyId, pathInBucket);
+    const suffix = label && label.length > 0 ? `${label}-${token}` : token;
+    const obfuscatedPath = `${propertyId}/${withSuffix(pathInBucket, suffix)}`;
     await ensureDocsBucket();
     const { error } = await supabaseAdmin.storage
       .from(DOCS_BUCKET)
       .upload(obfuscatedPath, body, { contentType, upsert: true });
     if (error) {
-      logger.warn({ err: error.message, path: obfuscatedPath }, "public upload failed");
+      // Log the LOGICAL path only. The resolved path contains the token, and
+      // an application log is a much weaker secret store than the bucket.
+      logger.warn({ err: error.message, path: pathInBucket }, "public upload failed");
       return null;
     }
     const { data } = supabaseAdmin.storage.from(DOCS_BUCKET).getPublicUrl(obfuscatedPath);
-    logger.info({ url: data.publicUrl }, "public file uploaded");
+    // Deliberately NOT logging data.publicUrl: it embeds the token, so logging
+    // it turned the log into a ready-made index of every guest document.
+    logger.info({ path: pathInBucket }, "public file uploaded");
     return data.publicUrl;
   } catch (err) {
     logger.warn({ err: err instanceof Error ? err.message : err }, "uploadPublicFile threw");

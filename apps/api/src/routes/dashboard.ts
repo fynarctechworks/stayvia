@@ -274,16 +274,19 @@ async function buildDashboard(propertyId: string) {
         })
         .from(activityLog)
         .innerJoin(profiles, eq(profiles.id, activityLog.performedBy))
-        // Hide activity tied to complimentary reservations — they're
-        // silent everywhere outside the Complimentary report. (entity_id
-        // is a uuid column, so the join is always type-safe.)
+        // Hide activity tied to complimentary reservations while the
+        // hideComplimentary setting is on — they're then silent everywhere
+        // outside the Complimentary report. (entity_id is a uuid column,
+        // so the join is always type-safe.)
         .where(
           and(
             eq(activityLog.propertyId, propertyId),
-            sql`NOT (${activityLog.entityType} = 'reservation' AND EXISTS (
-              SELECT 1 FROM ${reservations} r
-              WHERE r.id = ${activityLog.entityId}
-                AND r.booking_source = 'complimentary'))`,
+            settings.hideComplimentary
+              ? sql`NOT (${activityLog.entityType} = 'reservation' AND EXISTS (
+                  SELECT 1 FROM ${reservations} r
+                  WHERE r.id = ${activityLog.entityId}
+                    AND r.booking_source = 'complimentary'))`
+              : sql`true`,
           ),
         )
         .orderBy(desc(activityLog.createdAt))
@@ -458,6 +461,9 @@ async function buildDashboard(propertyId: string) {
           guestPhone: guests.phone,
           checkInDate: reservations.checkInDate,
           arrivalReminderSentAt: reservations.arrivalReminderSentAt,
+          // Needed to compute the late-arrival window (past expected
+          // arrival, still inside the no-show cutoff).
+          plannedCheckInAt: reservations.plannedCheckInAt,
         })
         .from(reservations)
         .innerJoin(guests, eq(guests.id, reservations.guestId))
@@ -468,8 +474,10 @@ async function buildDashboard(propertyId: string) {
             gte(reservations.checkInDate, today),
             lte(reservations.checkInDate, reminderWindowEnd),
             // Complimentary bookings get no arrival reminder (banner or
-            // WhatsApp) — they're silent everywhere outside the comp report.
-            sql`${reservations.bookingSource} <> 'complimentary'`,
+            // WhatsApp) while hideComplimentary is on.
+            settings.hideComplimentary
+              ? sql`${reservations.bookingSource} <> 'complimentary'`
+              : sql`true`,
           ),
         )
         .orderBy(reservations.checkInDate),
@@ -496,8 +504,11 @@ async function buildDashboard(propertyId: string) {
             eq(reservations.propertyId, propertyId),
             eq(reservations.status, "confirmed"),
             lte(reservations.checkInDate, today),
-            // No no-show alert for complimentary bookings.
-            sql`${reservations.bookingSource} <> 'complimentary'`,
+            // No no-show alert for complimentary bookings while
+            // hideComplimentary is on.
+            settings.hideComplimentary
+              ? sql`${reservations.bookingSource} <> 'complimentary'`
+              : sql`true`,
           ),
         )
         .orderBy(reservations.checkInDate),
@@ -586,7 +597,28 @@ async function buildDashboard(propertyId: string) {
         // already passed) and future-leg rows (effective_from not yet
         // reached). NULL bounds mean "whole stay" so they pass through.
         sql`(${reservationRooms.effectiveFrom} IS NULL OR ${reservationRooms.effectiveFrom} <= ${todayDate})`,
-        sql`(${reservationRooms.effectiveTo} IS NULL OR ${reservationRooms.effectiveTo} > ${todayDate})`,
+        // The `>= check_out_date` arm keeps the FINAL segment live on the
+        // checkout date itself.
+        //
+        // Segment bounds are half-open night ranges: [20 Jul, 21 Jul) is the
+        // night of the 20th. `effective_to > today` is the right test for
+        // counting nights (reports.ts does exactly that), but this map answers
+        // a different question — "who is physically in this room right now" —
+        // and on checkout day the guest is still in it until they check out.
+        //
+        // Without this arm the last leg of a swapped stay dropped out of the
+        // map on its checkout date, so the tile lost its reservation_id while
+        // still rendering OCCUPIED from the physical room status. Clicking it
+        // fell through to the room/maintenance page instead of the booking.
+        // An UNSEGMENTED room never had the problem (NULL passes the filter),
+        // so swapped stays behaved differently from ordinary ones on the one
+        // day it mattered most — checkout morning.
+        //
+        // A closed leg is still excluded: its effective_to is earlier than
+        // check_out_date, so it fails both arms.
+        sql`(${reservationRooms.effectiveTo} IS NULL
+             OR ${reservationRooms.effectiveTo} > ${todayDate}
+             OR ${reservationRooms.effectiveTo} >= ${reservations.checkOutDate})`,
       ),
     );
   const tomorrow = propertyDateOffset(1);
@@ -790,14 +822,32 @@ async function buildDashboard(propertyId: string) {
       return {
         upcoming_arrivals: upcomingArrivalsRow
           .filter((r) => !noShowIds.has(r.id))
-          .map((r) => ({
-            id: r.id,
-            reservationNumber: r.reservationNumber,
-            guestName: r.guestName,
-            guestPhone: r.guestPhone,
-            checkInDate: r.checkInDate,
-            reminderSent: r.arrivalReminderSentAt !== null,
-          })),
+          .map((r) => {
+            // Late-arrival window: the guest is past their expected arrival
+            // but hasn't hit the no-show cutoff yet, so they're still
+            // "expected, just late" — not a no-show. Anchored on the SAME
+            // clock the cutoff above uses (the booking's own
+            // plannedCheckInAt, else the hotel's default check-in time) so
+            // the amber and red states can never disagree about when the
+            // guest was due. Computed server-side so the banner ticks with
+            // the dashboard poll instead of a frozen client clock.
+            const plannedMs = r.plannedCheckInAt
+              ? new Date(r.plannedCheckInAt).getTime()
+              : todayMidnight + defaultArrivalMs;
+            const lateMinutes =
+              r.checkInDate === today && nowEpoch > plannedMs
+                ? Math.floor((nowEpoch - plannedMs) / 60000)
+                : 0;
+            return {
+              id: r.id,
+              reservationNumber: r.reservationNumber,
+              guestName: r.guestName,
+              guestPhone: r.guestPhone,
+              checkInDate: r.checkInDate,
+              reminderSent: r.arrivalReminderSentAt !== null,
+              lateMinutes,
+            };
+          }),
         likely_no_shows: noShows.map((r) => ({
           id: r.id,
           reservationNumber: r.reservationNumber,

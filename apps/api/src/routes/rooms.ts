@@ -14,6 +14,7 @@ import { logActivity } from "../lib/activity.js";
 import { findAvailableRooms } from "../lib/availability.js";
 import { invalidateDashboard } from "../lib/redis.js";
 import { fail, ok } from "../lib/response.js";
+import { canTransitionRoomStatus } from "../lib/roomStatus.js";
 import { requireAuth, requirePermission } from "../middleware/auth.js";
 import { resolveRoomId } from "../middleware/resolveRoom.js";
 import { validate } from "../middleware/validate.js";
@@ -127,10 +128,31 @@ router.put("/:id", requireAuth, requirePermission("edit_rooms"), validate(roomUp
 router.patch(
   "/:id/status",
   requireAuth,
+  requirePermission("update_housekeeping"),
   validate(roomStatusUpdateSchema),
   async (req, res) => {
     const id = req.params.id!;
     const { status, reason } = req.body as { status: string; reason?: string };
+
+    // Same transition rules the housekeeping board enforces. Without this the
+    // endpoint wrote `status` straight through, so an OCCUPIED room could be
+    // flipped to 'available' behind the back of the reservation still holding
+    // it — the board and the booking would then disagree about the room.
+    const [current] = await db
+      .select({ status: rooms.status })
+      .from(rooms)
+      .where(and(eq(rooms.id, id), eq(rooms.propertyId, req.propertyId)))
+      .limit(1);
+    if (!current) return fail(res, 404, "NOT_FOUND", "Room not found");
+    if (!canTransitionRoomStatus(current.status, status)) {
+      return fail(
+        res,
+        409,
+        "INVALID_TRANSITION",
+        `Cannot transition ${current.status} → ${status}`,
+      );
+    }
+
     const [updated] = await db
       .update(rooms)
       .set({ status: status as never, updatedAt: new Date() })

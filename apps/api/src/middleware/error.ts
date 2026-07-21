@@ -166,7 +166,7 @@ export function errorHandler(
         res,
         409,
         "DUPLICATE",
-        "Duplicate value — this record already exists",
+        "Duplicate value - this record already exists",
       );
     }
   }

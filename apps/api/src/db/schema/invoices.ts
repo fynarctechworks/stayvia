@@ -151,6 +151,16 @@ export const additionalCharges = pgTable("additional_charges", {
   rate: numeric("rate", { precision: 10, scale: 2 }).notNull(),
   amount: numeric("amount", { precision: 10, scale: 2 }).notNull(),
   gstRate: numeric("gst_rate", { precision: 5, scale: 2 }).notNull().default("18"),
+  // Who owns this row (migration 0012).
+  //   manual         — staff-entered; freely editable and deletable.
+  //   stay_extension — written by Extend Stay, holding only the rate delta
+  //                    between the room's stored rate and the agreed
+  //                    extension rate. Deleting it in isolation under-bills
+  //                    the stay, so the API refuses and points at Undo
+  //                    Extension, which rolls back dates + charge together.
+  source: text("source", { enum: ["manual", "stay_extension"] })
+    .notNull()
+    .default("manual"),
   addedBy: uuid("added_by")
     .notNull()
     .references(() => profiles.id),

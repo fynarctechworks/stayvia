@@ -22,6 +22,16 @@ export const PERMISSION_CATALOG: PermissionDef[] = [
   { key: "view_reservations", area: "Reservations", label: "View reservations" },
   { key: "create_reservations", area: "Reservations", label: "Create reservations" },
   { key: "edit_reservations", area: "Reservations", label: "Edit reservations (dates, rooms, charges)" },
+  // Split out of edit_reservations (migration 0007). Moving a guest between
+  // rooms is routine desk work, but edit_reservations is withheld from the
+  // front desk as a cash-skim control (migration 0006) because it also covers
+  // rate and date edits. This key carries the room moves without the money.
+  {
+    key: "manage_rooms_on_stay",
+    area: "Reservations",
+    label: "Move guests between rooms (swap / add room)",
+    description: "Swap a guest into a different room, or add a room to an in-progress stay. Does not permit rate or date changes.",
+  },
   { key: "check_in", area: "Reservations", label: "Check guests in" },
   { key: "check_out", area: "Reservations", label: "Check guests out & generate invoice" },
   { key: "cancel_reservations", area: "Reservations", label: "Cancel reservations" },
@@ -131,7 +141,12 @@ export const SYSTEM_ROLES = {
       "view_rooms",
       "view_reservations",
       "create_reservations",
-      "edit_reservations",
+      // edit_reservations deliberately absent: charge/date edits are a
+      // cash-skim vector, so the desk gets it only when the hotel's admin
+      // explicitly customises the role.
+      // Room MOVES are carved out into their own key so the desk keeps that
+      // routine operation without gaining rate/date editing (migration 0007).
+      "manage_rooms_on_stay",
       "check_in",
       "check_out",
       "cancel_reservations",
@@ -220,6 +235,7 @@ export const SYSTEM_ROLES = {
       "view_reservations",
       "create_reservations",
       "edit_reservations",
+      "manage_rooms_on_stay",
       "check_in",
       "check_out",
       "cancel_reservations",

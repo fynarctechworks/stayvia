@@ -362,6 +362,9 @@ export const addRoomSchema = z.object({
   ratePerNight: z.coerce.number().positive(),
   soldAsType: z.string().min(1).max(64).optional().nullable(),
   startDate: z.string().date().optional(),
+  // Optional early end for the added room. Must fall inside the parent
+  // stay; defaults to the reservation's check-out when omitted.
+  endDate: z.string().date().optional(),
 });
 
 export const editRoomRateSchema = z.object({

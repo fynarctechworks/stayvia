@@ -70,8 +70,14 @@ RUN apt-get update \
 RUN groupadd --system app && useradd --system --gid app --create-home app
 
 WORKDIR /app
+
+# Commit this image was built from. deploy.sh passes it and then asserts that
+# /health reports it back, which is how a stale image is caught.
+ARG GIT_SHA=unknown
+
 ENV NODE_ENV=production \
     PORT=3000 \
+    GIT_SHA=$GIT_SHA \
     PUPPETEER_SKIP_DOWNLOAD=true \
     PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true \
     PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium

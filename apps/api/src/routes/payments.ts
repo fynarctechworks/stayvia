@@ -1,4 +1,9 @@
-import { editPaymentSchema, paymentSchema, voidPaymentSchema } from "@stayvia/shared";
+import {
+  editPaymentSchema,
+  markReceivedSchema,
+  paymentSchema,
+  voidPaymentSchema,
+} from "@stayvia/shared";
 import { and, desc, eq, gte, lte, sql } from "drizzle-orm";
 import { Router } from "express";
 import { db } from "../db/client.js";
@@ -9,7 +14,10 @@ import { logActivity } from "../lib/activity.js";
 import { loadGuestExtra } from "../lib/guestExtra.js";
 import { logger } from "../lib/logger.js";
 import { propertyDayEnd, propertyDayStart } from "../lib/propertyTime.js";
-import { recomputeReservationBalance } from "../lib/reservationBalance.js";
+import {
+  recomputeInvoiceTotals,
+  recomputeReservationBalance,
+} from "../lib/reservationBalance.js";
 import { renderInvoicePdf, renderReceiptPdf } from "../lib/pdf.js";
 import { generateReceiptNumber } from "../lib/receipt.js";
 import { invalidateDashboard } from "../lib/redis.js";
@@ -60,25 +68,34 @@ router.post(
         })
         .returning();
 
-      const newTotalPaid = +(Number(inv[0]!.totalPaid) + input.amount).toFixed(2);
-      const newBalance = +(Number(inv[0]!.grandTotal) - newTotalPaid).toFixed(2);
-      const newStatus = newBalance <= 0.009 ? "paid" : "partial";
-
-      await tx
-        .update(invoices)
-        .set({
-          totalPaid: String(newTotalPaid),
-          balanceDue: String(newBalance),
-          status: newStatus,
-          updatedAt: new Date(),
-        })
-        .where(eq(invoices.id, input.invoiceId));
+      // Derive the invoice's totals from the payment rows inside this
+      // transaction, exactly the way the reservation balance already is.
+      //
+      // The previous version computed `stale.totalPaid + input.amount` from a
+      // snapshot read at the top of the handler, OUTSIDE the transaction, and
+      // wrote it unconditionally. Two concurrent payments on one invoice both
+      // read the same base and the second clobbered the first: two ₹1,000 rows
+      // against a ₹2,000 invoice left it claiming ₹1,000 paid and ₹1,000 still
+      // owed. The reservation-level number self-healed (it is fact-derived),
+      // which made the divergence silent — the reservation said settled while
+      // the invoice, its PDF and the /invoices/summary tiles chased the guest
+      // for money already collected.
+      await recomputeInvoiceTotals(tx, inv[0]!.reservationId);
 
       // Reservation balanceDue is recomputed from facts, not derived
       // from this invoice's balance — a booking may have multiple
       // invoices and we mustn't overwrite the cross-invoice picture
       // with this one's number.
       await recomputeReservationBalance(tx, inv[0]!.reservationId);
+
+      // Read back the status the recompute just settled on, rather than
+      // predicting it from the stale snapshot.
+      const [afterInv] = await tx
+        .select({ status: invoices.status })
+        .from(invoices)
+        .where(eq(invoices.id, input.invoiceId))
+        .limit(1);
+      const newStatus = afterInv?.status ?? "partial";
 
       // If this real payment fully settles the invoice, auto-void any
       // still-pending "collect later" promises that were sitting on the
@@ -327,19 +344,12 @@ router.post(
         .where(and(eq(payments.id, id), eq(payments.propertyId, req.propertyId)));
 
       if (inv.length) {
-        // Post-invoice void: reverse the invoice ledger.
-        const newTotalPaid = +(Number(inv[0]!.totalPaid) - Number(existing[0]!.amount)).toFixed(2);
-        const newBalance = +(Number(inv[0]!.grandTotal) - newTotalPaid).toFixed(2);
-        const newStatus = newBalance <= 0.009 ? "paid" : newTotalPaid > 0 ? "partial" : "issued";
-        await tx
-          .update(invoices)
-          .set({
-            totalPaid: String(Math.max(0, newTotalPaid)),
-            balanceDue: String(newBalance),
-            status: newStatus,
-            updatedAt: new Date(),
-          })
-          .where(eq(invoices.id, inv[0]!.id));
+        // Post-invoice void: re-derive the invoice ledger from the surviving
+        // payment rows. Same reasoning as POST / — the old code subtracted
+        // from a totalPaid snapshot read outside the transaction, so a void
+        // racing a payment (or another void) wrote a figure that ignored the
+        // other one.
+        await recomputeInvoiceTotals(tx, existing[0]!.reservationId);
       }
       // Reservation balance is the cross-invoice picture; recompute
       // from the payment facts regardless of whether the voided payment
@@ -367,6 +377,7 @@ router.post(
   requireAuth,
   requirePermission("record_payments"),
   idempotent("payments.markReceived"),
+  validate(markReceivedSchema),
   async (req, res) => {
     const id = req.params.id!;
     const body = req.body as { paymentMethod?: string; notes?: string };
@@ -386,8 +397,6 @@ router.post(
     }
     if (existing.voided) return fail(res, 400, "VOIDED", "Payment is voided");
 
-    const amount = Number(existing.amount);
-
     await db.transaction(async (tx) => {
       await tx
         .update(payments)
@@ -401,25 +410,11 @@ router.post(
         .where(and(eq(payments.id, id), eq(payments.propertyId, req.propertyId)));
 
       if (existing.invoiceId) {
-        const [inv] = await tx
-          .select()
-          .from(invoices)
-          .where(and(eq(invoices.id, existing.invoiceId), eq(invoices.propertyId, req.propertyId)))
-          .limit(1);
-        if (inv) {
-          const newTotalPaid = +(Number(inv.totalPaid) + amount).toFixed(2);
-          const newBalance = +(Number(inv.grandTotal) - newTotalPaid).toFixed(2);
-          const newStatus = newBalance <= 0.009 ? "paid" : newTotalPaid > 0 ? "partial" : "issued";
-          await tx
-            .update(invoices)
-            .set({
-              totalPaid: String(newTotalPaid),
-              balanceDue: String(Math.max(0, newBalance)),
-              status: newStatus,
-              updatedAt: new Date(),
-            })
-            .where(eq(invoices.id, inv.id));
-        }
+        // Re-derive from payment rows rather than adding this amount onto a
+        // read-modify-write, for the same concurrency reason as POST / and
+        // POST /:id/void. The flip to 'received' above is already visible to
+        // this transaction, so the recompute picks it up.
+        await recomputeInvoiceTotals(tx, existing.reservationId);
       }
       // The pending → received flip turns this payment into "real money"
       // for the first time, so the reservation-level rollup needs to

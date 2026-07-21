@@ -56,7 +56,16 @@ export async function resolveInvoiceId(
 
   if (INVOICE_NUMBER_RE.test(raw)) {
     // Numbers are per-hotel — scope the lookup and the cache by tenant.
-    const key = `${req.propertyId}:${raw.toUpperCase()}`;
+    // Strip the legacy SLDT- prefix before looking anything up.
+    //
+    // The regex above accepts an optional SLDT- so old bookmarked links
+    // still match, but the raw string was then queried verbatim. Since
+    // lib/numbers.ts emits bare numbers (INV-0044, RCP-0003, RES-0002),
+    // a prefixed link searched for a value that cannot exist and every
+    // one of them 404'd — the compatibility branch did the exact
+    // opposite of what its comment claimed, in all three middlewares.
+    const number = raw.toUpperCase().replace(/^SLDT-/, "");
+    const key = `${req.propertyId}:${number}`;
     const cached = cacheGet(key);
     if (cached) {
       req.params.id = cached;
@@ -68,7 +77,7 @@ export async function resolveInvoiceId(
       .from(invoices)
       .where(
         and(
-          eq(invoices.invoiceNumber, raw.toUpperCase()),
+          eq(invoices.invoiceNumber, number),
           eq(invoices.propertyId, req.propertyId),
         ),
       )

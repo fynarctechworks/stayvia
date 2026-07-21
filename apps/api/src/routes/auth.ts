@@ -16,7 +16,7 @@ import {
 import { messaging } from "../lib/messaging.js";
 import { hotelDisplayName } from "../lib/notify.js";
 import { expiresAt, generateOtp, hashOtp, maskTarget } from "../lib/otp.js";
-import { supabaseAdmin } from "../lib/supabase.js";
+import { createCredentialCheckClient, supabaseAdmin } from "../lib/supabase.js";
 import { fail, ok } from "../lib/response.js";
 import { requireAuth } from "../middleware/auth.js";
 import { loginLimiter } from "../middleware/rateLimit.js";
@@ -72,7 +72,10 @@ router.post("/login", validate(loginSchema), async (req, res) => {
     );
   }
 
-  const { data, error } = await supabaseAdmin.auth.signInWithPassword({ email, password });
+  const { data, error } = await createCredentialCheckClient().auth.signInWithPassword({
+    email,
+    password,
+  });
   if (error || !data.session) {
     const tripped = recordFailure(email, clientIp);
     logger.warn(
@@ -159,10 +162,16 @@ router.get("/me", requireAuth, async (req, res) => {
 
 // Self-edit of safe profile fields only. Password is handled separately by
 // the OTP-verified change-password flow below — no shortcut via this route.
+//
+// `email` is NOT a safe field: it is the login identity, so changing it
+// redirects the forgot-password flow. It therefore requires the current
+// password, the same proof the password-change flow demands.
 const meUpdateSchema = z.object({
   fullName: z.string().min(1).max(120).optional(),
   email: z.string().email().optional(),
   phone: z.string().max(20).nullable().optional(),
+  // Required only when `email` is present.
+  currentPassword: z.string().min(1).optional(),
 });
 
 router.put("/me", requireAuth, validate(meUpdateSchema), async (req, res) => {
@@ -170,6 +179,24 @@ router.put("/me", requireAuth, validate(meUpdateSchema), async (req, res) => {
   const input = req.body as z.infer<typeof meUpdateSchema>;
 
   if (input.email) {
+    // Changing the login email was the shortcut this route's own comment
+    // claimed didn't exist. A stolen bearer token could not change the
+    // password (that needs the old password AND an OTP to the profile's
+    // phone), but it could point the account at an attacker's inbox and then
+    // drive the app's ordinary forgot-password flow to seize it outright.
+    if (!input.currentPassword) {
+      return fail(
+        res,
+        400,
+        "PASSWORD_REQUIRED",
+        "Enter your current password to change your login email.",
+      );
+    }
+    const okPw = await verifyCurrentSecret(req.user!.email, input.currentPassword);
+    if (!okPw) {
+      return fail(res, 403, "INVALID_PASSWORD", "Current password is incorrect");
+    }
+
     const { error } = await supabaseAdmin.auth.admin.updateUserById(id, {
       email: input.email,
     });
@@ -353,7 +380,7 @@ router.post(
 
 // Verify the caller's current password via a Supabase sign-in attempt.
 async function verifyCurrentSecret(userEmail: string, secret: string): Promise<boolean> {
-  const verify = await supabaseAdmin.auth.signInWithPassword({
+  const verify = await createCredentialCheckClient().auth.signInWithPassword({
     email: userEmail,
     password: secret,
   });
