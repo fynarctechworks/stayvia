@@ -69,7 +69,7 @@ export default function QrCodeModal({ open, onClose, url, title, subtitle }: Pro
             Print
           </button>
           <a
-            className="btn-secondary flex-1 text-center"
+            className="btn-secondary flex-1 inline-flex items-center justify-center"
             href={dataUrl}
             download={`${title.replace(/\s+/g, "-").toLowerCase()}-qr.png`}
           >
