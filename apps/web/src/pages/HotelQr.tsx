@@ -21,6 +21,7 @@ import {
   ChevronLeft,
   FileImage,
   IdCard,
+  LayoutDashboard,
   Loader2,
   Snowflake,
   Users,
@@ -69,6 +70,7 @@ export default function HotelQr() {
   const [nights, setNights] = useState(1);
   const [numAdults, setNumAdults] = useState(1);
   const [detailRoom, setDetailRoom] = useState<QrCatalogRoom | null>(null);
+  const [activeType, setActiveType] = useState<string>("all");
 
   const [fullName, setFullName] = useState("");
   const [phone, setPhone] = useState("");
@@ -223,24 +225,43 @@ export default function HotelQr() {
             {catalog.rooms.length > 0 &&
               (() => {
                 const cats = groupByType(catalog.rooms);
+                const shownCats =
+                  activeType === "all" ? cats : cats.filter((c) => c.slug === activeType);
                 return (
                   <>
+                    {/* Round photo category thumbnails — tap to filter the
+                        list below. "All" first, then one per room type. */}
+                    <div className="-mx-4 px-4 overflow-x-auto">
+                      <div className="flex gap-4 w-max pb-1">
+                        <CategoryCircle
+                          label="All"
+                          active={activeType === "all"}
+                          onClick={() => setActiveType("all")}
+                        />
+                        {cats.map((cat) => (
+                          <CategoryCircle
+                            key={cat.slug}
+                            label={cat.label}
+                            cover={cat.cover}
+                            hasAc={cat.hasAc}
+                            active={activeType === cat.slug}
+                            onClick={() => setActiveType(cat.slug)}
+                          />
+                        ))}
+                      </div>
+                    </div>
+
                     <div className="flex items-center justify-between px-1">
                       <span className="text-sm font-semibold text-textPrimary">
                         Rooms free tonight
-                        <span className="text-textSecondary font-normal">
-                          {" "}
-                          · {catalog.rooms.length}
-                        </span>
+                        <span className="text-textSecondary font-normal"> · {catalog.rooms.length}</span>
                       </span>
                       <span className="text-xs text-textSecondary">
                         check-in {qrFormatTime(catalog.hotel.checkInTime)}
                       </span>
                     </div>
 
-                    {/* Grouped by room type — a heading per category, rooms
-                        (cheapest first) beneath it. No filter to tap. */}
-                    {cats.map((cat) => (
+                    {shownCats.map((cat) => (
                       <div key={cat.slug} className="space-y-2.5">
                         <div className="flex items-baseline gap-2 px-1 pt-1">
                           <h3 className="text-xs font-bold uppercase tracking-wider text-brand-dark">
@@ -544,6 +565,49 @@ export default function HotelQr() {
 
 // Group catalog rooms into room-type categories, cheapest first within and
 // across categories. Category facts (sleeps/AC/WiFi) roll up from members.
+// Round photo category thumbnail (destination-circle style). Cover photo,
+// or a soft icon circle when the type has no photo. Active = brand ring.
+function CategoryCircle({
+  label,
+  cover,
+  hasAc,
+  active,
+  onClick,
+}: {
+  label: string;
+  cover?: string;
+  hasAc?: boolean;
+  active: boolean;
+  onClick: () => void;
+}) {
+  const isAll = label === "All";
+  const Icon = isAll ? LayoutDashboard : hasAc ? Snowflake : BedDouble;
+  return (
+    <button onClick={onClick} className="flex flex-col items-center gap-1.5 w-16 shrink-0">
+      <span
+        className={`w-16 h-16 rounded-full overflow-hidden grid place-items-center transition ${
+          active ? "ring-2 ring-brand ring-offset-2 ring-offset-bg" : ""
+        }`}
+      >
+        {cover && !isAll ? (
+          <img src={cover} alt={label} className="w-full h-full object-cover" />
+        ) : (
+          <span className="w-full h-full bg-brand-soft text-brand-deep grid place-items-center">
+            <Icon className="w-6 h-6" />
+          </span>
+        )}
+      </span>
+      <span
+        className={`text-[11px] leading-tight text-center capitalize truncate max-w-full ${
+          active ? "font-semibold text-brand-dark" : "text-textSecondary"
+        }`}
+      >
+        {label.toLowerCase()}
+      </span>
+    </button>
+  );
+}
+
 function groupByType(rooms: QrCatalogRoom[]) {
   const map = new Map<string, QrCatalogRoom[]>();
   for (const r of rooms) {
@@ -562,6 +626,9 @@ function groupByType(rooms: QrCatalogRoom[]) {
         maxOccupancy: Math.max(...sorted.map((r) => r.maxOccupancy)),
         hasAc: sorted.some((r) => r.hasAc),
         hasWifi: sorted.some((r) => r.hasWifi),
+        // First available photo of the type — used for the round category
+        // thumbnail. Undefined falls back to an icon.
+        cover: sorted.flatMap((r) => r.images)[0]?.url,
         rooms: sorted,
       };
     })
