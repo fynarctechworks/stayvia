@@ -240,13 +240,13 @@ export default function Rooms() {
         <div className="space-y-5">
           {floors.map(([floorNumber, list]) => (
             <section key={floorNumber}>
-              <div className="flex items-baseline justify-between mb-2">
+              <div className="flex items-baseline gap-2 mb-2">
                 <h2 className="text-sm font-bold tracking-[0.15em] uppercase text-brand-dark">
                   Floor {floorNumber}
                 </h2>
-                <div className="text-[11px] text-textSecondary">
-                  {list.length} room{list.length === 1 ? "" : "s"}
-                </div>
+                <span className="text-[11px] text-textSecondary">
+                  · {list.length} room{list.length === 1 ? "" : "s"}
+                </span>
               </div>
               <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3">
                 {list.map((r) => (
