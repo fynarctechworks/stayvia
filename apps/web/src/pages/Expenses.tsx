@@ -34,7 +34,7 @@ import {
   rangeForPreset,
   type DatePresetKey,
 } from "@/components/DatePresetBar";
-import { Loader } from "@/components/Loader";
+import { ListSkeleton } from "@/components/kit";
 import { StickyBar } from "@/components/StickyBar";
 import { Money } from "@/components/Money";
 import { useToast } from "@/components/Toast";
@@ -334,7 +334,7 @@ export default function Expenses() {
       </StickyBar>
 
       {isLoading ? (
-        <Loader />
+        <ListSkeleton rows={6} />
       ) : rows.length === 0 ? (
         <div className="card flex flex-col items-center justify-center py-16 text-center text-textSecondary">
           <Receipt className="w-10 h-10 mb-3 opacity-40" />

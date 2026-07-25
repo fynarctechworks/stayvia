@@ -13,12 +13,13 @@ import {
   Wallet,
   X,
 } from "@/lib/micons";
+import { format } from "date-fns";
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "@/auth/AuthContext";
 import { Can } from "@/auth/Can";
 import { useRoomTypes } from "@/hooks/useRoomTypes";
-import { Loader } from "@/components/Loader";
+import { KpiCard, KpiSkeletonRow, StackedAvailability } from "@/components/kit";
 import { RoomActionPopover } from "@/components/RoomActionPopover";
 import { api } from "@/lib/api";
 import { inr } from "@/lib/utils";
@@ -110,12 +111,27 @@ export default function Dashboard() {
     refetchInterval: 30_000,
   });
 
-  if (isLoading || !data) return <Loader label="Loading dashboard…" size="lg" />;
+  if (isLoading || !data) {
+    return (
+      <div className="space-y-4">
+        <div className="flex items-center justify-between">
+          <h1 className="text-2xl font-bold text-brand-dark">Dashboard</h1>
+        </div>
+        <KpiSkeletonRow />
+        <KpiSkeletonRow />
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between flex-wrap gap-3">
-        <h1 className="text-2xl font-bold text-brand-dark">Dashboard</h1>
+      <div className="flex items-end justify-between flex-wrap gap-3">
+        <div>
+          <h1 className="text-2xl font-bold text-brand-dark">Dashboard</h1>
+          <div className="text-sm text-textSecondary mt-0.5">
+            {format(new Date(), "EEEE, d MMM yyyy")}
+          </div>
+        </div>
         <div className="flex items-center gap-2">
           <button
             onClick={() => navigate("/reservations/new?mode=booking")}
@@ -144,22 +160,24 @@ export default function Dashboard() {
       {data.occupancy.total === 0 && <GetStartedCard />}
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <StatCard
-          icon={<BedDouble className="w-5 h-5" />}
+        <KpiCard
+          featured
+          icon={<BedDouble className="w-4 h-4" />}
           label="Occupancy"
           value={`${data.occupancy.occupied} / ${data.occupancy.total} rooms`}
           sub={`${data.occupancy.percentage}% occupied`}
+          to="/rooms"
         />
-        <StatCard
-          icon={<LogIn className="w-5 h-5" />}
+        <KpiCard
+          icon={<LogIn className="w-4 h-4" />}
           label="Today's Check-ins"
           value={String(data.today_checkins.count)}
           sub={`${
             data.today_checkins.reservations.filter((r) => r.status === "confirmed").length
           } pending`}
         />
-        <StatCard
-          icon={<LogOut className="w-5 h-5" />}
+        <KpiCard
+          icon={<LogOut className="w-4 h-4" />}
           label="Today's Check-outs"
           value={String(data.today_checkouts.count)}
           sub={`${
@@ -167,10 +185,11 @@ export default function Dashboard() {
           } pending`}
         />
         <Can any={["view_revenue", "view_daily_collections"]}>
-          <StatCard
-            icon={<Wallet className="w-5 h-5" />}
+          <KpiCard
+            icon={<Wallet className="w-4 h-4" />}
             label="Revenue Today"
             value={inr(data.revenue_today?.total_collected ?? 0)}
+            to="/collections"
             // Net can go negative when a refund lands today for a booking
             // paid on an earlier day. Spell out the two halves so the minus
             // number is never a mystery at the desk.
@@ -195,38 +214,43 @@ export default function Dashboard() {
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           {data.revenue_kpis?.mtd_collected !== undefined && (
             <Can do="view_revenue">
-              <StatCard
-                icon={<Receipt className="w-5 h-5" />}
+              <KpiCard
+                icon={<Receipt className="w-4 h-4" />}
                 label="Revenue MTD"
                 value={inr(data.revenue_kpis.mtd_collected)}
                 sub="collected this month"
+                to="/reports"
               />
             </Can>
           )}
           {data.revenue_kpis?.outstanding_balance !== undefined && (
             <Can any={["view_revenue", "view_daily_collections"]}>
-              <StatCard
-                icon={<Wallet className="w-5 h-5" />}
+              <KpiCard
+                icon={<Wallet className="w-4 h-4" />}
                 label="Outstanding Balance"
                 value={inr(data.revenue_kpis.outstanding_balance)}
                 sub="unpaid across all bookings"
+                tone="warning"
               />
             </Can>
           )}
           {data.operations_kpis && (
-            <StatCard
-              icon={<LogOut className="w-5 h-5" />}
+            <KpiCard
+              icon={<LogOut className="w-4 h-4" />}
               label="Pending Check-outs"
               value={String(data.operations_kpis.pending_checkouts_today)}
               sub="due today, not yet processed"
+              tone="info"
             />
           )}
           {data.operations_kpis && (
-            <StatCard
-              icon={<BedDouble className="w-5 h-5" />}
+            <KpiCard
+              icon={<BedDouble className="w-4 h-4" />}
               label="Rooms Out of Service"
               value={String(data.operations_kpis.rooms_out_of_service)}
               sub="maintenance + dirty"
+              tone="danger"
+              to="/housekeeping"
             />
           )}
         </div>
@@ -242,6 +266,28 @@ export default function Dashboard() {
           <TodaysCollections data={data.revenue_today} />
         )}
       </Can>
+
+      {/* Reference-style availability block: one proportion bar for the
+          whole property + a count per state. Same data as the floor grid
+          below, rolled up — answers "what's the house like right now?"
+          before staff scan individual rooms. */}
+      {data.room_grid.length > 0 && (() => {
+        const s = rollupFloorStats(data.room_grid);
+        return (
+          <div className="card">
+            <h2 className="font-semibold text-brand-dark mb-4">Room Availability</h2>
+            <StackedAvailability
+              segments={[
+                { label: "Occupied", count: s.occupied, barClass: "bg-brand-dark" },
+                { label: "Reserved", count: s.reserved + s.held, barClass: "bg-info" },
+                { label: "Available", count: s.available, barClass: "bg-brand" },
+                { label: "Not Ready", count: s.dirty + s.maintenance, barClass: "bg-warning" },
+              ]}
+            />
+          </div>
+        );
+      })()}
+
 
       <div className="card">
         <h2 className="font-semibold text-brand-dark mb-3">Availability by Floor</h2>
@@ -625,29 +671,6 @@ function GetStartedCard() {
           <X className="w-4 h-4" />
         </button>
       </div>
-    </div>
-  );
-}
-
-function StatCard({
-  icon,
-  label,
-  value,
-  sub,
-}: {
-  icon: React.ReactNode;
-  label: string;
-  value: string;
-  sub: string;
-}) {
-  return (
-    <div className="card">
-      <div className="flex items-center justify-between">
-        <div className="text-textSecondary text-xs uppercase tracking-wide">{label}</div>
-        <div className="text-accentBlue">{icon}</div>
-      </div>
-      <div className="text-2xl font-bold text-navy mt-2">{value}</div>
-      <div className="text-xs text-textSecondary mt-1">{sub}</div>
     </div>
   );
 }

@@ -20,7 +20,7 @@ import {
 import type { LucideIcon } from "@/lib/micons";
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Loader } from "@/components/Loader";
+import { EmptyState, ListSkeleton } from "@/components/kit";
 import { StickyBar } from "@/components/StickyBar";
 import { Combobox } from "@/components/Combobox";
 import { EmailInput } from "@/components/EmailInput";
@@ -242,9 +242,9 @@ export default function Guests() {
       </StickyBar>
 
       {isLoading ? (
-        <Loader />
+        <ListSkeleton rows={6} />
       ) : guests.length === 0 ? (
-        <div className="card text-textSecondary text-center py-10">No guests found.</div>
+        <div className="card"><EmptyState title="No guests found" hint="Try a different name, phone or ID search." /></div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
           {guests.map((g) => (

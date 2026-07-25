@@ -75,7 +75,7 @@ interface Detail {
   status: string;
   // Booking source. Drives the Make Complimentary button (hidden when
   // already 'complimentary') and the booking-source pill on the page.
-  bookingSource?: "walkin" | "phone_whatsapp" | "complimentary";
+  bookingSource?: "walkin" | "phone_whatsapp" | "complimentary" | "qr";
   checkedInAt: string | null;
   // Actual check-out timestamp — set when staff completes checkout.
   // The dates card prefers this over plannedCheckOutAt / policy
@@ -379,6 +379,12 @@ export default function ReservationDetail() {
       if (ok) checkIn.mutate();
       return;
     }
+    // QR self-bookings verified the guest's phone with an OTP at booking
+    // time; the server accepts that verification, so no second code here.
+    if (r?.bookingSource === "qr") {
+      checkIn.mutate();
+      return;
+    }
     setShowOtp(true);
   }
 
@@ -435,6 +441,29 @@ export default function ReservationDetail() {
     onSuccess: () => {
       invalidate();
       toast("Extension undone", "success");
+    },
+    onError: (e: Error) => toast(e.message, "error"),
+  });
+
+  // QR self-booking confirmation: hold → confirmed. The desk verifies the
+  // guest + takes payment first; the API re-checks room availability (holds
+  // never blocked inventory).
+  const confirmHold = useMutation({
+    mutationFn: () => api.post(`/reservations/${id}/confirm`, {}),
+    onSuccess: () => {
+      invalidate();
+      qc.invalidateQueries({ queryKey: ["dashboard"] });
+      // The guest is standing at the desk — flow straight into check-in.
+      // KYC photos are legally required first; with them on file the
+      // check-in fires immediately (the booking-time OTP already verified
+      // the phone, so no second code).
+      if (guest?.kycVerifiedAt && guest?.idProofPhotoFront && guest?.photoUrl) {
+        toast("Booking confirmed. Checking in…", "success");
+        checkIn.mutate();
+      } else {
+        toast("Booking confirmed. Add the guest's KYC photos to finish check-in.", "success");
+        setShowKyc(true);
+      }
     },
     onError: (e: Error) => toast(e.message, "error"),
   });
@@ -747,6 +776,58 @@ export default function ReservationDetail() {
             </button>
           )}
       </div>
+
+      {/* QR self-booking awaiting the desk. Confirm = verify guest + take
+          payment, then the hold becomes a real confirmed booking. Reject =
+          the normal cancel flow (holds carry no payments). */}
+      {r.status === "hold" && r.bookingSource === "qr" && (
+        <div className="card border-warning/50 bg-warning/5 flex items-start gap-3 flex-wrap">
+          <div className="text-warning text-lg leading-none mt-0.5">⏳</div>
+          <div className="flex-1 min-w-48">
+            <div className="font-semibold text-navy">
+              Guest self-booking, awaiting confirmation
+            </div>
+            <div className="text-xs text-textSecondary mt-0.5">
+              Booked from the hotel QR. Verify the guest's ID, take payment, then
+              confirm. Unconfirmed requests expire automatically and never block the
+              room.
+            </div>
+          </div>
+          {can("create_reservations") && (
+            <div className="flex items-center gap-2">
+              <button
+                className="btn-primary !h-9"
+                disabled={confirmHold.isPending}
+                onClick={() => confirmHold.mutate()}
+              >
+                {confirmHold.isPending ? "Confirming…" : "Confirm booking"}
+              </button>
+              {can("cancel_reservations") && (
+                <button
+                  className="btn-secondary !h-9"
+                  onClick={async () => {
+                    const ok = await dialog.confirm({
+                      title: "Reject this booking request?",
+                      message: "The request will be cancelled. The guest keeps nothing; no payment was taken.",
+                      okLabel: "Reject request",
+                      cancelLabel: "Keep it",
+                      tone: "danger",
+                    });
+                    if (ok)
+                      cancel.mutate({
+                        cancellationReason: "QR booking rejected at the front desk",
+                        refundMode: "cash",
+                        cancellationFee: 0,
+                      });
+                  }}
+                >
+                  Reject
+                </button>
+              )}
+            </div>
+          )}
+        </div>
+      )}
 
       {overdueDays > 0 && (
         <div className="card border-danger/40 bg-danger/5 flex items-start gap-3">
@@ -1073,7 +1154,7 @@ export default function ReservationDetail() {
           </button>
         )}
         {Number(r.balanceDue) > 0.009 && r.status !== "cancelled" && can("record_payments") && (
-          <button className="btn-secondary inline-flex items-center gap-2" onClick={() => setShowPay(true)}>
+          <button className="btn-primary inline-flex items-center gap-2" onClick={() => setShowPay(true)}>
             <CreditCard className="w-4 h-4" /> Record Payment
           </button>
         )}
@@ -1093,9 +1174,10 @@ export default function ReservationDetail() {
             <Gift className="w-4 h-4" /> Make Complimentary
           </button>
         )}
+        <div className="ml-auto flex flex-wrap gap-2">
         {r.status === "confirmed" && can("cancel_reservations") && (
           <button
-            className="btn-secondary inline-flex items-center gap-2"
+            className="btn-secondary !text-danger !border-danger/40 hover:!bg-danger/5 inline-flex items-center gap-2"
             onClick={async () => {
               const advance = Number(r.advancePaid ?? 0);
               const advanceLine =
@@ -1126,6 +1208,7 @@ export default function ReservationDetail() {
             <XCircle className="w-4 h-4" /> Cancel
           </button>
         )}
+        </div>
       </div>
 
       {err && <div className="card bg-danger/5 border-danger text-danger text-sm">{err}</div>}
@@ -4900,7 +4983,7 @@ function ChargeModal(props: {
             className="input"
             value={description}
             onChange={(e) => setDescription(e.target.value)}
-            placeholder="Laundry, restaurant, extra bed…"
+            placeholder="Laundry, restaurant, extra person…"
           />
           {looksLikeLateFee && (
             <div className="text-xs text-warning mt-1 flex items-start gap-1.5">

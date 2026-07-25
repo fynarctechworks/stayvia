@@ -1,11 +1,26 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Pencil, Plus, Snowflake, Trash2, Tv, Wifi } from "@/lib/micons";
-import { useEffect, useState } from "react";
+import {
+  Loader2,
+  Pencil,
+  Plus,
+  QrCode,
+  Snowflake,
+  Star,
+  StarFill,
+  Trash2,
+  Tv,
+  Upload,
+  Wifi,
+  X,
+} from "@/lib/micons";
+import { useEffect, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { useAuth } from "@/auth/AuthContext";
 import { useDialog } from "@/components/Dialog";
 import { Loader } from "@/components/Loader";
+import QrCodeModal from "@/components/QrCodeModal";
 import { RoomTypesManager } from "@/components/RoomTypesManager";
+import { useToast } from "@/components/Toast";
 import { useRoomTypes, labelForRoomType } from "@/hooks/useRoomTypes";
 import { api } from "@/lib/api";
 import { invalidateRoomData } from "@/lib/invalidate";
@@ -22,6 +37,7 @@ interface Room {
   hasTv: boolean;
   hasWifi: boolean;
   status: string;
+  qrToken: string;
   notes: string | null;
 }
 
@@ -36,6 +52,7 @@ export default function Rooms() {
   );
   const [showAdd, setShowAdd] = useState(false);
   const [editing, setEditing] = useState<Room | null>(null);
+  const [qrRoom, setQrRoom] = useState<Room | null>(null);
   const [floor, setFloor] = useState<string>("");
   const [status, setStatus] = useState<string>("");
   const [type, setType] = useState<string>("");
@@ -242,6 +259,7 @@ export default function Rooms() {
                     onEdit={
                       profile?.role === "admin" ? () => setEditing(r) : undefined
                     }
+                    onQr={() => setQrRoom(r)}
                   />
                 ))}
               </div>
@@ -250,6 +268,15 @@ export default function Rooms() {
         </div>
       )}
 
+      {qrRoom && (
+        <QrCodeModal
+          open
+          onClose={() => setQrRoom(null)}
+          url={`${window.location.origin}/r/${qrRoom.qrToken}`}
+          title={`Room ${qrRoom.roomNumber}`}
+          subtitle="Stick this inside the room. Guests scan it for WiFi & requests"
+        />
+      )}
       {(showAdd || editing) && (
         <RoomModal
           room={editing}
@@ -316,10 +343,12 @@ function RoomCard({
   room,
   typeLabel,
   onEdit,
+  onQr,
 }: {
   room: Room;
   typeLabel: string;
   onEdit?: () => void;
+  onQr?: () => void;
 }) {
   const v = statusVisual(room.status);
   return (
@@ -361,22 +390,171 @@ function RoomCard({
             </span>
           )}
         </div>
-        <div className="flex items-end justify-between">
-          <div className="font-mono text-sm font-semibold text-brand-dark">
-            {inr(room.baseRate)}
-            <span className="text-[10px] font-normal text-textSecondary"> / night</span>
-          </div>
+        <div className="font-mono text-sm font-semibold text-brand-dark">
+          {inr(room.baseRate)}
+          <span className="text-[10px] font-normal text-textSecondary"> / night</span>
+        </div>
+      </div>
+      {/* Always-visible action bar. Hover-reveal text links were invisible on
+          touch screens and easy to miss on desktop. */}
+      {(onQr || onEdit) && (
+        <div className="grid grid-cols-2 border-t border-borderc divide-x divide-borderc">
+          {onQr && (
+            <button
+              onClick={onQr}
+              className={`inline-flex items-center justify-center gap-1.5 h-9 text-xs font-medium text-navy hover:bg-brand/5 hover:text-brand-dark transition-colors ${!onEdit ? "col-span-2" : ""}`}
+              aria-label={`Room ${room.roomNumber} QR sticker`}
+            >
+              <QrCode className="w-4 h-4" /> QR
+            </button>
+          )}
           {onEdit && (
             <button
               onClick={onEdit}
-              className="inline-flex items-center gap-1 text-[11px] text-accentBlue hover:underline opacity-0 group-hover:opacity-100 transition-opacity"
+              className={`inline-flex items-center justify-center gap-1.5 h-9 text-xs font-medium text-navy hover:bg-brand/5 hover:text-brand-dark transition-colors ${!onQr ? "col-span-2" : ""}`}
               aria-label={`Edit room ${room.roomNumber}`}
             >
-              <Pencil className="w-3 h-3" /> Edit
+              <Pencil className="w-4 h-4" /> Edit
             </button>
           )}
         </div>
+      )}
+    </div>
+  );
+}
+
+interface RoomImg {
+  id: string;
+  url: string;
+  caption: string | null;
+  sortOrder: number;
+  isPrimary: boolean;
+}
+
+// Room photo manager — lives in the edit modal. These images are what guests
+// see on the booking QR page (/h/:token). Cover = the first shown; set it
+// with the star. Uploads go to the public bucket via multipart.
+function RoomImagesManager({ roomId, roomNumber }: { roomId: string; roomNumber: string }) {
+  const qc = useQueryClient();
+  const { toast } = useToast();
+  const fileRef = useRef<HTMLInputElement>(null);
+  const [uploading, setUploading] = useState(false);
+
+  const { data: images = [], isLoading } = useQuery({
+    queryKey: ["room-images", roomId],
+    queryFn: () => api.get<RoomImg[]>(`/rooms/${roomId}/images`),
+  });
+
+  async function upload(files: FileList) {
+    if (!files.length) return;
+    setUploading(true);
+    try {
+      const fd = new FormData();
+      Array.from(files)
+        .slice(0, 8)
+        .forEach((f) => fd.append("files", f));
+      await api.upload(`/rooms/${roomId}/images`, fd);
+      qc.invalidateQueries({ queryKey: ["room-images", roomId] });
+      toast("Photos added", "success");
+    } catch (e) {
+      toast(e instanceof Error ? e.message : "Upload failed", "error");
+    } finally {
+      setUploading(false);
+      if (fileRef.current) fileRef.current.value = "";
+    }
+  }
+
+  const setPrimary = useMutation({
+    mutationFn: (imageId: string) =>
+      api.patch(`/rooms/${roomId}/images/${imageId}`, { isPrimary: true }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["room-images", roomId] }),
+  });
+  const remove = useMutation({
+    mutationFn: (imageId: string) => api.del(`/rooms/${roomId}/images/${imageId}`),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["room-images", roomId] }),
+  });
+
+  // Cover first, then by sort order.
+  const ordered = [...images].sort(
+    (a, b) => Number(b.isPrimary) - Number(a.isPrimary) || a.sortOrder - b.sortOrder,
+  );
+
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-2">
+        <div>
+          <label className="label">Photos</label>
+          <p className="text-[11px] text-textSecondary">
+            Shown to guests on the booking QR. First (★) is the cover.
+          </p>
+        </div>
+        <button
+          type="button"
+          className="btn-secondary !h-8 inline-flex items-center gap-1.5 text-xs"
+          disabled={uploading}
+          onClick={() => fileRef.current?.click()}
+        >
+          {uploading ? (
+            <Loader2 className="w-3.5 h-3.5 animate-spin" />
+          ) : (
+            <Upload className="w-3.5 h-3.5" />
+          )}
+          {uploading ? "Uploading…" : "Add photos"}
+        </button>
+        <input
+          ref={fileRef}
+          type="file"
+          accept="image/jpeg,image/png,image/webp"
+          multiple
+          className="hidden"
+          onChange={(e) => e.target.files && upload(e.target.files)}
+        />
       </div>
+
+      {isLoading ? (
+        <div className="text-xs text-textSecondary py-3">Loading photos…</div>
+      ) : ordered.length === 0 ? (
+        <button
+          type="button"
+          onClick={() => fileRef.current?.click()}
+          className="w-full border border-dashed border-borderc rounded-md py-6 text-xs text-textSecondary hover:border-brand hover:text-brand-dark transition"
+        >
+          No photos yet — add some so guests can see Room {roomNumber}
+        </button>
+      ) : (
+        <div className="grid grid-cols-3 gap-2">
+          {ordered.map((im) => (
+            <div key={im.id} className="relative group aspect-square rounded-md overflow-hidden border border-borderc">
+              <img src={im.url} alt="" className="w-full h-full object-cover" />
+              {im.isPrimary && (
+                <span className="absolute top-1 left-1 bg-brand text-brand-dark text-[9px] font-bold rounded-full px-1.5 py-0.5 inline-flex items-center gap-0.5">
+                  <StarFill className="w-2.5 h-2.5" /> Cover
+                </span>
+              )}
+              <div className="absolute inset-0 bg-black/0 group-hover:bg-black/30 transition flex items-center justify-center gap-1.5 opacity-0 group-hover:opacity-100">
+                {!im.isPrimary && (
+                  <button
+                    type="button"
+                    title="Set as cover"
+                    className="w-7 h-7 rounded-full bg-white/90 grid place-items-center hover:bg-white"
+                    onClick={() => setPrimary.mutate(im.id)}
+                  >
+                    <Star className="w-3.5 h-3.5 text-navy" />
+                  </button>
+                )}
+                <button
+                  type="button"
+                  title="Remove"
+                  className="w-7 h-7 rounded-full bg-white/90 grid place-items-center hover:bg-white"
+                  onClick={() => remove.mutate(im.id)}
+                >
+                  <X className="w-3.5 h-3.5 text-danger" />
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -578,6 +756,14 @@ function RoomModal({ room, onClose }: { room: Room | null; onClose: () => void }
             />
           </div>
         </div>
+
+        {/* Photos — only after the room exists (needs an id to attach to).
+            These are what guests see on the booking QR page. */}
+        {isEdit && room && (
+          <div className="border-t border-borderc pt-4">
+            <RoomImagesManager roomId={room.id} roomNumber={room.roomNumber} />
+          </div>
+        )}
 
         {err && <div className="text-danger text-xs">{err}</div>}
 

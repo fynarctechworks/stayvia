@@ -30,6 +30,8 @@ const Expenses = lazy(() => import("@/pages/Expenses"));
 const ExpenseDetail = lazy(() => import("@/pages/ExpenseDetail"));
 const MaintenanceDetail = lazy(() => import("@/pages/MaintenanceDetail"));
 const Billing = lazy(() => import("@/pages/Billing"));
+const RoomQr = lazy(() => import("@/pages/RoomQr"));
+const HotelQr = lazy(() => import("@/pages/HotelQr"));
 
 export default function App() {
   return (
@@ -43,6 +45,10 @@ export default function App() {
             arrives from the recovery email link with a token in the URL
             hash. No AppShell. */}
         <Route path="/reset-password" element={<ResetPassword />} />
+        {/* Public QR pages — a guest's phone, no auth, no AppShell.
+            /r/:token = in-room sticker, /h/:token = front-desk master QR. */}
+        <Route path="/r/:token" element={<RoomQr />} />
+        <Route path="/h/:token" element={<HotelQr />} />
 
         {/* Dashboard is mounted at both / and /dashboard so the URL is
             explicit when staff types or bookmarks the dashboard. Both

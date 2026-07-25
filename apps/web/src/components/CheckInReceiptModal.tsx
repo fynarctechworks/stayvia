@@ -17,7 +17,7 @@ export interface CheckInReceiptData {
   // Only meaningful for `phone_whatsapp` (pre-booking, guest not yet
   // on premises). Walk-ins are already at the desk; complimentary
   // bookings don't carry a balance.
-  bookingSource?: "walkin" | "phone_whatsapp" | "complimentary";
+  bookingSource?: "walkin" | "phone_whatsapp" | "complimentary" | "qr";
   checkInDate: string;
   checkOutDate: string;
   checkedInAt?: string | null;
@@ -551,7 +551,7 @@ export function CheckInReceiptModal({ data, onClose, variant = "checkin" }: Prop
                       <tr>
                         <td className="py-1.5 border-b border-borderc"></td>
                         <td className="py-1.5 border-b border-borderc text-textSecondary">
-                          + Extra bed × {rm.extraBeds}
+                          + Extra person × {rm.extraBeds}
                         </td>
                         <td className="py-1.5 border-b border-borderc text-right font-mono text-textSecondary">
                           {inr(rm.extraBedRate!)}

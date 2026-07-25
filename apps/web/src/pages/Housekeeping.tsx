@@ -3,7 +3,7 @@ import { AlertTriangle, Check } from "@/lib/micons";
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/auth/AuthContext";
-import { Loader } from "@/components/Loader";
+import { ListSkeleton } from "@/components/kit";
 import { NewIssueModal } from "@/components/NewIssueModal";
 import { StatusBadge } from "@/components/StatusBadge";
 import { api } from "@/lib/api";
@@ -174,7 +174,7 @@ export default function Housekeeping() {
       {err && <div className="card bg-danger/5 border-danger text-danger text-sm">{err}</div>}
 
       {isLoading ? (
-        <Loader />
+        <ListSkeleton rows={6} />
       ) : sorted.length === 0 ? (
         <div className="card flex flex-col items-center justify-center py-16 text-center text-textSecondary">
           <div className="text-sm">No rooms match this filter.</div>

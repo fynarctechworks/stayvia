@@ -15,7 +15,7 @@ import { ApiError, api, newIdempotencyKey } from "@/lib/api";
 import { citiesForState } from "@/lib/indianCities";
 import { INDIAN_STATES, INDIAN_UNION_TERRITORIES } from "@/lib/indianStates";
 import { invalidateReservationData } from "@/lib/invalidate";
-import { inr } from "@/lib/utils";
+import { ID_PROOF_SPECS, inr, sanitizeIdProofNumber } from "@/lib/utils";
 
 function describeApiError(e: unknown): string {
   // The API's error middleware already humanizes Zod errors into a
@@ -1428,7 +1428,33 @@ export default function NewReservation() {
         </div>
       )}
 
-      <div className="card space-y-3">
+      {/* Step rail — jump-scroll chips mirroring the numbered sections.
+          Pure navigation; no section is hidden or gated. */}
+      <div className="sticky top-0 z-30 -mx-1 px-1 py-2 bg-bg/95 backdrop-blur border-b border-borderc/60 flex gap-1.5 overflow-x-auto">
+        {[
+          [1, "Stay"],
+          [2, "Guest"],
+          [3, "Rooms"],
+          [4, "Source"],
+          [5, "Payment"],
+        ].map(([n, label]) => (
+          <button
+            key={n}
+            type="button"
+            onClick={() =>
+              document.getElementById(`step-${n}`)?.scrollIntoView({ behavior: "smooth" })
+            }
+            className="inline-flex items-center gap-1.5 h-8 px-2.5 rounded-full border border-borderc bg-surface text-xs font-medium text-textPrimary hover:border-brand whitespace-nowrap transition-colors"
+          >
+            <span className="w-4.5 h-4.5 min-w-[18px] grid place-items-center rounded-full bg-brand-soft text-brand-deep text-[10px] font-bold">
+              {n}
+            </span>
+            {label}
+          </button>
+        ))}
+      </div>
+
+      <div id="step-1" className="card space-y-3 scroll-mt-20">
         <h2 className="font-semibold text-navy">1. Stay Details</h2>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
           <div>
@@ -1566,7 +1592,7 @@ export default function NewReservation() {
               className="input"
               value={specialRequests}
               onChange={(e) => setSpecialRequests(e.target.value)}
-              placeholder="Early check-in, extra bed, etc."
+              placeholder="Early check-in, extra person, etc."
             />
           </div>
         </div>
@@ -1588,7 +1614,7 @@ export default function NewReservation() {
         </div>
       </div>
 
-      <div className="card space-y-3">
+      <div id="step-2" className="card space-y-3 scroll-mt-20">
         <div className="flex items-center justify-between">
           <h2 className="font-semibold text-navy">2. Guest</h2>
           <ArrowKeyGroup className="flex gap-2 text-xs">
@@ -1763,9 +1789,15 @@ export default function NewReservation() {
               <select
                 className="input"
                 value={newGuest.idProofType}
-                onChange={(e) =>
-                  setNewGuest({ ...newGuest, idProofType: e.target.value as typeof newGuest.idProofType })
-                }
+                onChange={(e) => {
+                  const idProofType = e.target.value as typeof newGuest.idProofType;
+                  setNewGuest({
+                    ...newGuest,
+                    idProofType,
+                    // Re-clamp the number to the new type's rules.
+                    idProofNumber: sanitizeIdProofNumber(idProofType, newGuest.idProofNumber),
+                  });
+                }}
               >
                 <option value="aadhaar">Aadhaar</option>
                 <option value="pan">PAN</option>
@@ -1779,9 +1811,17 @@ export default function NewReservation() {
                 ID Number <span className="text-danger">*</span>
               </label>
               <input
-                className="input"
+                className="input font-mono"
+                inputMode={ID_PROOF_SPECS[newGuest.idProofType]?.digitsOnly ? "numeric" : "text"}
+                maxLength={ID_PROOF_SPECS[newGuest.idProofType]?.maxLength ?? 50}
+                placeholder={ID_PROOF_SPECS[newGuest.idProofType]?.placeholder}
                 value={newGuest.idProofNumber}
-                onChange={(e) => setNewGuest({ ...newGuest, idProofNumber: e.target.value })}
+                onChange={(e) =>
+                  setNewGuest({
+                    ...newGuest,
+                    idProofNumber: sanitizeIdProofNumber(newGuest.idProofType, e.target.value),
+                  })
+                }
               />
             </div>
             <div>
@@ -1947,7 +1987,7 @@ export default function NewReservation() {
         </>
       )}
 
-      <div className="card space-y-3">
+      <div id="step-3" className="card space-y-3 scroll-mt-20">
         <div className="flex items-center justify-between flex-wrap gap-3">
           <h2 className="font-semibold text-navy">3. Rooms</h2>
           {availRooms.data && availRooms.data.length > 0 && (
@@ -1988,11 +2028,11 @@ export default function NewReservation() {
               <AlertTriangle className="w-4 h-4 text-danger shrink-0 mt-0.5" />
               <div className="text-sm leading-snug">
                 <div className="font-semibold text-danger">
-                  {adults} adult{adults === 1 ? "" : "s"} but selected rooms sleep {effectiveCapacity}.
+                  {adults} adult{adults === 1 ? "" : "s"}, but the selected room{selectedRooms.length === 1 ? "'s" : "s'"} guest limit is {effectiveCapacity}.
                 </div>
                 <div className="text-textSecondary mt-0.5">
-                  Add an extra bed to a room below, or select another room -{" "}
-                  <strong>{capacityShortfall}</strong> more {capacityShortfall === 1 ? "berth" : "berths"} needed.
+                  Add an extra person to a room below, or select another room -{" "}
+                  space for <strong>{capacityShortfall}</strong> more guest{capacityShortfall === 1 ? "" : "s"} needed.
                 </div>
               </div>
             </div>
@@ -2000,7 +2040,7 @@ export default function NewReservation() {
             <div className="text-xs text-success flex items-center gap-1.5">
               <Users className="w-3.5 h-3.5" />
               Capacity OK - sleeps {effectiveCapacity} for {adults} adult{adults === 1 ? "" : "s"}
-              {extraBedCapacity > 0 ? ` (incl. ${extraBedCapacity} extra bed${extraBedCapacity === 1 ? "" : "s"})` : ""}.
+              {extraBedCapacity > 0 ? ` (incl. ${extraBedCapacity} extra person${extraBedCapacity === 1 ? "" : "s"})` : ""}.
             </div>
           )
         )}
@@ -2243,7 +2283,7 @@ export default function NewReservation() {
                       )}
                       {selected.extraBeds > 0 && (
                         <span>
-                          · {selected.extraBeds} extra bed
+                          · {selected.extraBeds} extra person
                           {selected.extraBeds === 1 ? "" : "s"} (
                           {inr(selected.extraBeds * selected.extraBedRate * (isShortStay ? 1 : nights))})
                         </span>
@@ -2307,7 +2347,7 @@ export default function NewReservation() {
                           base; each bed raises effective capacity. */}
                       {extraBedRateForType(selected.soldAsType ?? selected.nativeType) > 0 && (
                         <div>
-                          <label className="label block mb-1">Extra beds</label>
+                          <label className="label block mb-1">Extra persons</label>
                           <div className="flex items-center gap-2 flex-wrap">
                             <button
                               type="button"
@@ -2317,7 +2357,7 @@ export default function NewReservation() {
                                 e.stopPropagation();
                                 updateExtraBeds(r.id, selected.extraBeds - 1);
                               }}
-                              aria-label="Remove extra bed"
+                              aria-label="Remove extra person"
                             >
                               <Minus className="w-3.5 h-3.5" />
                             </button>
@@ -2336,7 +2376,7 @@ export default function NewReservation() {
                                 e.stopPropagation();
                                 updateExtraBeds(r.id, selected.extraBeds + 1);
                               }}
-                              aria-label="Add extra bed"
+                              aria-label="Add extra person"
                             >
                               <Plus className="w-3.5 h-3.5" />
                             </button>
@@ -2349,7 +2389,7 @@ export default function NewReservation() {
                               booking. */}
                           <div className="flex items-center gap-1.5 mt-1.5">
                             <span className="text-[11px] text-textSecondary whitespace-nowrap">
-                              ₹/bed/night
+                              ₹/person/night
                             </span>
                             <input
                               className="input !h-8 text-sm !w-28"
@@ -2368,7 +2408,7 @@ export default function NewReservation() {
                               scrolling to the summary. 0 beds → no charge. */}
                           {selected.extraBeds > 0 && selected.extraBedRate > 0 && (
                             <div className="text-[11px] text-textSecondary mt-1.5">
-                              Extra-bed charge:{" "}
+                              Extra-person charge:{" "}
                               <span className="font-mono font-semibold text-brand-dark">
                                 {inr(
                                   selected.extraBeds *
@@ -2398,7 +2438,7 @@ export default function NewReservation() {
         )}
       </div>
 
-      <div className="card space-y-3">
+      <div id="step-4" className="card space-y-3 scroll-mt-20">
         <h2 className="font-semibold text-brand-dark">4. Booking Source</h2>
         <ArrowKeyGroup className={`grid gap-2 ${compFeatureOn ? "grid-cols-3" : "grid-cols-2"}`}>
           {(
@@ -2468,7 +2508,7 @@ export default function NewReservation() {
       </div>
 
       {!isCreditBooking && (
-        <div className="card space-y-3">
+        <div id="step-5" className="card space-y-3 scroll-mt-20">
           <h2 className="font-semibold text-navy">5. Advance Payment (optional)</h2>
           <div className="grid grid-cols-2 gap-3">
             <div>
@@ -2598,7 +2638,7 @@ export default function NewReservation() {
         {extraBedAmount > 0 && (
           <div className="flex justify-between text-sm text-textSecondary">
             <span>
-              Extra beds (
+              Extra persons (
               {selectedRooms.reduce((a, r) => a + r.extraBeds, 0)} ×{" "}
               {isShortStay ? `${shortStayDurationHours} hrs` : `${nights} night${nights === 1 ? "" : "s"}`})
             </span>
@@ -3253,11 +3293,14 @@ function CoGuestCard(props: {
               <select
                 className="input"
                 value={f.idProofType}
-                onChange={(e) =>
+                onChange={(e) => {
+                  const idProofType = e.target.value as typeof f.idProofType;
                   setF({
-                    idProofType: e.target.value as typeof f.idProofType,
-                  })
-                }
+                    idProofType,
+                    // Re-clamp the number to the new type's rules.
+                    idProofNumber: sanitizeIdProofNumber(idProofType, f.idProofNumber),
+                  });
+                }}
               >
                 <option value="aadhaar">Aadhaar</option>
                 <option value="pan">PAN</option>
@@ -3271,9 +3314,14 @@ function CoGuestCard(props: {
                 ID Number <span className="text-danger">*</span>
               </label>
               <input
-                className="input"
+                className="input font-mono"
+                inputMode={ID_PROOF_SPECS[f.idProofType]?.digitsOnly ? "numeric" : "text"}
+                maxLength={ID_PROOF_SPECS[f.idProofType]?.maxLength ?? 50}
+                placeholder={ID_PROOF_SPECS[f.idProofType]?.placeholder}
                 value={f.idProofNumber}
-                onChange={(e) => setF({ idProofNumber: e.target.value })}
+                onChange={(e) =>
+                  setF({ idProofNumber: sanitizeIdProofNumber(f.idProofType, e.target.value) })
+                }
               />
             </div>
             <div>

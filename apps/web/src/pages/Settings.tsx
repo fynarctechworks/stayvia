@@ -11,6 +11,7 @@ import {
 import { useEffect, useMemo, useState } from "react";
 import { useAuth } from "@/auth/AuthContext";
 import { useDialog } from "@/components/Dialog";
+import QrCodeModal from "@/components/QrCodeModal";
 import { TimePicker12h } from "@/components/TimePicker12h";
 import { Loader } from "@/components/Loader";
 import { useToast } from "@/components/Toast";
@@ -787,6 +788,38 @@ interface HotelSettings {
   hasComplimentaryUnlockCode?: boolean;
 }
 
+// Hotel master QR — the framed code at the front desk. Guests scan it to
+// see tonight's free rooms and self-book (arrives as a hold the desk
+// confirms). Per-room stickers live on the Rooms page.
+function QrCodesSection() {
+  const [open, setOpen] = useState(false);
+  const { data: property } = useQuery({
+    queryKey: ["property-me"],
+    queryFn: () => api.get<{ qrToken: string; name: string }>("/properties/me"),
+  });
+  if (!property) return null;
+  return (
+    <div className="border-t border-borderc pt-4 mt-2 space-y-3">
+      <h3 className="font-semibold text-brand-dark">QR codes</h3>
+      <p className="text-xs text-textSecondary -mt-2">
+        The hotel QR sits at the front desk. Walk-ins scan it to browse tonight's
+        rooms and send a booking request you confirm. Per-room stickers (WiFi +
+        guest requests) print from the Rooms page.
+      </p>
+      <button className="btn-secondary" onClick={() => setOpen(true)}>
+        Hotel QR: view & print
+      </button>
+      <QrCodeModal
+        open={open}
+        onClose={() => setOpen(false)}
+        url={`${window.location.origin}/h/${property.qrToken}`}
+        title={property.name}
+        subtitle="Scan to see tonight's rooms & book"
+      />
+    </div>
+  );
+}
+
 function HotelTab() {
   const qc = useQueryClient();
   const { data } = useQuery({
@@ -1324,6 +1357,8 @@ function HotelTab() {
           </Field>
         </div>
       </div>
+
+      <QrCodesSection />
 
       <div className="flex justify-end gap-2 items-center">
         {msg && <span className="text-xs text-success">{msg}</span>}

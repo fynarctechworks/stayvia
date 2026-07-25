@@ -17,7 +17,7 @@ import {
   rangeForPreset,
   type DatePresetKey,
 } from "@/components/DatePresetBar";
-import { Loader } from "@/components/Loader";
+import { ListSkeleton } from "@/components/kit";
 import { StickyBar } from "@/components/StickyBar";
 import { Money } from "@/components/Money";
 import { PdfPreviewModal } from "@/components/PdfPreviewModal";
@@ -314,7 +314,7 @@ export default function Invoices() {
       </StickyBar>
 
       {isLoading ? (
-        <Loader />
+        <ListSkeleton rows={6} />
       ) : rows.length === 0 ? (
         <div className="card flex flex-col items-center justify-center py-16 text-center text-textSecondary">
           <Receipt className="w-10 h-10 mb-3 opacity-40" />
@@ -449,15 +449,16 @@ function InvoiceRow({
         <div className="text-right text-sm font-mono text-success">{inr(inv.totalPaid)}</div>
 
         <div className="text-right">
-          <div
-            className={`text-sm font-mono font-semibold ${
-              hasBalance ? "text-danger" : "text-success"
-            }`}
-          >
-            {hasBalance ? inr(inv.balanceDue) : "Paid"}
-          </div>
+          {/* Show the outstanding amount only when there IS one — otherwise
+              the status badge already reads PAID, so a second "Paid" line is
+              redundant. */}
+          {hasBalance && (
+            <div className="text-sm font-mono font-semibold text-danger">
+              {inr(inv.balanceDue)}
+            </div>
+          )}
           <span
-            className={`inline-block mt-0.5 px-1.5 py-0 rounded-sm text-[9px] font-bold uppercase tracking-wider border ${statusTone(inv.status)}`}
+            className={`inline-block ${hasBalance ? "mt-0.5" : ""} px-1.5 py-0 rounded-sm text-[9px] font-bold uppercase tracking-wider border ${statusTone(inv.status)}`}
           >
             {inv.status}
           </span>
@@ -505,13 +506,11 @@ function InvoiceRow({
             <div className="text-sm font-mono font-semibold text-brand-dark">
               {inr(inv.grandTotal)}
             </div>
-            <div
-              className={`text-xs font-mono font-semibold mt-0.5 ${
-                hasBalance ? "text-danger" : "text-success"
-              }`}
-            >
-              {hasBalance ? `${inr(inv.balanceDue)} due` : "Paid"}
-            </div>
+            {hasBalance && (
+              <div className="text-xs font-mono font-semibold mt-0.5 text-danger">
+                {inr(inv.balanceDue)} due
+              </div>
+            )}
             <span
               className={`inline-block mt-1 px-1.5 py-0 rounded-sm text-[9px] font-bold uppercase tracking-wider border ${statusTone(inv.status)}`}
             >

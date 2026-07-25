@@ -15,7 +15,7 @@ import {
   rangeForPreset,
   type DatePresetKey,
 } from "@/components/DatePresetBar";
-import { Loader } from "@/components/Loader";
+import { EmptyState, ListSkeleton } from "@/components/kit";
 import { StickyBar } from "@/components/StickyBar";
 import { StatusBadge } from "@/components/StatusBadge";
 import { api } from "@/lib/api";
@@ -276,10 +276,14 @@ export default function Reservations() {
       </StickyBar>
 
       {isLoading ? (
-        <Loader />
+        <ListSkeleton rows={6} />
       ) : data.length === 0 ? (
-        <div className="card text-textSecondary text-center py-10">
-          No reservations match these filters.
+        <div className="card">
+          <EmptyState
+            icon={<CalendarPlus className="w-5 h-5" />}
+            title="No reservations match these filters"
+            hint="Try widening the date range or clearing the status filter."
+          />
         </div>
       ) : (
         // Single-column dense list. One row per reservation; all the

@@ -169,21 +169,6 @@ export function AppShell({ children }: { children: ReactNode }) {
 
       {/* Watermark — hidden on phones (too noisy on small screens), and
           hidden in focus mode where the content goes edge-to-edge. */}
-      {!focusMode && (
-        <div
-          aria-hidden
-          className={`hidden md:grid pointer-events-none fixed inset-0 ${
-            collapsed ? "pl-16" : "pl-60"
-          } place-items-center select-none transition-[padding] duration-200 ease-out`}
-        >
-          <img
-            src="/logo.png"
-            alt=""
-            className="w-[min(70vw,640px)] h-auto opacity-[0.06] mix-blend-multiply"
-          />
-        </div>
-      )}
-
       <div
         className={`relative transition-[margin] duration-200 ease-out ${
           focusMode ? "md:ml-0" : collapsed ? "md:ml-16" : "md:ml-60"

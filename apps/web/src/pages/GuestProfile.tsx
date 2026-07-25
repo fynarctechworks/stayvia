@@ -14,7 +14,7 @@ import { api } from "@/lib/api";
 import { citiesForState } from "@/lib/indianCities";
 import { INDIAN_STATES, INDIAN_UNION_TERRITORIES } from "@/lib/indianStates";
 import { invalidateReservationData } from "@/lib/invalidate";
-import { inr } from "@/lib/utils";
+import { ID_PROOF_SPECS, inr, sanitizeIdProofNumber } from "@/lib/utils";
 
 interface GuestStats {
   totalStays: number;
@@ -409,9 +409,16 @@ function EditGuestModal({ guest, onClose }: { guest: Guest; onClose: () => void 
               <select
                 className="input"
                 value={form.idProofType}
-                onChange={(e) =>
-                  set("idProofType", e.target.value as typeof form.idProofType)
-                }
+                onChange={(e) => {
+                  const idProofType = e.target.value as typeof form.idProofType;
+                  // One update — set() spreads the current form, so two
+                  // sequential calls would drop the first change.
+                  setForm({
+                    ...form,
+                    idProofType,
+                    idProofNumber: sanitizeIdProofNumber(idProofType, form.idProofNumber),
+                  });
+                }}
               >
                 <option value="aadhaar">Aadhaar</option>
                 <option value="pan">PAN</option>
@@ -423,9 +430,13 @@ function EditGuestModal({ guest, onClose }: { guest: Guest; onClose: () => void 
             <Field label={`ID Number (current ends ••••${guest.idProofLast4})`}>
               <input
                 className="input font-mono"
+                inputMode={ID_PROOF_SPECS[form.idProofType]?.digitsOnly ? "numeric" : "text"}
+                maxLength={ID_PROOF_SPECS[form.idProofType]?.maxLength ?? 50}
                 value={form.idProofNumber}
                 placeholder="Leave blank to keep current"
-                onChange={(e) => set("idProofNumber", e.target.value)}
+                onChange={(e) =>
+                  set("idProofNumber", sanitizeIdProofNumber(form.idProofType, e.target.value))
+                }
               />
             </Field>
           </div>

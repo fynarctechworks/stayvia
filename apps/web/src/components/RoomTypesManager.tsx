@@ -144,7 +144,7 @@ export function RoomTypesManager() {
               <th>Slug</th>
               <th className="!text-right">Default Rate</th>
               <th className="!text-right">Max Occ.</th>
-              <th className="!text-right">Extra Bed/Night</th>
+              <th className="!text-right">Extra Person/Night</th>
               <th>Status</th>
               <th className="!text-right">Actions</th>
             </tr>
@@ -359,8 +359,8 @@ function RoomTypeModal({ row, onClose }: { row: RoomTypeRow | null; onClose: () 
             }}
           />
           <div className="text-xs text-textSecondary mt-1">
-            Per-night charge for each extra bed beyond Max Occupancy. Leave 0 to
-            disable extra beds for this room type.
+            Per-night charge for each extra person beyond Max Occupancy. Leave 0 to
+            disable extra persons for this room type.
           </div>
         </Field>
         <Field label="Description (optional)">
