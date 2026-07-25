@@ -5,6 +5,7 @@ import {
   Eye,
   EyeOff,
   MapPin,
+  QrCode,
   ShieldCheck,
   Smartphone,
 } from "@/lib/micons";
@@ -704,55 +705,70 @@ function TwoFactorCard() {
         </>
       )}
 
-      {/* Enrollment in progress — show QR + secret + code entry */}
+      {/* Enrollment in progress — a clean two-step panel */}
       {enroll && (
-        <div className="space-y-4">
-          <div className="grid grid-cols-1 sm:grid-cols-[auto_1fr] gap-4 items-start">
-            <div className="bg-white border border-borderc rounded-md p-2 mx-auto sm:mx-0">
-              {/* Supabase returns an SVG data URI for the QR code. */}
-              <img
-                src={enroll.qr}
-                alt="Scan this QR code with your authenticator app"
-                className="w-40 h-40"
-              />
-            </div>
-            <div className="space-y-3 text-sm">
-              <p className="text-textSecondary">
-                1. Scan this QR code with your authenticator app. Can't scan? Enter this key
-                manually:
+        <div className="rounded-md border border-borderc bg-bg p-4 sm:p-5 space-y-5">
+          {/* Step 1 — scan / manual key */}
+          <div className="flex gap-3">
+            <StepDot n={1} />
+            <div className="flex-1 min-w-0">
+              <div className="font-semibold text-brand-dark text-sm">Add the account</div>
+              <p className="text-xs text-textSecondary mt-0.5">
+                Scan the QR with Google Authenticator, Authy or 1Password.
               </p>
-              <div className="flex items-center gap-2">
-                <code className="flex-1 break-all rounded-sm bg-bg border border-borderc px-2 py-1.5 text-xs font-mono">
-                  {enroll.secret}
-                </code>
-                <button
-                  type="button"
-                  onClick={copySecret}
-                  className="shrink-0 p-2 rounded-sm border border-borderc text-textSecondary hover:text-navy hover:bg-bg"
-                  aria-label="Copy setup key"
-                  title="Copy setup key"
-                >
-                  {copied ? (
-                    <Check className="w-4 h-4 text-success" />
-                  ) : (
-                    <Copy className="w-4 h-4" />
-                  )}
-                </button>
+              <div className="mt-3 flex flex-col sm:flex-row gap-4 items-start">
+                <div className="bg-white border border-borderc rounded-md p-2.5 shrink-0 mx-auto sm:mx-0">
+                  <img
+                    src={enroll.qr}
+                    alt="Scan this QR code with your authenticator app"
+                    className="w-40 h-40"
+                  />
+                </div>
+                <div className="flex-1 min-w-0 w-full">
+                  <div className="text-[11px] font-medium text-textSecondary mb-1.5">
+                    Can't scan? Enter this key manually
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <code className="flex-1 min-w-0 break-all rounded-sm bg-surface border border-borderc px-2.5 py-2 text-xs font-mono tracking-wide">
+                      {enroll.secret}
+                    </code>
+                    <button
+                      type="button"
+                      onClick={copySecret}
+                      className="shrink-0 h-9 w-9 grid place-items-center rounded-sm border border-borderc text-textSecondary hover:text-navy hover:border-brand transition"
+                      aria-label="Copy setup key"
+                      title="Copy setup key"
+                    >
+                      {copied ? (
+                        <Check className="w-4 h-4 text-success" />
+                      ) : (
+                        <Copy className="w-4 h-4" />
+                      )}
+                    </button>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
 
-          <Field label="2. Enter the 6-digit code from your app">
-            <input
-              className="input text-center tracking-[0.4em] text-lg font-semibold max-w-[12rem]"
-              inputMode="numeric"
-              maxLength={6}
-              value={code}
-              onChange={(e) => setCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
-              placeholder="000000"
-              autoFocus
-            />
-          </Field>
+          {/* Step 2 — verify */}
+          <div className="flex gap-3">
+            <StepDot n={2} />
+            <div className="flex-1 min-w-0">
+              <div className="font-semibold text-brand-dark text-sm">
+                Enter the 6-digit code from your app
+              </div>
+              <input
+                className="mt-3 w-full max-w-[16rem] h-14 rounded-md border border-borderc bg-surface text-center tracking-[0.5em] text-xl font-bold outline-none focus:border-brand focus:ring-2 focus:ring-brand/20 transition"
+                inputMode="numeric"
+                maxLength={6}
+                value={code}
+                onChange={(e) => setCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
+                placeholder="000000"
+                autoFocus
+              />
+            </div>
+          </div>
 
           {err && (
             <div className="rounded-sm border border-danger/30 bg-danger/5 px-3 py-2 text-danger text-sm">
@@ -760,10 +776,10 @@ function TwoFactorCard() {
             </div>
           )}
 
-          <div className="flex justify-between items-center">
+          <div className="flex justify-between items-center pt-1 border-t border-borderc">
             <button
               type="button"
-              className="text-sm text-textSecondary hover:text-navy"
+              className="text-sm text-textSecondary hover:text-navy py-2"
               onClick={cancelEnroll}
             >
               Cancel
@@ -833,16 +849,23 @@ function QrCodesSection() {
   });
   if (!property) return null;
   return (
-    <div className="border-t border-borderc pt-4 mt-2 space-y-3">
+    <div className="border-t border-borderc pt-4 mt-2">
       <h3 className="font-semibold text-brand-dark">QR codes</h3>
-      <p className="text-xs text-textSecondary -mt-2">
-        The hotel QR sits at the front desk. Walk-ins scan it to browse tonight's
-        rooms and send a booking request you confirm. Per-room stickers (WiFi +
-        guest requests) print from the Rooms page.
-      </p>
-      <button className="btn-secondary" onClick={() => setOpen(true)}>
-        Hotel QR: view & print
-      </button>
+      <div className="mt-3 rounded-md border border-borderc bg-bg p-4 flex items-center gap-4 flex-wrap">
+        <div className="w-11 h-11 rounded-md bg-brand-soft text-brand-deep grid place-items-center shrink-0">
+          <QrCode className="w-5 h-5" />
+        </div>
+        <div className="flex-1 min-w-[200px]">
+          <div className="font-medium text-brand-dark text-sm">Hotel front-desk QR</div>
+          <p className="text-xs text-textSecondary mt-0.5">
+            Walk-ins scan it to browse tonight's rooms and send a booking request you
+            confirm. Per-room WiFi/request stickers print from the Rooms page.
+          </p>
+        </div>
+        <button className="btn-secondary inline-flex items-center gap-2 shrink-0" onClick={() => setOpen(true)}>
+          <QrCode className="w-4 h-4" /> View & print
+        </button>
+      </div>
       <QrCodeModal
         open={open}
         onClose={() => setOpen(false)}
@@ -851,6 +874,15 @@ function QrCodesSection() {
         subtitle="Scan to see tonight's rooms & book"
       />
     </div>
+  );
+}
+
+// Numbered step badge for the 2FA enrollment panel.
+function StepDot({ n }: { n: number }) {
+  return (
+    <span className="shrink-0 w-6 h-6 rounded-full bg-brand text-textPrimary text-xs font-bold grid place-items-center">
+      {n}
+    </span>
   );
 }
 
