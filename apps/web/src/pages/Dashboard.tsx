@@ -274,16 +274,18 @@ export default function Dashboard() {
       {data.room_grid.length > 0 && (() => {
         const s = rollupFloorStats(data.room_grid);
         return (
-          <div className="card">
-            <h2 className="font-semibold text-brand-dark mb-4">Room Availability</h2>
-            <StackedAvailability
-              segments={[
-                { label: "Occupied", count: s.occupied, barClass: "bg-brand-dark" },
-                { label: "Reserved", count: s.reserved + s.held, barClass: "bg-info" },
-                { label: "Available", count: s.available, barClass: "bg-brand" },
-                { label: "Not Ready", count: s.dirty + s.maintenance, barClass: "bg-warning" },
-              ]}
-            />
+          <div className="card !py-3 flex items-center gap-4 flex-wrap">
+            <h2 className="font-semibold text-brand-dark text-sm shrink-0">Room Availability</h2>
+            <div className="flex-1 min-w-[220px]">
+              <StackedAvailability
+                segments={[
+                  { label: "Occupied", count: s.occupied, barClass: "bg-brand-dark" },
+                  { label: "Reserved", count: s.reserved + s.held, barClass: "bg-info" },
+                  { label: "Available", count: s.available, barClass: "bg-brand" },
+                  { label: "Not Ready", count: s.dirty + s.maintenance, barClass: "bg-warning" },
+                ]}
+              />
+            </div>
           </div>
         );
       })()}

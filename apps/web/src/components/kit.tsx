@@ -99,8 +99,8 @@ export function StackedAvailability({
 }) {
   const total = segments.reduce((a, s) => a + s.count, 0);
   return (
-    <div>
-      <div className="flex h-3 rounded-full overflow-hidden bg-bg">
+    <div className="flex items-center gap-4 flex-wrap">
+      <div className="flex h-2.5 rounded-full overflow-hidden bg-bg flex-1 min-w-[160px]">
         {total > 0 &&
           segments
             .filter((s) => s.count > 0)
@@ -113,15 +113,13 @@ export function StackedAvailability({
               />
             ))}
       </div>
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-4">
+      <div className="flex items-center gap-x-4 gap-y-1 flex-wrap text-xs">
         {segments.map((s) => (
-          <div key={s.label}>
-            <div className="flex items-center gap-1.5 text-[11px] text-textSecondary">
-              <span className={`w-2 h-2 rounded-full ${s.barClass}`} />
-              {s.label}
-            </div>
-            <div className="text-xl font-bold text-navy tabular-nums mt-0.5">{s.count}</div>
-          </div>
+          <span key={s.label} className="inline-flex items-center gap-1.5 text-textSecondary">
+            <span className={`w-2 h-2 rounded-full ${s.barClass}`} />
+            {s.label}
+            <span className="font-bold text-navy tabular-nums">{s.count}</span>
+          </span>
         ))}
       </div>
     </div>
