@@ -174,8 +174,8 @@ export default function Rooms() {
                 />
                 <span>{c.label}</span>
                 <span
-                  className={`ml-0.5 text-[10px] tabular-nums ${
-                    isActive ? "text-cream/80" : "text-textSecondary"
+                  className={`inline-grid place-items-center min-w-[18px] h-[18px] px-1 rounded-full text-[10px] font-bold tabular-nums leading-none ${
+                    isActive ? "bg-white/20 text-white" : "bg-bg text-textSecondary"
                   }`}
                 >
                   {count}
