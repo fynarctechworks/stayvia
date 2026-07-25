@@ -303,10 +303,6 @@ function chipDot(key: string): string {
       return "bg-[#644fc1]";
     case "dirty":
       return "bg-warning";
-    case "clean":
-      return "bg-info";
-    case "inspected":
-      return "bg-brand-mid";
     case "maintenance":
       return "bg-danger";
     default:
@@ -326,10 +322,6 @@ function statusVisual(status: string): { stripe: string; pillBg: string; pillTex
       return { stripe: "bg-[#644fc1]", pillBg: "bg-[#644fc1]/15", pillText: "text-[#4c3ba8]" };
     case "dirty":
       return { stripe: "bg-warning", pillBg: "bg-warning/15", pillText: "text-[#92400e]" };
-    case "clean":
-      return { stripe: "bg-info", pillBg: "bg-info/10", pillText: "text-[#1d4ed8]" };
-    case "inspected":
-      return { stripe: "bg-brand-mid", pillBg: "bg-brand-mid/15", pillText: "text-[#157f5f]" };
     case "maintenance":
       return { stripe: "bg-danger", pillBg: "bg-danger/10", pillText: "text-[#b91c1c]" };
     default:
