@@ -235,7 +235,7 @@ export default function HotelQr() {
                     {/* Category tiles — travel-app style. Tap to filter the
                         rooms shown below. "All" plus one tile per room type. */}
                     <div className="-mx-4 px-4 overflow-x-auto">
-                      <div className="flex gap-3 w-max pb-1">
+                      <div className="flex gap-2 w-max pb-1">
                         <CategoryTile
                           label="All"
                           count={catalog.rooms.length}
@@ -602,24 +602,23 @@ function CategoryTile({
   Icon: typeof BedDouble;
 }) {
   return (
-    <button onClick={onClick} className="flex flex-col items-center gap-1.5 w-16 shrink-0">
+    <button
+      onClick={onClick}
+      className={`inline-flex items-center gap-2 h-10 pl-3 pr-2.5 rounded-full border shrink-0 whitespace-nowrap text-sm font-medium transition-colors ${
+        active
+          ? "bg-brand text-textPrimary border-brand"
+          : "bg-white text-textSecondary border-borderc hover:border-brand/50"
+      }`}
+    >
+      <Icon className={`w-4 h-4 ${active ? "text-brand-deep" : "text-textSecondary"}`} />
+      <span className="capitalize">{label.toLowerCase()}</span>
       <span
-        className={`w-16 h-16 rounded-2xl grid place-items-center transition ${
-          active
-            ? "bg-brand text-textPrimary shadow-sm"
-            : "bg-brand-soft text-brand-deep"
+        className={`inline-grid place-items-center min-w-[18px] h-[18px] px-1 rounded-full text-[10px] font-bold tabular-nums leading-none ${
+          active ? "bg-brand-dark text-white" : "bg-bg text-textSecondary"
         }`}
       >
-        <Icon className="w-6 h-6" />
+        {count}
       </span>
-      <span
-        className={`text-[11px] leading-tight text-center line-clamp-2 ${
-          active ? "font-semibold text-textPrimary" : "text-textSecondary"
-        }`}
-      >
-        {label}
-      </span>
-      <span className="text-[10px] text-textSecondary -mt-1">{count}</span>
     </button>
   );
 }
