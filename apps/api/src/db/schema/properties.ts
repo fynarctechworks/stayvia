@@ -5,6 +5,7 @@
 // by lib/provisionProperty.ts (seed + public signup); there is no
 // bootstrap/PRIMARY row convention any more.
 
+import { sql } from "drizzle-orm";
 import {
   boolean,
   numeric,
@@ -33,6 +34,11 @@ export const properties = pgTable("properties", {
   defaultCheckOutTime: text("default_check_out_time").notNull().default("11:00"),
   latitude: numeric("latitude", { precision: 9, scale: 6 }),
   longitude: numeric("longitude", { precision: 9, scale: 6 }),
+  // Migration 0013 — permanent token behind the hotel's master QR (front
+  // desk / lobby). Public catalog + self-booking pages resolve it.
+  qrToken: text("qr_token")
+    .notNull()
+    .default(sql`encode(gen_random_bytes(16), 'hex')`),
   isActive: boolean("is_active").notNull().default(true),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),

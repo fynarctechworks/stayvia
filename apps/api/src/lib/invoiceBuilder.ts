@@ -222,7 +222,7 @@ export function buildInvoice(args: BuilderArgs): BuiltInvoice {
     totalGst += bedBreak.gstAmount;
     const unitWord = isShort ? "day" : "night";
     lineItems.push({
-      description: `Room ${roomNumber} - Extra bed (${beds} × ${units} ${unitWord}${bedQty === 1 ? "" : "s"})`,
+      description: `Room ${roomNumber} - Extra person (${beds} × ${units} ${unitWord}${bedQty === 1 ? "" : "s"})`,
       sacCode: "996311",
       quantity: bedQty,
       rate: String(+(bedBreak.subtotal / bedQty).toFixed(2)),

@@ -1,3 +1,4 @@
+import { sql } from "drizzle-orm";
 import {
   boolean,
   index,
@@ -29,6 +30,12 @@ export const rooms = pgTable(
     hasTv: boolean("has_tv").notNull().default(true),
     hasWifi: boolean("has_wifi").notNull().default(true),
     status: text("status", { enum: ROOM_STATUSES }).notNull().default("available"),
+    // Migration 0013 — permanent opaque token behind the in-room QR sticker.
+    // DB-generated (gen_random_bytes) on insert; never rotates, so a printed
+    // sticker stays valid for the life of the room.
+    qrToken: text("qr_token")
+      .notNull()
+      .default(sql`encode(gen_random_bytes(16), 'hex')`),
     notes: text("notes"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),

@@ -91,9 +91,12 @@ export const reservations = pgTable(
     // Migration 0021 — set once we fire the pre-arrival WhatsApp/SMS
     // reminder. Used to dedupe so the dashboard tick doesn't resend.
     arrivalReminderSentAt: timestamp("arrival_reminder_sent_at", { withTimezone: true }),
-    createdBy: uuid("created_by")
-      .notNull()
-      .references(() => profiles.id),
+    // Migration 0013 — QR self-bookings arrive as status='hold' and expire
+    // to 'cancelled' if the front desk never confirms them. NULL on every
+    // staff-created reservation.
+    holdExpiresAt: timestamp("hold_expires_at", { withTimezone: true }),
+    // Nullable since 0013: a guest self-booking has no staff author.
+    createdBy: uuid("created_by").references(() => profiles.id),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },

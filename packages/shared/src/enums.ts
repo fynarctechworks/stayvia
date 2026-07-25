@@ -67,7 +67,10 @@ export type InvoiceStatus = (typeof INVOICE_STATUSES)[number];
 export const PAYMENT_METHODS = ["cash", "upi", "card", "bank_transfer", "unpaid"] as const;
 export type PaymentMethod = (typeof PAYMENT_METHODS)[number];
 
-export const BOOKING_SOURCES = ["walkin", "phone_whatsapp", "complimentary"] as const;
+// "qr" — guest self-booking via the hotel's master QR (front-desk code).
+// Arrives as status='hold' and must be confirmed by staff before it blocks
+// inventory.
+export const BOOKING_SOURCES = ["walkin", "phone_whatsapp", "complimentary", "qr"] as const;
 export type BookingSource = (typeof BOOKING_SOURCES)[number];
 
 export const REVENUE_EXCLUDED_SOURCES: readonly BookingSource[] = ["complimentary"];

@@ -83,7 +83,7 @@ export type ExpensePaymentMethod = (typeof EXPENSE_PAYMENT_METHODS)[number];
 export const LINE_ITEM_TYPES = ["room_charge", "additional_charge"] as const;
 export type LineItemType = (typeof LINE_ITEM_TYPES)[number];
 
-export const BOOKING_SOURCES = ["walkin", "phone_whatsapp", "complimentary"] as const;
+export const BOOKING_SOURCES = ["walkin", "phone_whatsapp", "complimentary", "qr"] as const;
 export type BookingSource = (typeof BOOKING_SOURCES)[number];
 
 export const REVENUE_EXCLUDED_SOURCES: readonly BookingSource[] = ["complimentary"];

@@ -52,6 +52,11 @@ export const settings = pgTable("settings", {
   hideComplimentary: boolean("hide_complimentary").notNull().default(false),
   wifiSsid: text("wifi_ssid"),
   wifiPassword: text("wifi_password"),
+  // Migration 0013 — advisory geofence for the in-room QR unlock. The
+  // browser's coordinates (when granted) are compared to the hotel pin and
+  // the distance is LOGGED; it never hard-blocks (GPS is trivially spoofed
+  // and indoor accuracy is worse than a hotel's footprint).
+  qrUnlockRadiusM: integer("qr_unlock_radius_m").notNull().default(100),
   hotelGstin: text("hotel_gstin").notNull(),
   hotelLogoUrl: text("hotel_logo_url"),
   checkInTime: time("check_in_time").notNull().default("12:00"),

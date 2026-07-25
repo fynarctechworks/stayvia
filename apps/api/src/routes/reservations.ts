@@ -1447,7 +1447,35 @@ router.post(
           ),
         )
         .limit(1);
-      if (!otpRow.length) {
+      // QR self-bookings already verified this guest's phone with an OTP at
+      // booking time (purpose guest_verify, consumed by /public/qr .../book).
+      // Demanding a second code minutes later at the desk is pure friction —
+      // accept the booking-time verification within a 24h window instead.
+      let qrVerified = false;
+      if (!otpRow.length && r[0]!.bookingSource === "qr") {
+        const [guestPhoneRow] = await db
+          .select({ phone: guests.phone })
+          .from(guests)
+          .where(eq(guests.id, r[0]!.guestId))
+          .limit(1);
+        if (guestPhoneRow) {
+          const recent = await db
+            .select({ id: otps.id })
+            .from(otps)
+            .where(
+              and(
+                eq(otps.propertyId, req.propertyId),
+                eq(otps.purpose, "guest_verify"),
+                eq(otps.target, guestPhoneRow.phone),
+                isNotNull(otps.consumedAt),
+                gte(otps.consumedAt, sql`now() - interval '24 hours'`),
+              ),
+            )
+            .limit(1);
+          qrVerified = recent.length > 0;
+        }
+      }
+      if (!otpRow.length && !qrVerified) {
         return fail(
           res,
           422,
@@ -2341,7 +2369,7 @@ router.post(
             : bedRate;
         subtotal += bedBreakdown.subtotal;
         lineItems.push({
-          description: `Room ${rr.room.roomNumber} - Extra bed (${beds} × ${roomUnits} ${isShortStayInvoice ? "day" : "night"}${roomUnits === 1 && beds === 1 ? "" : "s"})`,
+          description: `Room ${rr.room.roomNumber} - Extra person (${beds} × ${roomUnits} ${isShortStayInvoice ? "day" : "night"}${roomUnits === 1 && beds === 1 ? "" : "s"})`,
           sacCode: "996311",
           quantity: bedQty,
           rate: String(bedNetRate),
@@ -2847,7 +2875,92 @@ router.post(
   requirePermission("cancel_reservations"),
   idempotent("reservations.cancel"),
   validate(cancelSchema),
+  cancelHandler,
+);
+
+// Confirm a QR self-booking (status 'hold' → 'confirmed'). The desk verifies
+// the guest + takes payment in person, then taps Confirm. Availability is
+// re-checked — holds deliberately never blocked inventory, so a walk-in may
+// have taken the room in the meantime.
+router.post(
+  "/:id/confirm",
+  requireAuth,
+  requirePermission("create_reservations"),
+  idempotent("reservations.confirmHold"),
   async (req, res) => {
+    const id = req.params.id!;
+    const [r] = await db
+      .select()
+      .from(reservations)
+      .where(and(eq(reservations.id, id), eq(reservations.propertyId, req.propertyId)))
+      .limit(1);
+    if (!r) return fail(res, 404, "NOT_FOUND", "Reservation not found");
+    if (r.status !== "hold") {
+      return fail(res, 409, "INVALID_STATUS", `Only a hold can be confirmed (this is ${r.status})`);
+    }
+    if (r.holdExpiresAt && r.holdExpiresAt.getTime() < Date.now()) {
+      return fail(res, 409, "HOLD_EXPIRED", "This booking request has expired. Ask the guest to rebook.");
+    }
+
+    const links = await db
+      .select({ roomId: reservationRooms.roomId })
+      .from(reservationRooms)
+      .where(eq(reservationRooms.reservationId, id));
+    const roomIds = links.map((l) => l.roomId);
+
+    // Re-check every room is still free for the stay window.
+    const conflicts = await findRoomConflicts(req.propertyId, r.checkInDate, r.checkOutDate, {
+      roomIds,
+      excludeReservationId: id,
+    });
+    if (conflicts.size > 0) {
+      return fail(
+        res,
+        409,
+        "ROOM_TAKEN",
+        "A room on this request was booked by someone else while it waited. Reject it and rebook the guest on a free room.",
+      );
+    }
+
+    await db.transaction(async (tx) => {
+      await tx
+        .update(reservations)
+        .set({ status: "confirmed", holdExpiresAt: null, updatedAt: new Date() })
+        .where(eq(reservations.id, id));
+      // Mirror the walk-in create: reserved tonight's rooms show on the grid.
+      if (roomIds.length) {
+        await tx
+          .update(rooms)
+          .set({ status: "reserved", updatedAt: new Date() })
+          .where(
+            and(
+              eq(rooms.propertyId, req.propertyId),
+              inArray(rooms.id, roomIds),
+              eq(rooms.status, "available"),
+            ),
+          );
+      }
+    });
+
+    await logActivity({
+      propertyId: req.propertyId,
+      action: "qr_hold_confirmed",
+      entityType: "reservation",
+      entityId: id,
+      description: `QR booking ${r.reservationNumber} confirmed at the desk`,
+      performedBy: req.user!.id,
+      ipAddress: req.ip,
+    });
+    await invalidateDashboard(req.propertyId);
+    return ok(res, { confirmed: true });
+  },
+);
+
+async function cancelHandler(
+  req: import("express").Request,
+  res: import("express").Response,
+) {
+  {
     const id = req.params.id!;
     const input = req.body as {
       cancellationReason: string;
@@ -2861,7 +2974,9 @@ router.post(
       .where(and(eq(reservations.id, id), eq(reservations.propertyId, req.propertyId)))
       .limit(1);
     if (!r.length) return fail(res, 404, "NOT_FOUND", "Reservation not found");
-    if (!["confirmed", "checked_in"].includes(r[0]!.status)) {
+    // 'hold' — a QR self-booking the desk is rejecting. No payments exist
+    // on one, so the refund path below is a no-op for it.
+    if (!["confirmed", "checked_in", "hold"].includes(r[0]!.status)) {
       return fail(res, 409, "INVALID_STATUS", `Cannot cancel ${r[0]!.status}`);
     }
 
@@ -3126,8 +3241,8 @@ router.post(
       refundMode,
       roomStatus: targetRoomStatus,
     });
-  },
-);
+  }
+}
 
 // Mark a confirmed reservation as no-show. Standard hotel policy:
 // the advance (if any) is FORFEIT — it stays on the books as revenue
@@ -5686,7 +5801,7 @@ router.get(
         lineItems.push({
           id: `preview-${rr.room.id}-${String(rowFrom)}-xbed`,
           invoiceId: "preview",
-          description: `Room ${rr.room.roomNumber} - Extra bed (${beds} × ${rowUnits} ${isShortStayPreview ? "day" : "night"}${rowUnits === 1 && beds === 1 ? "" : "s"})`,
+          description: `Room ${rr.room.roomNumber} - Extra person (${beds} × ${rowUnits} ${isShortStayPreview ? "day" : "night"}${rowUnits === 1 && beds === 1 ? "" : "s"})`,
           sacCode: "996311",
           quantity: bedQty,
           rate: String(bedNetRate),

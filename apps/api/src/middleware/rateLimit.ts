@@ -60,3 +60,31 @@ export const writeLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
 });
+
+// ---- Public QR surface (unauthenticated, keyed by IP) ----
+// Reads are polled by a guest's phone; writes are strictly throttled.
+
+export const qrReadLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 60,
+  message: { success: false, error: { code: "RATE_LIMITED", message: "Too many requests" } },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+// Unlock attempts guess phone last-4s — keep the budget tiny.
+export const qrUnlockLimiter = rateLimit({
+  windowMs: 10 * 60 * 1000,
+  max: 10,
+  message: { success: false, error: { code: "RATE_LIMITED", message: "Too many attempts. Wait a few minutes." } },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+export const qrWriteLimiter = rateLimit({
+  windowMs: 10 * 60 * 1000,
+  max: 12,
+  message: { success: false, error: { code: "RATE_LIMITED", message: "Too many requests. Wait a few minutes." } },
+  standardHeaders: true,
+  legacyHeaders: false,
+});

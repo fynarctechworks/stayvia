@@ -36,6 +36,7 @@ import otpRoutes from "./routes/otp.js";
 import paymentRoutes from "./routes/payments.js";
 import propertiesRoutes from "./routes/properties.js";
 import publicRoutes from "./routes/public.js";
+import qrRoutes, { sweepExpiredHolds } from "./routes/qr.js";
 import rbacRoutes from "./routes/rbac.js";
 import reportRoutes from "./routes/reports.js";
 import reservationRoutes from "./routes/reservations.js";
@@ -103,11 +104,20 @@ app.use((_req, res, next) => {
 });
 
 // Allowed browser origins: the web front end only. Requests with no Origin
-// header (native fetch, health checks) are allowed through.
+// header (native fetch, health checks) are allowed through. In development,
+// private-network origins (localhost / LAN IPs) are also allowed so the app
+// and the public QR pages can be tested from a phone on the same WiFi —
+// production stays locked to FRONTEND_URL exactly.
+const DEV_LAN_ORIGIN =
+  /^http:\/\/(localhost|127\.0\.0\.1|192\.168\.\d{1,3}\.\d{1,3}|10\.\d{1,3}\.\d{1,3}\.\d{1,3}|172\.(1[6-9]|2\d|3[01])\.\d{1,3}\.\d{1,3})(:\d+)?$/;
 app.use(
   cors({
     origin(origin, callback) {
-      if (!origin || origin === env.FRONTEND_URL) {
+      if (
+        !origin ||
+        origin === env.FRONTEND_URL ||
+        (env.NODE_ENV !== "production" && DEV_LAN_ORIGIN.test(origin))
+      ) {
         callback(null, true);
       } else {
         callback(null, false);
@@ -152,6 +162,9 @@ v1.use("/auth", authRoutes);
 // Public signup — unauthenticated by design; carries its own strict
 // limiter (signupLimiter, 5/hour/IP) inside the route file.
 v1.use("/public", publicRoutes);
+// Public QR surface (in-room stickers + hotel master QR) — unauthenticated,
+// token-scoped, own limiters. Mounted before the auth/subscription gate.
+v1.use("/public/qr", qrRoutes);
 
 v1.use((req, _res, next) => {
   if (["GET", "HEAD"].includes(req.method)) return readLimiter(req, _res, next);
@@ -216,6 +229,13 @@ startDashboardSubscriber().catch((err) =>
 const server = app.listen(env.PORT, () => {
   logger.info(`Stayvia API listening on http://localhost:${env.PORT}`);
 });
+
+// Unconfirmed QR self-bookings die after their hold window. Cheap partial-
+// index scan; runs once a minute for the life of the process.
+const holdSweepTimer = setInterval(() => {
+  sweepExpiredHolds().catch((err) => logger.warn({ err }, "hold sweep failed"));
+}, 60 * 1000);
+holdSweepTimer.unref();
 
 async function shutdown(signal: string) {
   logger.info(`${signal} received, shutting down`);
