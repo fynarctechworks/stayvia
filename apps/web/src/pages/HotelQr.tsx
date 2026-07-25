@@ -21,7 +21,6 @@ import {
   ChevronLeft,
   FileImage,
   IdCard,
-  LayoutDashboard,
   Loader2,
   Snowflake,
   Users,
@@ -70,7 +69,6 @@ export default function HotelQr() {
   const [nights, setNights] = useState(1);
   const [numAdults, setNumAdults] = useState(1);
   const [detailRoom, setDetailRoom] = useState<QrCatalogRoom | null>(null);
-  const [activeType, setActiveType] = useState<string>("all");
 
   const [fullName, setFullName] = useState("");
   const [phone, setPhone] = useState("");
@@ -225,45 +223,14 @@ export default function HotelQr() {
             {catalog.rooms.length > 0 &&
               (() => {
                 const cats = groupByType(catalog.rooms);
-                const visible =
-                  activeType === "all"
-                    ? catalog.rooms
-                    : catalog.rooms.filter((r) => r.roomType === activeType);
-                const sortedVisible = [...visible].sort((a, b) => a.baseRate - b.baseRate);
                 return (
                   <>
-                    {/* Category tiles — travel-app style. Tap to filter the
-                        rooms shown below. "All" plus one tile per room type. */}
-                    <div className="-mx-4 px-4 overflow-x-auto">
-                      <div className="flex gap-2 w-max pb-1">
-                        <CategoryTile
-                          label="All"
-                          count={catalog.rooms.length}
-                          active={activeType === "all"}
-                          onClick={() => setActiveType("all")}
-                          Icon={LayoutDashboard}
-                        />
-                        {cats.map((cat) => (
-                          <CategoryTile
-                            key={cat.slug}
-                            label={cat.label}
-                            count={cat.rooms.length}
-                            active={activeType === cat.slug}
-                            onClick={() => setActiveType(cat.slug)}
-                            Icon={cat.hasAc ? Snowflake : BedDouble}
-                          />
-                        ))}
-                      </div>
-                    </div>
-
                     <div className="flex items-center justify-between px-1">
                       <span className="text-sm font-semibold text-textPrimary">
-                        {activeType === "all"
-                          ? "Rooms free tonight"
-                          : cats.find((c) => c.slug === activeType)?.label}
+                        Rooms free tonight
                         <span className="text-textSecondary font-normal">
                           {" "}
-                          · {sortedVisible.length}
+                          · {catalog.rooms.length}
                         </span>
                       </span>
                       <span className="text-xs text-textSecondary">
@@ -271,18 +238,31 @@ export default function HotelQr() {
                       </span>
                     </div>
 
-                    <div className="space-y-3">
-                      {sortedVisible.map((r) => (
-                        <RoomCard
-                          key={r.id}
-                          room={r}
-                          active={selected.includes(r.id)}
-                          disabled={!selected.includes(r.id) && selected.length >= 3}
-                          onToggle={() => toggleRoom(r.id)}
-                          onDetails={() => setDetailRoom(r)}
-                        />
-                      ))}
-                    </div>
+                    {/* Grouped by room type — a heading per category, rooms
+                        (cheapest first) beneath it. No filter to tap. */}
+                    {cats.map((cat) => (
+                      <div key={cat.slug} className="space-y-2.5">
+                        <div className="flex items-baseline gap-2 px-1 pt-1">
+                          <h3 className="text-xs font-bold uppercase tracking-wider text-brand-dark">
+                            {cat.label}
+                          </h3>
+                          <span className="text-[11px] text-textSecondary">
+                            {cat.rooms.length} room{cat.rooms.length === 1 ? "" : "s"} · from{" "}
+                            {inr(cat.fromRate)}
+                          </span>
+                        </div>
+                        {cat.rooms.map((r) => (
+                          <RoomCard
+                            key={r.id}
+                            room={r}
+                            active={selected.includes(r.id)}
+                            disabled={!selected.includes(r.id) && selected.length >= 3}
+                            onToggle={() => toggleRoom(r.id)}
+                            onDetails={() => setDetailRoom(r)}
+                          />
+                        ))}
+                      </div>
+                    ))}
                   </>
                 );
               })()}
@@ -588,40 +568,6 @@ function groupByType(rooms: QrCatalogRoom[]) {
     .sort((a, b) => a.fromRate - b.fromRate);
 }
 
-function CategoryTile({
-  label,
-  count,
-  active,
-  onClick,
-  Icon,
-}: {
-  label: string;
-  count: number;
-  active: boolean;
-  onClick: () => void;
-  Icon: typeof BedDouble;
-}) {
-  return (
-    <button
-      onClick={onClick}
-      className={`inline-flex items-center gap-2 h-10 pl-3 pr-2.5 rounded-full border shrink-0 whitespace-nowrap text-sm font-medium transition-colors ${
-        active
-          ? "bg-brand text-textPrimary border-brand"
-          : "bg-white text-textSecondary border-borderc hover:border-brand/50"
-      }`}
-    >
-      <Icon className={`w-4 h-4 ${active ? "text-brand-deep" : "text-textSecondary"}`} />
-      <span className="capitalize">{label.toLowerCase()}</span>
-      <span
-        className={`inline-grid place-items-center min-w-[18px] h-[18px] px-1 rounded-full text-[10px] font-bold tabular-nums leading-none ${
-          active ? "bg-brand-dark text-white" : "bg-bg text-textSecondary"
-        }`}
-      >
-        {count}
-      </span>
-    </button>
-  );
-}
 
 function RoomCard({
   room: r,
