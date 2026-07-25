@@ -146,8 +146,8 @@ export default function Notifications() {
             {opt.label}
             {opt.count > 0 && (
               <span
-                className={`ml-2 inline-grid place-items-center min-w-[1.2rem] h-[1.2rem] px-1 rounded-full text-[10px] font-semibold ${
-                  filter === opt.v ? "bg-cream/20 text-cream" : "bg-borderc text-textSecondary"
+                className={`ml-2 inline-grid place-items-center min-w-[1.2rem] h-[1.2rem] px-1 rounded-full text-[10px] font-bold ${
+                  filter === opt.v ? "bg-brand-dark text-white" : "bg-bg text-textSecondary"
                 }`}
               >
                 {opt.count}

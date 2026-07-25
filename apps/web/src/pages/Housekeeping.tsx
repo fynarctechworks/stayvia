@@ -156,14 +156,18 @@ export default function Housekeeping() {
             <button
               key={s}
               onClick={() => setStatusFilter(s)}
-              className={`text-xs font-semibold px-3 py-1.5 rounded-sm transition-colors inline-flex items-center gap-2 ${
+              className={`text-xs font-semibold px-3 py-1.5 rounded-full border transition-colors inline-flex items-center gap-2 ${
                 active
-                  ? "bg-brand-dark text-cream"
-                  : "text-textSecondary hover:text-brand-dark hover:bg-bg"
+                  ? "bg-brand text-textPrimary border-brand"
+                  : "bg-surface text-textSecondary border-borderc hover:text-brand-dark hover:border-brand/40"
               }`}
             >
               <span>{STATUS_LABELS[s]}</span>
-              <span className={`text-[10px] px-1.5 py-0.5 rounded ${active ? "bg-cream/20" : "bg-bg"}`}>
+              <span
+                className={`inline-grid place-items-center min-w-[18px] h-[18px] px-1 rounded-full text-[10px] font-bold tabular-nums leading-none ${
+                  active ? "bg-brand-dark text-white" : "bg-bg text-textSecondary"
+                }`}
+              >
                 {count}
               </span>
             </button>

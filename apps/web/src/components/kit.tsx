@@ -238,8 +238,8 @@ export function FilterChip({
       {label}
       {count !== undefined && (
         <span
-          className={`min-w-5 h-5 px-1 grid place-items-center rounded-full text-[10px] font-bold ${
-            active ? "bg-white/20" : "bg-bg text-textSecondary"
+          className={`min-w-[18px] h-[18px] px-1 grid place-items-center rounded-full text-[10px] font-bold tabular-nums leading-none ${
+            active ? "bg-brand-dark text-white" : "bg-bg text-textSecondary"
           }`}
         >
           {count}
