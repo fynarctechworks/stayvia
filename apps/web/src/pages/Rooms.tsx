@@ -175,7 +175,7 @@ export default function Rooms() {
                 <span>{c.label}</span>
                 <span
                   className={`inline-grid place-items-center min-w-[18px] h-[18px] px-1 rounded-full text-[10px] font-bold tabular-nums leading-none ${
-                    isActive ? "bg-white/20 text-white" : "bg-bg text-textSecondary"
+                    isActive ? "bg-brand-dark text-white" : "bg-bg text-textSecondary"
                   }`}
                 >
                   {count}
