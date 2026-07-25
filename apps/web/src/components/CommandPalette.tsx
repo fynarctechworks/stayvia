@@ -130,8 +130,17 @@ export function CommandPalette() {
         setOpen(false);
       }
     }
+    // Also open on a custom event so the mobile top-bar search icon can
+    // trigger the same palette (no keyboard on phones).
+    function onOpen() {
+      setOpen(true);
+    }
     document.addEventListener("keydown", onKey);
-    return () => document.removeEventListener("keydown", onKey);
+    window.addEventListener("stayvia:search", onOpen);
+    return () => {
+      document.removeEventListener("keydown", onKey);
+      window.removeEventListener("stayvia:search", onOpen);
+    };
   }, [open]);
 
   // Focus the input on open.

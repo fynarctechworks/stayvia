@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { Maximize2, Menu, Minimize2 } from "@/lib/micons";
+import { Bell, Maximize2, Menu, Minimize2, Search } from "@/lib/micons";
 import type { ReactNode } from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
@@ -176,25 +176,44 @@ export function AppShell({ children }: { children: ReactNode }) {
       >
         {/* Mobile top bar with hamburger. Only visible <md. Sticky so
             the user can always reach the menu without scrolling up. */}
-        <header className="md:hidden sticky top-0 z-30 bg-brand-dark text-cream flex items-center gap-2 px-3 h-12 shadow-sm pt-safe">
+        <header className="md:hidden sticky top-0 z-30 bg-brand-dark text-cream flex items-center gap-1 px-2 h-14 shadow-sm pt-safe">
           <button
             onClick={() => setMobileOpen(true)}
             aria-label="Open menu"
-            className="p-2 -ml-2 rounded hover:bg-white/10 active:bg-white/15"
+            className="w-10 h-10 grid place-items-center rounded-full hover:bg-white/10 active:bg-white/15 transition-colors"
           >
             <Menu className="w-5 h-5" />
           </button>
-          <div className="flex items-center gap-2 min-w-0">
+          <div className="flex items-center gap-2 min-w-0 flex-1">
             <img
               src="/logo.png"
               alt=""
-              className="w-7 h-7 rounded-sm object-contain shrink-0"
+              className="w-8 h-8 rounded-md object-contain shrink-0 bg-white/5"
             />
             <div className="min-w-0">
-              <div className="text-sm font-semibold leading-tight truncate uppercase">{property?.name ?? "Stayvia"}</div>
+              <div className="text-sm font-bold leading-tight truncate uppercase">
+                {property?.name ?? "Stayvia"}
+              </div>
               <div className="text-[9px] text-brass tracking-[0.15em] leading-none">HOTEL OS</div>
             </div>
           </div>
+          <button
+            onClick={() => window.dispatchEvent(new Event("stayvia:search"))}
+            aria-label="Search"
+            className="w-10 h-10 grid place-items-center rounded-full hover:bg-white/10 active:bg-white/15 transition-colors"
+          >
+            <Search className="w-5 h-5" />
+          </button>
+          <button
+            onClick={() => navigate("/notifications")}
+            aria-label="Notifications"
+            className="relative w-10 h-10 grid place-items-center rounded-full hover:bg-white/10 active:bg-white/15 transition-colors"
+          >
+            <Bell className="w-5 h-5" />
+            {(unreadIds?.length ?? 0) > 0 && (
+              <span className="absolute top-2 right-2 w-2 h-2 rounded-full bg-brand ring-2 ring-brand-dark" />
+            )}
+          </button>
         </header>
 
         {/* All alert bars pin together as a single header so they
