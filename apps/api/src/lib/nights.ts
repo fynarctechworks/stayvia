@@ -53,3 +53,24 @@ export function sumRoomAmount(
     .reduce((sum, rm) => sum + Number(rm.ratePerNight) * roomBillableNights(rm, stay), 0)
     .toFixed(2);
 }
+
+// Sum of extra-person (extra bed) money across every room row: for each row,
+// beds × per-bed rate × the SAME billable nights the room tariff uses. This
+// is part of the room tariff (same GST slab/mode), so callers add it to the
+// room amount BEFORE calcGstBreakdown — exactly as the create path and the
+// invoice builder do. recalcReservation once omitted this, so extending or
+// adding a room silently dropped the extra-person charge from the stored
+// reservation total (the invoice still billed it), surfacing as a phantom
+// "guest overpaid" once the correct invoice amount was paid.
+export function sumExtraBedAmount(
+  rooms: Array<RoomSegment & { extraBeds?: number | null; extraBedRate?: string | number | null }>,
+  stay: StayWindow,
+): number {
+  return +rooms
+    .reduce(
+      (sum, rm) =>
+        sum + Number(rm.extraBeds ?? 0) * Number(rm.extraBedRate ?? 0) * roomBillableNights(rm, stay),
+      0,
+    )
+    .toFixed(2);
+}

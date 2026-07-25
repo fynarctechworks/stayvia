@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { roomBillableNights, sumRoomAmount } from "./nights.js";
+import { roomBillableNights, sumExtraBedAmount, sumRoomAmount } from "./nights.js";
 
 // These tests encode the invariant that repeatedly broke: a room is billed
 // for ITS OWN nights, never the whole reservation's span. Each case mirrors a
@@ -65,5 +65,30 @@ describe("sumRoomAmount", () => {
   it("handles inclusive-mode decimal rates without drift", () => {
     const rooms = [{ ratePerNight: "1499.99", effectiveFrom: null, effectiveTo: null }];
     expect(sumRoomAmount(rooms, stay)).toBe(7499.95);
+  });
+});
+
+describe("sumExtraBedAmount", () => {
+  // RES-0001 (LUMINA STAYS): a penthouse extended 1n -> 2n with 1 extra
+  // person at 497/night gross. recalcReservation dropped this on extend, so
+  // the reservation total lost 994 while the invoice still billed it -> a
+  // phantom "guest overpaid 994".
+  const twoNight = { checkInDate: "2026-07-23", checkOutDate: "2026-07-25" };
+
+  it("bills extra beds for the room's own billable nights", () => {
+    const rooms = [{ extraBeds: 1, extraBedRate: "497.00", effectiveFrom: null, effectiveTo: null }];
+    expect(sumExtraBedAmount(rooms, twoNight)).toBe(994);
+  });
+
+  it("is zero when no extra beds are set", () => {
+    expect(sumExtraBedAmount([{ effectiveFrom: null, effectiveTo: null }], twoNight)).toBe(0);
+  });
+
+  it("uses per-segment nights, not the whole stay", () => {
+    // Extra bed only on a 1-night added-room segment inside a 2-night stay.
+    const rooms = [
+      { extraBeds: 2, extraBedRate: 300, effectiveFrom: "2026-07-24", effectiveTo: "2026-07-25" },
+    ];
+    expect(sumExtraBedAmount(rooms, twoNight)).toBe(600); // 2 beds * 300 * 1 night
   });
 });

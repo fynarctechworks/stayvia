@@ -52,7 +52,7 @@ import {
 import { calcGstBreakdown, getGstRate } from "../lib/gst.js";
 import { loadGuestExtra } from "../lib/guestExtra.js";
 import { buildInvoice, selectChargesForScope } from "../lib/invoiceBuilder.js";
-import { roomBillableNights, sumRoomAmount } from "../lib/nights.js";
+import { roomBillableNights, sumExtraBedAmount, sumRoomAmount } from "../lib/nights.js";
 import { PAYMENT_METHODS } from "../db/schema/enums.js";
 import { creditNoteNumber, invoiceNumber, nextDocNumber, reservationNumber } from "../lib/numbers.js";
 import { hashOtp } from "../lib/otp.js";
@@ -5077,6 +5077,12 @@ async function recalcReservation(id: string) {
       ratePerNight: reservationRooms.ratePerNight,
       effectiveFrom: reservationRooms.effectiveFrom,
       effectiveTo: reservationRooms.effectiveTo,
+      // Extra-person (extra bed) money is part of the room tariff and MUST be
+      // folded into the taxable room amount here — the invoice bills it, so
+      // omitting it understated the reservation total and produced a false
+      // "overpaid" once the correct invoice amount was paid.
+      extraBeds: reservationRooms.extraBeds,
+      extraBedRate: reservationRooms.extraBedRate,
     })
     .from(reservationRooms)
     .where(eq(reservationRooms.reservationId, id));
@@ -5096,8 +5102,9 @@ async function recalcReservation(id: string) {
   const reservationGstMode = current.gstMode ?? "exclusive";
   // Per-room segment nights via the shared helper — the ONE definition every
   // total goes through, so recalc, checkout, preview and the invoice builder
-  // can never disagree about how many nights a room is billed for.
-  const roomAmount = sumRoomAmount(assigned, current);
+  // can never disagree about how many nights a room is billed for. Extra-bed
+  // money rides the same nights + GST mode as the room tariff.
+  const roomAmount = +(sumRoomAmount(assigned, current) + sumExtraBedAmount(assigned, current)).toFixed(2);
 
   // ALWAYS inherit the reservation's snapshotted GST rate. Re-deriving
   // from the slab on every recalc made the rate drift whenever the
