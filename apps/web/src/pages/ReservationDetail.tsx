@@ -138,6 +138,11 @@ interface Detail {
     // Pre-rendered by the API. See lib/roomTypeLabel.ts on the server.
     displayType: string;
     ratePerNight: string;
+    // Extra person(s) on this room + per-night rate (0043). Billed on top of
+    // the room tariff for the room's own nights, at the same GST — shown as a
+    // sub-line under the room so the grand total is self-explanatory.
+    extraBeds?: number | null;
+    extraBedRate?: string | null;
     hasAc?: boolean;
     hasTv?: boolean;
     hasWifi?: boolean;
@@ -2417,6 +2422,8 @@ function RoomRow(props: {
     soldAsType?: string | null;
     displayType?: string;
     ratePerNight: string;
+    extraBeds?: number | null;
+    extraBedRate?: string | null;
     // PHYSICAL room status (dirty/clean/inspected/...).
     status?: string;
     // NEW (migration 0017): per-room reservation state +
@@ -2816,6 +2823,30 @@ function RoomRow(props: {
         )}
       </td>
     </tr>
+    {/* Extra-person (extra bed) sub-line — billed on top of the room tariff
+        for the room's own nights, at the same GST. Shown so the reservation
+        grand total is self-explanatory (it's a separate line on the
+        invoice). Hidden on closed swap legs and when none were added. */}
+    {!isClosedSwapLeg &&
+      Number(props.room.extraBeds ?? 0) > 0 &&
+      Number(props.room.extraBedRate ?? 0) > 0 && (
+        <tr className="text-textSecondary">
+          <td className="pl-8 text-xs">
+            <span className="inline-flex items-center gap-1.5">
+              <span className="text-textSecondary/60">↳</span>
+              {props.room.extraBeds} extra person{Number(props.room.extraBeds) === 1 ? "" : "s"}
+            </span>
+          </td>
+          <td className="text-xs capitalize">Extra person</td>
+          <td className="font-mono tabular-nums text-xs">
+            {inr(Number(props.room.extraBedRate))}
+          </td>
+          <td className="font-mono tabular-nums text-xs">
+            {inr(Number(props.room.extraBedRate) * Number(props.room.extraBeds) * rowNights)}
+          </td>
+          <td />
+        </tr>
+      )}
     {showRoomCheckout && (
       <PerRoomCheckoutModal
         reservationId={props.reservationId}
