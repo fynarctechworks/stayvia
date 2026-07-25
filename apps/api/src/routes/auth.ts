@@ -1,4 +1,4 @@
-import { and, eq, gt, isNull, sql } from "drizzle-orm";
+import { and, eq, gt, inArray, isNull, sql } from "drizzle-orm";
 import { Router } from "express";
 import { z } from "zod";
 import { env } from "../config/env.js";
@@ -257,6 +257,11 @@ router.put("/me", requireAuth, validate(meUpdateSchema), async (req, res) => {
 
 const sendPwOtpSchema = z.object({
   oldPassword: z.string().min(1),
+  // Where to send the code. "whatsapp" delivers to the profile phone via the
+  // messaging provider; "email" delivers to the account email. Phone and
+  // WhatsApp are the same channel here (the provider sends WhatsApp), so we
+  // expose WhatsApp + Email rather than a meaningless phone/whatsapp split.
+  channel: z.enum(["whatsapp", "email"]).default("whatsapp"),
 });
 
 router.post(
@@ -266,7 +271,7 @@ router.post(
   async (req, res) => {
     const userId = req.user!.id;
     const userEmail = req.user!.email;
-    const { oldPassword } = req.body as z.infer<typeof sendPwOtpSchema>;
+    const { oldPassword, channel } = req.body as z.infer<typeof sendPwOtpSchema>;
     const clientIp = req.ip ?? "unknown";
 
     // 1. Verify the current password by attempting a Supabase sign-in.
@@ -285,22 +290,32 @@ router.post(
     }
     recordSuccess(userEmail);
 
-    // 2. The OTP gets WhatsApp'd to the user's profile.phone. If missing,
-    //    require an admin to add the phone first — we don't fall back to
-    //    email since deployment is WhatsApp-only.
+    // 2. Resolve the delivery target for the chosen channel. WhatsApp needs a
+    //    profile phone (an admin adds it if missing); email always exists on
+    //    the account. `otpChannel` is the stored channel enum (sms|email);
+    //    WhatsApp is delivered through the SMS provider, so it stores "sms".
     const [row] = await db
       .select({ phone: profiles.phone })
       .from(profiles)
       .where(eq(profiles.id, userId))
       .limit(1);
-    const phone = row?.phone?.trim() ?? "";
-    if (!phone) {
-      return fail(
-        res,
-        400,
-        "NO_PHONE",
-        "Add a phone number to your profile before changing your password. Ask an administrator if you cannot edit your phone.",
-      );
+    let target: string;
+    let otpChannel: "sms" | "email";
+    if (channel === "email") {
+      target = userEmail;
+      otpChannel = "email";
+    } else {
+      const phone = row?.phone?.trim() ?? "";
+      if (!phone) {
+        return fail(
+          res,
+          400,
+          "NO_PHONE",
+          "Add a phone number to your profile to receive the code on WhatsApp, or choose Email instead.",
+        );
+      }
+      target = phone;
+      otpChannel = "sms";
     }
 
     // Same throttling shape as the guest OTP path (one per minute, 10/day
@@ -311,7 +326,7 @@ router.post(
       .where(
         and(
           eq(otps.propertyId, req.propertyId),
-          eq(otps.target, phone),
+          eq(otps.target, target),
           eq(otps.purpose, "password_change"),
           gt(otps.createdAt, sql`now() - interval '1 minute'`),
         ),
@@ -327,7 +342,7 @@ router.post(
       .where(
         and(
           eq(otps.propertyId, req.propertyId),
-          eq(otps.target, phone),
+          eq(otps.target, target),
           eq(otps.purpose, "password_change"),
           gt(otps.createdAt, sql`now() - interval '24 hours'`),
         ),
@@ -345,8 +360,8 @@ router.post(
     await db.insert(otps).values({
       propertyId: req.propertyId,
       purpose: "password_change",
-      channel: "sms",
-      target: phone,
+      channel: otpChannel,
+      target,
       codeHash: hashOtp(code),
       reservationId: null,
       guestId: null,
@@ -357,19 +372,27 @@ router.post(
     const minutes = Math.floor(env.OTP_TTL_SECONDS / 60);
     const hotel = await hotelDisplayName(req.propertyId);
     const text = `${hotel}: Your password change code is ${code}. Valid for ${minutes} minutes. Do not share this code.`;
-    const sendResult = await messaging.sendSms({ to: phone, text });
+    const sendResult =
+      otpChannel === "email"
+        ? await messaging.sendEmail({
+            to: target,
+            subject: `${hotel} — password change code`,
+            text,
+          })
+        : await messaging.sendSms({ to: target, text });
     if (!sendResult.ok && env.NOTIFICATIONS_PROVIDER === "live") {
-      logger.warn({ userId, error: sendResult.error }, "password-change OTP send failed");
+      logger.warn({ userId, channel: otpChannel, error: sendResult.error }, "password-change OTP send failed");
       return fail(
         res,
         502,
         "DELIVERY_FAILED",
-        "Could not send WhatsApp code. Try again in a moment.",
+        `Could not send the ${channel === "email" ? "email" : "WhatsApp"} code. Try again in a moment.`,
       );
     }
 
     return ok(res, {
-      target: maskTarget(phone, "sms"),
+      target: maskTarget(target, otpChannel),
+      channel,
       expiresInSeconds: env.OTP_TTL_SECONDS,
       // Mirrors the guest-OTP devCode behaviour: in stub mode the code
       // comes back in the response so local testing works without Twilio.
@@ -414,23 +437,24 @@ router.post(
       return fail(res, 401, "INVALID_CREDENTIALS", "Current password is incorrect");
     }
 
-    // Resolve the user's phone — must match the target the OTP was sent to.
+    // The OTP could have been sent to either the phone (WhatsApp) or the
+    // email — both belong to this same user, so accept either target.
     const [row] = await db
       .select({ phone: profiles.phone })
       .from(profiles)
       .where(eq(profiles.id, userId))
       .limit(1);
     const phone = row?.phone?.trim() ?? "";
-    if (!phone) return fail(res, 400, "NO_PHONE", "Profile phone missing");
+    const targets = [userEmail, ...(phone ? [phone] : [])];
 
-    // Newest non-consumed OTP for this phone + purpose.
+    // Newest non-consumed password-change OTP for any of this user's targets.
     const [otpRow] = await db
       .select()
       .from(otps)
       .where(
         and(
           eq(otps.propertyId, req.propertyId),
-          eq(otps.target, phone),
+          inArray(otps.target, targets),
           eq(otps.purpose, "password_change"),
           isNull(otps.consumedAt),
         ),

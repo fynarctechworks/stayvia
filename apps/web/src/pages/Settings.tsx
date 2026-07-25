@@ -217,6 +217,7 @@ function MyProfileTab() {
 function ChangePasswordCard({ phone }: { phone: string | null }) {
   const { toast } = useToast();
   const [step, setStep] = useState<1 | 2>(1);
+  const [channel, setChannel] = useState<"whatsapp" | "email">("whatsapp");
   const [oldPw, setOldPw] = useState("");
   const [newPw, setNewPw] = useState("");
   const [newPwConfirm, setNewPwConfirm] = useState("");
@@ -251,7 +252,7 @@ function ChangePasswordCard({ phone }: { phone: string | null }) {
       if (!oldPw) throw new Error("Enter your current password");
       return api.post<{ target: string; expiresInSeconds: number; devCode?: string }>(
         "/auth/me/password/send-otp",
-        { oldPassword: oldPw },
+        { oldPassword: oldPw, channel },
       );
     },
     onSuccess: (data) => {
@@ -260,7 +261,7 @@ function ChangePasswordCard({ phone }: { phone: string | null }) {
       setSecondsLeft(data.expiresInSeconds);
       setStep(2);
       setErr(null);
-      toast("OTP sent on WhatsApp", "success");
+      toast(channel === "email" ? "Code sent to your email" : "Code sent on WhatsApp", "success");
     },
     onError: (e: Error) => setErr(e.message),
   });
@@ -269,7 +270,7 @@ function ChangePasswordCard({ phone }: { phone: string | null }) {
     mutationFn: async () => {
       if (newPw.length < 8) throw new Error("New password must be at least 8 characters");
       if (newPw !== newPwConfirm) throw new Error("New passwords do not match");
-      if (!otp) throw new Error("Enter the OTP from WhatsApp");
+      if (!otp) throw new Error("Enter the code we sent you");
       return api.post("/auth/me/password/change", {
         oldPassword: oldPw,
         otp,
@@ -290,16 +291,10 @@ function ChangePasswordCard({ phone }: { phone: string | null }) {
       <div>
         <h3 className="font-semibold text-brand-dark text-lg">Change Password</h3>
         <p className="text-xs text-textSecondary mt-1">
-          Verify your current password, then enter the OTP we send to your WhatsApp number.
+          Verify your current password, then enter the code we send to your WhatsApp or email.
         </p>
       </div>
 
-      {!hasPhone && (
-        <div className="rounded-sm border border-warning/40 bg-warning/10 px-3 py-2 text-warning text-sm">
-          You don't have a phone number on file. Add one above and save before changing your
-          password - the OTP is delivered via WhatsApp.
-        </div>
-      )}
 
       {step === 1 && (
         <>
@@ -329,13 +324,52 @@ function ChangePasswordCard({ phone }: { phone: string | null }) {
             </div>
           )}
 
+          <div>
+            <label className="label block mb-1.5">Send the code to</label>
+            <div className="inline-flex rounded-sm border border-borderc overflow-hidden text-sm">
+              <button
+                type="button"
+                onClick={() => setChannel("whatsapp")}
+                disabled={!hasPhone}
+                className={`px-4 h-9 font-medium transition-colors disabled:opacity-40 ${
+                  channel === "whatsapp"
+                    ? "bg-brand text-textPrimary"
+                    : "bg-surface text-textSecondary hover:bg-bg"
+                }`}
+                title={hasPhone ? undefined : "Add a phone number above to use WhatsApp"}
+              >
+                WhatsApp
+              </button>
+              <button
+                type="button"
+                onClick={() => setChannel("email")}
+                className={`px-4 h-9 font-medium border-l border-borderc transition-colors ${
+                  channel === "email"
+                    ? "bg-brand text-textPrimary"
+                    : "bg-surface text-textSecondary hover:bg-bg"
+                }`}
+              >
+                Email
+              </button>
+            </div>
+            {channel === "whatsapp" && !hasPhone && (
+              <p className="text-[11px] text-warning mt-1.5">
+                No phone on file — add one above, or use Email.
+              </p>
+            )}
+          </div>
+
           <div className="flex justify-end">
             <button
               className="btn-primary"
               onClick={() => sendOtp.mutate()}
-              disabled={sendOtp.isPending || !hasPhone || !oldPw}
+              disabled={sendOtp.isPending || !oldPw || (channel === "whatsapp" && !hasPhone)}
             >
-              {sendOtp.isPending ? "Verifying…" : "Send OTP on WhatsApp"}
+              {sendOtp.isPending
+                ? "Verifying…"
+                : channel === "email"
+                  ? "Email me a code"
+                  : "Send code on WhatsApp"}
             </button>
           </div>
         </>
@@ -345,7 +379,7 @@ function ChangePasswordCard({ phone }: { phone: string | null }) {
         <>
           <div className="rounded-sm bg-brand-soft/40 border border-borderc px-3 py-2 text-sm">
             <>
-              OTP sent to <span className="font-mono">{maskedTarget}</span> via WhatsApp.
+              Code sent to <span className="font-mono">{maskedTarget}</span> via {channel === "email" ? "email" : "WhatsApp"}.
             </>
             {secondsLeft > 0 && (
               <span className="text-textSecondary ml-2">
@@ -360,7 +394,7 @@ function ChangePasswordCard({ phone }: { phone: string | null }) {
             )}
           </div>
 
-          <Field label="OTP from WhatsApp">
+          <Field label="Verification code">
             <input
               className="input font-mono tracking-widest text-lg"
               inputMode="numeric"
