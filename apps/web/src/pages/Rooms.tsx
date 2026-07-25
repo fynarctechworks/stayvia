@@ -87,8 +87,6 @@ export default function Rooms() {
     { key: "occupied", label: "Occupied" },
     { key: "reserved", label: "Reserved" },
     { key: "dirty", label: "Needs Cleaning" },
-    { key: "clean", label: "Clean" },
-    { key: "inspected", label: "Inspected" },
     { key: "maintenance", label: "Maintenance" },
   ];
 
