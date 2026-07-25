@@ -4,7 +4,7 @@
 // printed sticker never needs reprinting.
 import { useEffect, useRef, useState } from "react";
 import QRCode from "qrcode";
-import { X } from "@/lib/micons";
+import { Check, Copy, X } from "@/lib/micons";
 
 interface Props {
   open: boolean;
@@ -17,6 +17,17 @@ interface Props {
 export default function QrCodeModal({ open, onClose, url, title, subtitle }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [dataUrl, setDataUrl] = useState("");
+  const [copied, setCopied] = useState(false);
+
+  async function copyUrl() {
+    try {
+      await navigator.clipboard.writeText(url);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      /* clipboard blocked — the URL is still selectable as text */
+    }
+  }
 
   useEffect(() => {
     if (!open || !url) return;
@@ -63,7 +74,22 @@ export default function QrCodeModal({ open, onClose, url, title, subtitle }: Pro
         <div className="grid place-items-center bg-white rounded-sm p-3">
           <canvas ref={canvasRef} />
         </div>
-        <div className="text-[11px] text-textSecondary text-center mt-2 break-all">{url}</div>
+        <button
+          onClick={copyUrl}
+          title="Copy link"
+          className="w-full mt-2 flex items-center gap-2 rounded-sm border border-borderc bg-bg px-2.5 py-1.5 text-left hover:border-brand transition-colors group"
+        >
+          <span className="flex-1 min-w-0 text-[11px] text-textSecondary font-mono truncate">
+            {url}
+          </span>
+          {copied ? (
+            <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-brand-deep shrink-0">
+              <Check className="w-3.5 h-3.5" /> Copied
+            </span>
+          ) : (
+            <Copy className="w-3.5 h-3.5 text-textSecondary group-hover:text-brand-dark shrink-0" />
+          )}
+        </button>
         <div className="flex gap-2 mt-4">
           <button className="btn-primary flex-1" onClick={printQr}>
             Print
