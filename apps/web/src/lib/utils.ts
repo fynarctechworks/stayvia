@@ -14,6 +14,18 @@ export function inr(value: number | string) {
   }).format(n);
 }
 
+// Whole-rupee display (no paise). Guest-facing surfaces (QR pages) show
+// clean tariffs like ₹1,500 instead of ₹1,500.00. Never use for money the
+// books must reconcile — keep inr() for invoices/payments/final totals.
+export function inr0(value: number | string) {
+  const n = typeof value === "string" ? Number(value) : value;
+  return new Intl.NumberFormat("en-IN", {
+    style: "currency",
+    currency: "INR",
+    maximumFractionDigits: 0,
+  }).format(n);
+}
+
 // Per-ID-type input limits for guest KYC. Each entry drives the ID Number
 // field: allowed characters, hard length cap, and a placeholder showing the
 // expected shape. Aadhaar is digits-only; the rest are uppercase alphanumeric

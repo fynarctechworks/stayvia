@@ -19,10 +19,13 @@ import {
   Check,
   CheckCircle2,
   ChevronLeft,
+  Clock,
   FileImage,
   IdCard,
   LayoutDashboard,
   Loader2,
+  MapPin,
+  Plus,
   Snowflake,
   Users,
   Wifi,
@@ -40,7 +43,7 @@ import {
   qrInputClass,
 } from "@/components/qrKit";
 import { INDIAN_STATES, INDIAN_UNION_TERRITORIES } from "@/lib/indianStates";
-import { ID_PROOF_SPECS, inr, sanitizeIdProofNumber } from "@/lib/utils";
+import { ID_PROOF_SPECS, inr, inr0, sanitizeIdProofNumber } from "@/lib/utils";
 import {
   publicQr,
   PublicApiError,
@@ -206,11 +209,28 @@ export default function HotelQr() {
     <div className="min-h-screen bg-bg text-textPrimary antialiased">
       <QrTopNav
         hotelName={catalog.hotel.name}
-        subtitle={catalog.hotel.address || undefined}
         logoUrl={catalog.hotel.logoUrl}
+        phone={catalog.hotel.phone || undefined}
+        eyebrow={<>Direct booking</>}
+        meta={
+          <>
+            {catalog.hotel.address && (
+              <span className="inline-flex items-center gap-1 min-w-0">
+                <MapPin className="w-3 h-3 text-brand shrink-0" />
+                <span className="truncate">{catalog.hotel.address}</span>
+              </span>
+            )}
+            <span className="inline-flex items-center gap-1 shrink-0">
+              <Clock className="w-3 h-3 text-brand" /> Check-in {qrFormatTime(catalog.hotel.checkInTime)}
+            </span>
+            <span className="inline-flex items-center gap-1 shrink-0">
+              <Check className="w-3 h-3 text-brand" /> Pay at the desk
+            </span>
+          </>
+        }
       />
 
-      <main className="max-w-md mx-auto px-4 pt-5 pb-32 space-y-3.5 relative">
+      <main className="max-w-md mx-auto px-4 pt-4 pb-32 space-y-4 relative">
         {/* ---- browse ---- */}
         {step === "browse" && (
           <>
@@ -229,6 +249,17 @@ export default function HotelQr() {
                   activeType === "all" ? cats : cats.filter((c) => c.slug === activeType);
                 return (
                   <>
+                    {/* Arrival band — a warm greeting that sets the tone
+                        without needing a hero photo. */}
+                    <div className="rounded-2xl bg-brand-softer border border-brand/15 px-4 py-3">
+                      <div className="text-[15px] font-bold text-brand-dark capitalize">
+                        Tonight at {catalog.hotel.name}
+                      </div>
+                      <p className="text-[12px] text-textSecondary mt-0.5">
+                        Rooms ready now — reserve in a tap, settle at the front desk.
+                      </p>
+                    </div>
+
                     {/* Round photo category thumbnails — tap to filter the
                         list below. "All" first, then one per room type. */}
                     <div className="-mx-4 px-4 overflow-x-auto">
@@ -251,25 +282,35 @@ export default function HotelQr() {
                       </div>
                     </div>
 
-                    <div className="flex items-center justify-between px-1">
-                      <span className="text-sm font-semibold text-textPrimary">
-                        Rooms free tonight
-                        <span className="text-textSecondary font-normal"> · {catalog.rooms.length}</span>
+                    <div className="flex items-center gap-2.5 px-1">
+                      {/* Live-availability pulse. */}
+                      <span className="relative flex h-2 w-2 shrink-0">
+                        <span className="absolute inline-flex h-full w-full rounded-full bg-brand opacity-60 animate-ping" />
+                        <span className="relative inline-flex h-2 w-2 rounded-full bg-brand-deep" />
                       </span>
-                      <span className="text-xs text-textSecondary">
-                        check-in {qrFormatTime(catalog.hotel.checkInTime)}
+                      <span className="text-[13px] font-semibold uppercase tracking-[0.12em] text-brand-dark">
+                        Free tonight
+                      </span>
+                      <span className="font-mono text-[13px] text-textSecondary">
+                        {catalog.rooms.length}
+                      </span>
+                      <span className="flex-1 h-px bg-borderc" />
+                      <span className="text-[11px] text-textSecondary whitespace-nowrap">
+                        from <span className="font-mono">{inr0(cats[0]!.fromRate)}</span>
                       </span>
                     </div>
 
                     {shownCats.map((cat) => (
                       <div key={cat.slug} className="space-y-2.5">
-                        <div className="flex items-baseline gap-2 px-1 pt-1">
-                          <h3 className="text-xs font-bold uppercase tracking-wider text-brand-dark">
+                        <div className="flex items-center gap-2 px-1 pt-1">
+                          <span className="w-1 h-4 rounded-full bg-brand-deep shrink-0" />
+                          <h3 className="text-[12px] font-bold uppercase tracking-[0.14em] text-brand-dark">
                             {cat.label}
                           </h3>
-                          <span className="text-[11px] text-textSecondary">
+                          <span className="flex-1 h-px bg-borderc/70" />
+                          <span className="text-[11px] text-textSecondary whitespace-nowrap">
                             {cat.rooms.length} room{cat.rooms.length === 1 ? "" : "s"} · from{" "}
-                            {inr(cat.fromRate)}
+                            <span className="font-mono">{inr0(cat.fromRate)}</span>
                           </span>
                         </div>
                         {cat.rooms.map((r) => (
@@ -488,7 +529,7 @@ export default function HotelQr() {
                   <Loader2 className="w-4 h-4 animate-spin" /> Booking…
                 </>
               ) : (
-                `Confirm booking · ${inr(total)}`
+                `Confirm booking · ${inr0(total)}`
               )}
             </PrimaryButton>
           </Card>
@@ -525,14 +566,17 @@ export default function HotelQr() {
 
       {/* Sticky booking bar — browse step, once a room is picked */}
       {step === "browse" && selected.length > 0 && (
-        <div className="fixed bottom-0 inset-x-0 z-40 bg-white/95 backdrop-blur border-t border-borderc">
+        <div
+          className="fixed bottom-0 inset-x-0 z-40 bg-white/95 backdrop-blur border-t border-borderc shadow-[0_-4px_16px_rgba(0,0,0,0.06)] animate-in fade-in slide-in-from-bottom-2"
+          style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
+        >
           <div className="max-w-md mx-auto px-4 py-3 flex items-center gap-3">
-            <div className="flex-1">
-              <div className="flex items-center gap-1.5 font-bold text-lg">
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-1 font-mono font-bold text-xl text-brand-dark leading-none">
                 <BadgeIndianRupee className="w-4 h-4 text-brand-deep" />
-                {inr(total)}
+                {inr0(total)}
               </div>
-              <div className="text-[11px] text-textSecondary -mt-0.5">
+              <div className="text-[11px] text-textSecondary mt-1">
                 {selected.length} room{selected.length === 1 ? "" : "s"} · {nights} night
                 {nights === 1 ? "" : "s"} · + GST
               </div>
@@ -585,12 +629,15 @@ function CategoryCircle({
   return (
     <button onClick={onClick} className="flex flex-col items-center gap-1.5 w-16 shrink-0">
       <span
-        className={`w-16 h-16 rounded-2xl overflow-hidden grid place-items-center transition ${
-          active ? "ring-2 ring-brand" : "border border-borderc"
+        className={`relative w-16 h-16 rounded-2xl overflow-hidden grid place-items-center transition ${
+          active ? "ring-2 ring-brand shadow-sm" : "border border-borderc"
         }`}
       >
         {cover && !isAll ? (
-          <img src={cover} alt={label} className="w-full h-full object-cover" />
+          <>
+            <img src={cover} alt={label} className="w-full h-full object-cover" />
+            <span className="absolute inset-x-0 bottom-0 h-1/2 bg-gradient-to-t from-black/30 to-transparent" />
+          </>
         ) : (
           <span className="w-full h-full bg-brand-soft text-brand-deep grid place-items-center">
             <Icon className="w-6 h-6" />
@@ -652,69 +699,108 @@ function RoomCard({
   const cover = r.images[0]?.url;
   return (
     <div
-      className={`bg-white rounded-2xl border overflow-hidden shadow-sm transition ${
-        active ? "border-brand ring-1 ring-brand" : "border-borderc"
+      className={`bg-white rounded-2xl border overflow-hidden transition shadow-[0_1px_2px_rgba(0,0,0,0.04)] ${
+        active
+          ? "border-brand ring-2 ring-brand shadow-[0_4px_16px_rgba(62,207,142,0.18)]"
+          : "border-borderc"
       }`}
     >
-      {/* Big cover photo — travel-app style */}
-      <button onClick={onDetails} className="relative block w-full h-44">
+      {/* Cover photo — or a designed branded plate when the room has none */}
+      <button onClick={onDetails} className="group relative block w-full h-44 overflow-hidden">
         {cover ? (
-          <img src={cover} alt={`Room ${r.roomNumber}`} className="absolute inset-0 w-full h-full object-cover" />
+          <img
+            src={cover}
+            alt={`Room ${r.roomNumber}`}
+            className="absolute inset-0 w-full h-full object-cover transition duration-500 group-active:scale-[1.02]"
+          />
         ) : (
-          <div className="absolute inset-0 bg-bg grid place-items-center text-textSecondary/50">
-            <BedDouble className="w-10 h-10" />
-          </div>
+          <EmptyRoomArt roomNumber={r.roomNumber} label={r.roomTypeLabel} />
         )}
-        <span className="absolute top-2.5 left-2.5 bg-white/90 backdrop-blur text-[11px] font-semibold rounded-full px-2.5 py-1">
+        <span className="absolute inset-x-0 bottom-0 h-20 bg-gradient-to-t from-black/45 via-black/10 to-transparent" />
+        <span className="absolute top-3 left-3 bg-brand-dark/70 backdrop-blur text-cream text-[11px] font-semibold rounded-full px-2.5 py-1 ring-1 ring-white/10">
           {r.roomTypeLabel}
         </span>
         {r.images.length > 0 && (
-          <span className="absolute bottom-2.5 right-2.5 bg-black/55 text-white text-[10px] rounded-full px-2 py-0.5 inline-flex items-center gap-1">
+          <span className="absolute bottom-3 right-3 bg-black/45 backdrop-blur ring-1 ring-white/10 text-white text-[10px] rounded-full px-2 py-0.5 inline-flex items-center gap-1">
             <FileImage className="w-3 h-3" /> {r.images.length}
+          </span>
+        )}
+        {active && (
+          <span className="absolute top-3 right-3 w-6 h-6 rounded-full bg-brand text-textPrimary grid place-items-center shadow">
+            <Check className="w-4 h-4" />
           </span>
         )}
       </button>
 
-      <div className="p-3">
+      <div className="p-3.5">
         <div className="flex items-start justify-between gap-2">
           <button onClick={onDetails} className="text-left min-w-0">
             <div className="font-bold text-[15px] leading-tight">Room {r.roomNumber}</div>
             <div className="text-[11px] text-textSecondary mt-0.5">Floor {r.floor}</div>
           </button>
           <div className="text-right shrink-0">
-            <div className="font-bold text-textPrimary">{inr(r.baseRate)}</div>
-            <div className="text-[10px] text-textSecondary -mt-0.5">per night</div>
+            <div className="font-mono font-bold text-[18px] text-brand-dark leading-none">
+              {inr0(r.baseRate)}
+            </div>
+            <div className="text-[10px] text-textSecondary mt-1">per night · + GST</div>
           </div>
         </div>
 
-        <div className="flex flex-wrap items-center gap-x-2.5 gap-y-0.5 mt-2 text-[11px] text-textPrimary">
-          <span className="inline-flex items-center gap-1">
-            <Users className="w-3 h-3 text-textSecondary" /> Sleeps {r.maxOccupancy}
+        {/* Feature chips */}
+        <div className="flex flex-wrap gap-1.5 mt-2.5">
+          <span className="inline-flex items-center gap-1 rounded-full bg-brand-soft text-brand-deep px-2.5 py-1 text-[11px] font-medium">
+            <Users className="w-3 h-3" /> Sleeps {r.maxOccupancy}
           </span>
-          <span className="inline-flex items-center gap-1">
-            <Snowflake className="w-3 h-3 text-textSecondary" /> {r.hasAc ? "AC" : "Non-AC"}
+          <span className="inline-flex items-center gap-1 rounded-full bg-brand-soft text-brand-deep px-2.5 py-1 text-[11px] font-medium">
+            <Snowflake className="w-3 h-3" /> {r.hasAc ? "AC" : "Non-AC"}
           </span>
           {r.hasWifi && (
-            <span className="inline-flex items-center gap-1">
-              <Wifi className="w-3 h-3 text-textSecondary" /> Free WiFi
+            <span className="inline-flex items-center gap-1 rounded-full bg-brand-soft text-brand-deep px-2.5 py-1 text-[11px] font-medium">
+              <Wifi className="w-3 h-3" /> Free WiFi
             </span>
           )}
         </div>
 
-        <div className="flex items-center justify-between gap-2 mt-3">
+        <div className="flex items-center justify-between gap-2 mt-3.5">
           <span className="inline-flex items-center gap-1 text-[11px] font-medium text-brand-deep">
             <Check className="w-3.5 h-3.5" /> Pay at the hotel
           </span>
           <button
             onClick={onToggle}
             disabled={disabled}
-            className={`h-9 px-5 rounded-lg text-[13px] font-semibold transition disabled:opacity-40 ${
-              active ? "bg-brand-deep text-white" : "bg-brand text-textPrimary hover:bg-brand-light"
+            className={`h-9 px-5 rounded-full text-[13px] font-semibold transition disabled:opacity-40 inline-flex items-center gap-1 shadow-sm active:scale-95 ${
+              active ? "bg-brand-dark text-cream" : "bg-brand text-textPrimary hover:bg-brand-light"
             }`}
           >
-            {active ? "Selected" : "Select"}
+            {active ? (
+              <>
+                <Check className="w-3.5 h-3.5" /> Selected
+              </>
+            ) : (
+              <>
+                Select <Plus className="w-3.5 h-3.5" />
+              </>
+            )}
           </button>
         </div>
+      </div>
+    </div>
+  );
+}
+
+// Designed placeholder for rooms with no uploaded photo — a dark emerald
+// plate (ties to the header) with a dot texture and the room number as an
+// oversized mono watermark. Reads as intentional, never "missing image".
+function EmptyRoomArt({ roomNumber, label }: { roomNumber: string; label: string }) {
+  return (
+    <div className="absolute inset-0 bg-gradient-to-br from-brand-dark via-brand-deep to-brand overflow-hidden grid place-items-center">
+      <div className="absolute inset-0 opacity-[0.10] [background-image:radial-gradient(circle_at_1px_1px,#fff_1px,transparent_0)] [background-size:14px_14px]" />
+      <span className="absolute -bottom-3 -right-1 font-mono font-bold text-[7rem] leading-none text-cream/10 select-none">
+        {roomNumber}
+      </span>
+      <div className="relative flex flex-col items-center gap-1.5 text-cream/80">
+        <BedDouble className="w-9 h-9" />
+        <span className="text-[11px] font-medium tracking-wide capitalize">{label}</span>
       </div>
     </div>
   );
@@ -764,8 +850,8 @@ function RoomDetailSheet({
             ))}
           </div>
         ) : (
-          <div className="mx-4 h-48 rounded-lg bg-bg grid place-items-center text-textSecondary/40">
-            <BedDouble className="w-12 h-12" />
+          <div className="relative mx-4 h-48 rounded-lg overflow-hidden">
+            <EmptyRoomArt roomNumber={r.roomNumber} label={r.roomTypeLabel} />
           </div>
         )}
 

@@ -6,51 +6,78 @@
 import { useEffect, useRef, useState, type ButtonHTMLAttributes, type ReactNode } from "react";
 import { Check, ChevronDown, Phone } from "@/lib/micons";
 
-// Sticky top nav — app-bar style: logo + hotel name left, actions right,
-// optional one-line subtitle bar underneath. Stays pinned while the guest
-// scrolls so the hotel identity and the call action are always reachable.
+// Sticky "arrival" top nav — premium hospitality header. A near-black bar
+// with a soft emerald depth-glow, a jeweled logo tile, an optional emerald
+// eyebrow above the hotel name, an optional trust-meta row (location /
+// check-in / pay-at-desk), and a signature emerald baseline that turns the
+// slab into a designed header. `right` + `phone` are kept for the in-room
+// page (room badge / call button). Stays pinned as the guest scrolls.
 export function QrTopNav({
   hotelName,
-  subtitle,
   logoUrl,
   phone,
+  eyebrow,
+  meta,
+  subtitle,
   right,
 }: {
   hotelName: string;
-  subtitle?: string;
   logoUrl?: string | null;
   phone?: string;
+  // Small emerald label above the name (e.g. "Direct booking" or a location).
+  eyebrow?: ReactNode;
+  // Trust-meta row under the identity row. Falls back to `subtitle` text.
+  meta?: ReactNode;
+  subtitle?: string;
   right?: ReactNode;
 }) {
   return (
-    <header className="sticky top-0 z-40 bg-brand-dark text-white shadow-md">
-      <div className="max-w-md mx-auto h-14 px-3.5 flex items-center gap-2.5">
-        {logoUrl && (
-          <div className="w-9 h-9 rounded-md overflow-hidden bg-white shrink-0">
+    <header className="sticky top-0 z-40 bg-brand-dark text-cream shadow-lg relative overflow-hidden">
+      {/* Depth glow bleeding from the top-right corner. */}
+      <div className="pointer-events-none absolute -top-10 -right-8 w-44 h-44 rounded-full bg-brand/15 blur-3xl" />
+
+      {/* Row 1 — identity */}
+      <div className="max-w-md mx-auto px-4 pt-3.5 pb-2.5 flex items-center gap-3 relative">
+        <div className="w-11 h-11 rounded-xl bg-cream ring-1 ring-white/15 shadow-md overflow-hidden shrink-0 grid place-items-center">
+          {logoUrl ? (
             <img src={logoUrl} alt={hotelName} className="w-full h-full object-cover" />
-          </div>
-        )}
-        <h1 className="flex-1 min-w-0 text-[17px] font-bold leading-tight capitalize truncate">
-          {hotelName}
-        </h1>
+          ) : (
+            <span className="text-brand-dark font-bold text-lg">
+              {hotelName.charAt(0).toUpperCase()}
+            </span>
+          )}
+        </div>
+        <div className="flex-1 min-w-0">
+          {eyebrow && (
+            <div className="flex items-center gap-1 text-[11px] font-semibold uppercase tracking-[0.14em] text-brand">
+              {eyebrow}
+            </div>
+          )}
+          <h1 className="text-[19px] font-bold leading-tight capitalize truncate text-cream">
+            {hotelName}
+          </h1>
+        </div>
         {right}
         {phone && (
           <a
             href={`tel:${phone}`}
             aria-label="Call front desk"
-            className="w-9 h-9 rounded-md bg-white/10 hover:bg-white/20 grid place-items-center shrink-0 transition-colors"
+            className="w-9 h-9 rounded-full bg-white/10 hover:bg-white/20 grid place-items-center shrink-0 transition-colors"
           >
             <Phone className="w-4 h-4" />
           </a>
         )}
       </div>
-      {subtitle && (
-        <div className="bg-black/25">
-          <p className="max-w-md mx-auto px-4 py-1.5 text-[11px] text-white/75 leading-snug">
-            {subtitle}
-          </p>
+
+      {/* Row 2 — trust meta (or a plain subtitle line) */}
+      {(meta || subtitle) && (
+        <div className="max-w-md mx-auto px-4 pb-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-cream/70 relative">
+          {meta ?? subtitle}
         </div>
       )}
+
+      {/* Signature emerald baseline. */}
+      <div className="h-[3px] bg-gradient-to-r from-brand-deep via-brand to-brand-deep" />
     </header>
   );
 }
