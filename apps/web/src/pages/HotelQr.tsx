@@ -585,8 +585,8 @@ function CategoryCircle({
   return (
     <button onClick={onClick} className="flex flex-col items-center gap-1.5 w-16 shrink-0">
       <span
-        className={`w-16 h-16 rounded-full overflow-hidden grid place-items-center transition ${
-          active ? "ring-2 ring-brand ring-offset-2 ring-offset-bg" : ""
+        className={`w-16 h-16 rounded-2xl overflow-hidden grid place-items-center transition ${
+          active ? "ring-2 ring-brand ring-offset-2 ring-offset-bg" : "border border-borderc"
         }`}
       >
         {cover && !isAll ? (
