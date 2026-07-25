@@ -232,7 +232,7 @@ export default function HotelQr() {
                     {/* Round photo category thumbnails — tap to filter the
                         list below. "All" first, then one per room type. */}
                     <div className="-mx-4 px-4 overflow-x-auto">
-                      <div className="flex gap-4 w-max pb-1">
+                      <div className="flex gap-3 w-max py-1.5">
                         <CategoryCircle
                           label="All"
                           active={activeType === "all"}
@@ -586,7 +586,7 @@ function CategoryCircle({
     <button onClick={onClick} className="flex flex-col items-center gap-1.5 w-16 shrink-0">
       <span
         className={`w-16 h-16 rounded-2xl overflow-hidden grid place-items-center transition ${
-          active ? "ring-2 ring-brand ring-offset-2 ring-offset-bg" : "border border-borderc"
+          active ? "ring-2 ring-brand" : "border border-borderc"
         }`}
       >
         {cover && !isAll ? (
