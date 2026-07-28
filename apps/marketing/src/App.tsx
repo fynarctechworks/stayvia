@@ -6,10 +6,12 @@ import {
   FileText,
   Lock,
   MessageCircle,
+  QrCode,
   Receipt,
   ShieldCheck,
   Sparkles,
   Users,
+  Wifi,
 } from "./micons";
 
 // Where the product lives. Point at the deployed app in production via
@@ -86,9 +88,10 @@ function Hero() {
             <span className="text-brand">one desk.</span>
           </h1>
           <p className="mt-5 text-white/75 text-lg leading-relaxed max-w-xl">
-            Reservations, GST invoices, guest KYC, housekeeping and WhatsApp
-            updates - one calm workspace built for independent Indian hotels.
-            Set up in minutes, no hardware, no training manuals.
+            Reservations, GST invoices, guest KYC, housekeeping, WhatsApp
+            updates and contactless QR check-in - one calm workspace built for
+            independent Indian hotels. Set up in minutes, no hardware, no
+            training manuals.
           </p>
           <div className="mt-8 flex flex-wrap items-center gap-4">
             <a
@@ -167,6 +170,16 @@ const FEATURES = [
     body: "Pre-bookings, walk-in check-ins, room swaps, extensions and day-use stays - with a live calendar your whole desk can read at a glance.",
   },
   {
+    icon: QrCode,
+    title: "Contactless QR booking",
+    body: "Guests scan the QR at your front desk, see tonight's free rooms and fill in their own KYC. It arrives as a hold - your desk verifies the ID, takes payment and confirms. Walk-ins practically check themselves in.",
+  },
+  {
+    icon: Wifi,
+    title: "In-room guest QR",
+    body: "A QR in every room hands over the WiFi and lets guests request cleaning, amenities or report a problem - no calls to reception. It switches itself off at checkout.",
+  },
+  {
     icon: Receipt,
     title: "GST invoicing that's audit-ready",
     body: "CGST/SGST slabs applied automatically, sequential invoice numbers per hotel, credit notes, room-wise splits and clean PDF documents.",
@@ -242,7 +255,7 @@ const STEPS = [
   {
     n: "2",
     title: "Take bookings & check guests in",
-    body: "Walk-ins and pre-bookings with KYC capture and optional OTP verification. The calendar and housekeeping board stay in sync on their own.",
+    body: "Walk-ins and pre-bookings with KYC capture and optional OTP verification - or let guests self-book by scanning your QR. The calendar and housekeeping board stay in sync on their own.",
   },
   {
     n: "3",
@@ -275,6 +288,7 @@ function HowItWorks() {
 const PLAN_POINTS = [
   "Unlimited rooms, bookings & staff accounts",
   "Reservations, calendar & housekeeping",
+  "Contactless QR booking + in-room guest service QR",
   "GST invoices, credit notes & PDF documents",
   "WhatsApp confirmations, OTP check-in & receipts",
   "Encrypted guest KYC vault",
@@ -344,6 +358,10 @@ const FAQS = [
   {
     q: "Do I need special hardware?",
     a: "No. Stayvia runs in the browser on any laptop, tablet or phone. Reception uses whatever computer it already has.",
+  },
+  {
+    q: "Can guests book and check in themselves?",
+    a: "Yes. Put a Stayvia QR at your front desk and guests browse tonight's free rooms and submit their own details from their phone - it arrives as a hold your desk confirms after taking payment, so you stay in control. A separate QR in each room shares the WiFi and takes service requests, and it turns off automatically when the guest checks out.",
   },
   {
     q: "Are the invoices GST-compliant?",
