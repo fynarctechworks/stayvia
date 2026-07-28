@@ -5,10 +5,6 @@
   "installCommand": "PUPPETEER_SKIP_DOWNLOAD=true npm install --no-audit --no-fund",
   "framework": "vite",
   "trailingSlash": false,
-  "redirects": [
-    { "source": "/h/:path*", "destination": "https://app.stayvia.infynarc.com/h/:path*", "permanent": true },
-    { "source": "/r/:path*", "destination": "https://app.stayvia.infynarc.com/r/:path*", "permanent": true }
-  ],
   "rewrites": [
     { "source": "/(.*)", "destination": "/index.html" }
   ],
