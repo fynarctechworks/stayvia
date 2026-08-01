@@ -37,6 +37,9 @@ export default {
         surface: "#FFFFFF",
         surfaceAlt: "#FBFAF7",
         surfaceSubtle: "#F7F5F0",
+        // Shell chrome: blurred topbar paper + Parchment sidebar hover.
+        paper: "#F4F2EC",
+        parchment: "#EEEBE3",
         textPrimary: "#1E2420",
         textSecondary: "#6A7069",
         borderc: "#E9E6DE",

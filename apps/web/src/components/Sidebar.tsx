@@ -55,28 +55,60 @@ interface NavItem {
   // Strictly role-gated items (no permission key exists) — e.g. Billing,
   // which the API guards with requireRole('admin').
   adminOnly?: boolean;
+  // Live indicator rendered at the right edge when expanded.
+  indicator?: "collections" | "messages" | "notifications";
 }
 
-// Each item declares the permission key required. Admin (god mode) sees everything.
-const NAV: NavItem[] = [
-  { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard, iconFill: LayoutDashboardFill, permission: "view_dashboard" },
-  { to: "/rooms", label: "Rooms", icon: DoorOpen, iconFill: DoorOpenFill, permission: "view_rooms" },
-  { to: "/calendar", label: "Calendar", icon: CalendarDays, iconFill: CalendarDaysFill, permission: "view_reservations" },
-  { to: "/reservations", label: "Reservations", icon: CalendarCheck, iconFill: CalendarCheckFill, permission: "view_reservations" },
-  { to: "/guests", label: "Guests", icon: Users, iconFill: UsersFill, permission: "view_guests" },
-  { to: "/housekeeping", label: "Housekeeping", icon: SprayCan, iconFill: SprayCanFill, permission: "view_housekeeping" },
-  { to: "/messages", label: "Messages", icon: MessageSquare, iconFill: MessageSquareFill, permission: "view_messages" },
-  { to: "/invoices", label: "Invoices", icon: Receipt, iconFill: ReceiptFill, permission: "view_invoices" },
-  { to: "/collections", label: "Collections", icon: Wallet, iconFill: WalletFill, permission: "view_revenue" },
-  { to: "/credits", label: "Credits", icon: BadgeIndianRupee, iconFill: BadgeIndianRupeeFill, permission: "view_revenue" },
-  { to: "/expenses", label: "Expenses", icon: TrendingDown, iconFill: TrendingDownFill, permission: "view_expenses" },
-  { to: "/notifications", label: "Notifications", icon: Bell, iconFill: BellFill, permission: "view_notifications" },
-  { to: "/activity", label: "Activity", icon: Activity, iconFill: ActivityFill, permission: "view_activity" },
-  { to: "/reports", label: "Reports", icon: BarChart3, iconFill: BarChart3Fill, permission: "view_reports" },
-  { to: "/billing", label: "Billing", icon: CreditCard, iconFill: CreditCardFill, adminOnly: true },
-  { to: "/staff", label: "Staff", icon: UserCog, iconFill: UserCogFill, permission: "manage_staff" },
-  { to: "/settings", label: "Settings", icon: Settings, iconFill: SettingsFill, permission: "manage_settings" },
+// Warm Concierge grouped nav. Same items + permissions as before, now
+// organised into labelled sections (see design handoff "App Shell").
+const NAV_SECTIONS: { title: string; items: NavItem[] }[] = [
+  {
+    title: "OVERVIEW",
+    items: [
+      { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard, iconFill: LayoutDashboardFill, permission: "view_dashboard" },
+      { to: "/reservations", label: "Reservations", icon: CalendarCheck, iconFill: CalendarCheckFill, permission: "view_reservations" },
+      { to: "/rooms", label: "Rooms", icon: DoorOpen, iconFill: DoorOpenFill, permission: "view_rooms" },
+      { to: "/housekeeping", label: "Housekeeping", icon: SprayCan, iconFill: SprayCanFill, permission: "view_housekeeping" },
+      { to: "/calendar", label: "Calendar", icon: CalendarDays, iconFill: CalendarDaysFill, permission: "view_reservations" },
+      { to: "/guests", label: "Guests", icon: Users, iconFill: UsersFill, permission: "view_guests" },
+    ],
+  },
+  {
+    title: "MONEY",
+    items: [
+      { to: "/invoices", label: "Invoices", icon: Receipt, iconFill: ReceiptFill, permission: "view_invoices" },
+      { to: "/collections", label: "Collections", icon: Wallet, iconFill: WalletFill, permission: "view_revenue", indicator: "collections" },
+      { to: "/credits", label: "Credits", icon: BadgeIndianRupee, iconFill: BadgeIndianRupeeFill, permission: "view_revenue" },
+      { to: "/expenses", label: "Expenses", icon: TrendingDown, iconFill: TrendingDownFill, permission: "view_expenses" },
+    ],
+  },
+  {
+    title: "INSIGHTS",
+    items: [
+      { to: "/reports", label: "Reports", icon: BarChart3, iconFill: BarChart3Fill, permission: "view_reports" },
+      { to: "/activity", label: "Activity", icon: Activity, iconFill: ActivityFill, permission: "view_activity" },
+    ],
+  },
+  {
+    title: "WORKSPACE",
+    items: [
+      { to: "/messages", label: "Messages", icon: MessageSquare, iconFill: MessageSquareFill, permission: "view_messages", indicator: "messages" },
+      { to: "/notifications", label: "Notifications", icon: Bell, iconFill: BellFill, permission: "view_notifications", indicator: "notifications" },
+      { to: "/staff", label: "Staff", icon: UserCog, iconFill: UserCogFill, permission: "manage_staff" },
+      { to: "/billing", label: "Billing", icon: CreditCard, iconFill: CreditCardFill, adminOnly: true },
+      { to: "/settings", label: "Settings", icon: Settings, iconFill: SettingsFill, permission: "manage_settings" },
+    ],
+  },
 ];
+
+export function initials(name: string): string {
+  return name
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((w) => w[0]!.toUpperCase())
+    .join("");
+}
 
 export function Sidebar({
   collapsed,
@@ -88,11 +120,11 @@ export function Sidebar({
   // When true, renders inside the AppShell's mobile drawer:
   //   - no fixed-position absolute on the aside (the drawer wrapper
   //     handles slide-in already)
-  //   - hide the desktop collapse/expand arrow button
+  //   - the footer "Collapse" control is hidden
   //   - always expanded
   mobile?: boolean;
 }) {
-  const { profile, property, signOut, can } = useAuth();
+  const { profile, signOut, can } = useAuth();
   const dialog = useDialog();
 
   async function handleSignOut() {
@@ -119,7 +151,7 @@ export function Sidebar({
         .get<{ pendingPayments: { paymentId: string }[] }>("/reports/outstanding")
         .then((d) => d.pendingPayments.length),
     refetchInterval: 60_000,
-    // Match the nav: Collections is now revenue-gated, so we shouldn't be
+    // Match the nav: Collections is revenue-gated, so we shouldn't be
     // polling /reports/outstanding for a user who can't even see the page.
     enabled: !!profile && can("view_revenue"),
   });
@@ -140,145 +172,172 @@ export function Sidebar({
 
   if (!profile) return null;
 
-  const visible = NAV.filter((i) =>
-    i.adminOnly ? profile.role === "admin" : i.permission ? can(i.permission) : true,
-  );
+  function renderIndicator(kind: NavItem["indicator"]) {
+    if (collapsed && !mobile) return null;
+    if (kind === "collections" && owingCount > 0) {
+      return (
+        <span
+          className="shrink-0 min-w-[19px] h-[19px] px-1.5 rounded-full bg-brand text-white text-[11px] font-bold tabular-nums inline-flex items-center justify-center"
+          aria-label={`${owingCount} guest(s) owing`}
+        >
+          {owingCount}
+        </span>
+      );
+    }
+    if (kind === "messages" && unreadMessages > 0) {
+      return (
+        <span
+          className="shrink-0 min-w-[19px] h-[19px] px-1.5 rounded-full bg-brand text-white text-[11px] font-bold tabular-nums inline-flex items-center justify-center"
+          aria-label={`${unreadMessages} unread message${unreadMessages === 1 ? "" : "s"}`}
+        >
+          {unreadMessages}
+        </span>
+      );
+    }
+    if (kind === "notifications" && unread > 0) {
+      return (
+        <span
+          className="shrink-0 w-[7px] h-[7px] rounded-full bg-danger"
+          aria-label={`${unread} unread`}
+          title={`${unread} unread`}
+        />
+      );
+    }
+    return null;
+  }
+
+  const iconOnly = collapsed && !mobile;
 
   return (
     <aside
       className={cn(
-        "bg-brand-dark text-cream flex flex-col h-full transition-[width] duration-200 ease-out",
-        // Desktop: fixed left rail with collapsible width. z-50 so the
-        // rail (and its collapse pill) sit above the sticky checkout
-        // alert bar (z-40) in the content column — otherwise the pill,
-        // which juts out over the content edge, gets covered by the bar.
-        mobile ? "w-72 relative" : "fixed top-0 left-0 z-50",
-        !mobile && (collapsed ? "w-16" : "w-60"),
+        "bg-surfaceAlt text-ink border-r border-borderc flex flex-col h-full transition-[width] duration-200 ease-out",
+        mobile ? "w-[284px] relative" : "fixed top-0 left-0 z-50",
+        !mobile && (collapsed ? "w-[74px]" : "w-60"),
       )}
     >
-      {/* Desktop collapse/expand pill. Hidden in the mobile drawer
-          because the drawer has its own backdrop+tap-to-close. */}
-      {!mobile && (
-        <button
-          onClick={onToggle}
-          aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
-          title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
-          className="absolute -right-4 top-7 z-50 grid place-items-center w-8 h-8 rounded-full bg-brand-dark text-cream ring-1 ring-brass/40 shadow-md hover:bg-[#2a2a2a] hover:text-brass transition-colors"
-        >
-          {collapsed ? (
-            <ChevronRight className="w-5 h-5" />
-          ) : (
-            <ChevronLeft className="w-5 h-5" />
-          )}
-        </button>
-      )}
-
+      {/* Brand header: logo tile + wordmark. */}
       <div
         className={cn(
-          "py-5 border-b border-brass/15 flex items-center gap-3",
-          collapsed ? "px-3 justify-center" : "px-5",
+          "py-4 border-b border-borderc flex items-center gap-3",
+          iconOnly ? "px-0 justify-center" : "px-4",
         )}
       >
-        <img
-          src="/logo.png"
-          alt="Stayvia"
-          className="w-10 h-10 rounded-[10px] object-contain shrink-0 ring-1 ring-brass/40"
-        />
-        {!collapsed && (
+        <span className="w-9 h-9 rounded-[11px] overflow-hidden bg-brand-soft grid place-items-center shrink-0">
+          <img src="/logo.png" alt="Stayvia" className="w-full h-full object-contain" />
+        </span>
+        {!iconOnly && (
           <div className="min-w-0">
-            <div className="text-base font-semibold tracking-tight leading-tight truncate text-cream uppercase">{property?.name ?? "Stayvia"}</div>
-            <div className="text-[10px] text-brass tracking-[0.15em] mt-0.5">HOTEL OS</div>
+            <div className="font-bold text-[15.5px] tracking-tight leading-tight truncate">Stayvia</div>
+            <div className="text-[10px] font-bold text-inkMuted tracking-[0.16em] mt-0.5">HOTEL OS</div>
           </div>
         )}
       </div>
 
-      <nav className="flex-1 py-3 overflow-y-auto overflow-x-hidden no-scrollbar">
-        {visible.map((item) => {
-          // Dashboard lives at both / and /dashboard — highlight
-          // the Dashboard nav item for either URL.
-          const onRootDashboard =
-            item.to === "/dashboard" && window.location.pathname === "/";
+      <nav className="flex-1 px-2.5 py-1.5 overflow-y-auto overflow-x-hidden no-scrollbar">
+        {NAV_SECTIONS.map((section) => {
+          const visible = section.items.filter((i) =>
+            i.adminOnly ? profile.role === "admin" : i.permission ? can(i.permission) : true,
+          );
+          if (visible.length === 0) return null;
           return (
-            <NavLink
-              key={item.to}
-              to={item.to}
-              end={item.to === "/dashboard"}
-              title={collapsed ? item.label : undefined}
-              className={({ isActive }) => {
-                const active = isActive || onRootDashboard;
-                return cn(
-                  "flex items-center gap-3 py-2.5 text-sm transition-colors",
-                  collapsed ? "px-0 justify-center" : "px-5",
-                  active
-                    ? "bg-brand-mid/30 text-cream border-l-2 border-brass"
-                    : "text-cream/70 hover:bg-cream/5 hover:text-cream border-l-2 border-transparent",
-                );
-              }}
-            >
-              {({ isActive }) => {
-                const Icon = isActive || onRootDashboard ? item.iconFill : item.icon;
+            <div key={section.title}>
+              {!iconOnly && (
+                <div className="px-2.5 pt-3.5 pb-1 text-[10px] font-bold tracking-[0.13em] text-inkMuted">
+                  {section.title}
+                </div>
+              )}
+              {visible.map((item) => {
+                // Dashboard lives at both / and /dashboard — highlight
+                // the Dashboard nav item for either URL.
+                const onRootDashboard =
+                  item.to === "/dashboard" && window.location.pathname === "/";
                 return (
-                  <>
-                    <Icon className="w-4 h-4 shrink-0" />
-                    {!collapsed && <span className="flex-1">{item.label}</span>}
-              {!collapsed && item.to === "/notifications" && unread > 0 && (
-                <span
-                  className="w-2 h-2 rounded-full bg-brass shrink-0"
-                  aria-label={`${unread} unread`}
-                  title={`${unread} unread`}
-                />
-              )}
-              {!collapsed && item.to === "/messages" && unreadMessages > 0 && (
-                <span
-                  className="w-2 h-2 rounded-full bg-brass shrink-0"
-                  aria-label={`${unreadMessages} unread message${unreadMessages === 1 ? "" : "s"}`}
-                  title={`${unreadMessages} unread message${unreadMessages === 1 ? "" : "s"}`}
-                />
-              )}
-                    {!collapsed && item.to === "/collections" && owingCount > 0 && (
-                      <span
-                        className="relative flex w-2 h-2 shrink-0"
-                        aria-label={`${owingCount} guest(s) owing`}
-                        title={`${owingCount} guest(s) owing`}
-                      >
-                        <span className="absolute inset-0 rounded-full bg-danger animate-ping opacity-60" />
-                        <span className="relative w-2 h-2 rounded-full bg-danger" />
-                      </span>
-                    )}
-                  </>
+                  <NavLink
+                    key={item.to}
+                    to={item.to}
+                    end={item.to === "/dashboard"}
+                    title={iconOnly ? item.label : undefined}
+                    className={({ isActive }) => {
+                      const active = isActive || onRootDashboard;
+                      return cn(
+                        "flex items-center gap-3 my-px py-[9px] rounded-[11px] text-sm transition-colors",
+                        iconOnly ? "px-0 justify-center" : "px-[11px]",
+                        active
+                          ? "bg-brand-soft text-brand-deep font-semibold shadow-[inset_3px_0_0_theme(colors.brand.DEFAULT)]"
+                          : "text-inkBody font-medium hover:bg-parchment hover:text-ink",
+                      );
+                    }}
+                  >
+                    {({ isActive }) => {
+                      const Icon = isActive || onRootDashboard ? item.iconFill : item.icon;
+                      return (
+                        <>
+                          <Icon className="w-5 h-5 shrink-0" />
+                          {!iconOnly && <span className="flex-1 min-w-0 truncate">{item.label}</span>}
+                          {renderIndicator(item.indicator)}
+                        </>
+                      );
+                    }}
+                  </NavLink>
                 );
-              }}
-            </NavLink>
+              })}
+            </div>
           );
         })}
       </nav>
 
-      {!collapsed ? (
-        <div className="px-5 py-4 border-t border-brass/15">
-          <div className="text-[10px] text-brass tracking-[0.15em]">SIGNED IN AS</div>
-          <div className="text-sm font-medium truncate text-cream mt-1 uppercase">{profile.fullName}</div>
-          <div className="text-xs text-cream/50 capitalize">
-            {profile.rbacRoleKey ?? profile.role}
-          </div>
+      {/* Footer: collapse, sign out, user card. */}
+      <div className="mt-auto p-2.5 border-t border-borderc flex flex-col gap-1.5">
+        {!mobile && (
           <button
-            onClick={handleSignOut}
-            className="mt-3 flex items-center gap-2 text-xs text-cream/60 hover:text-brass transition-colors"
+            onClick={onToggle}
+            title={collapsed ? "Expand" : "Collapse"}
+            aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+            className={cn(
+              "flex items-center gap-3 w-full py-[9px] rounded-[11px] text-[13px] font-semibold text-inkBody hover:bg-parchment transition-colors",
+              iconOnly ? "px-0 justify-center" : "px-[11px]",
+            )}
           >
-            <LogOut className="w-3 h-3" /> Sign out
+            {collapsed ? (
+              <ChevronRight className="w-5 h-5 shrink-0" />
+            ) : (
+              <ChevronLeft className="w-5 h-5 shrink-0" />
+            )}
+            {!iconOnly && <span className="flex-1 text-left">Collapse</span>}
           </button>
+        )}
+        <button
+          onClick={handleSignOut}
+          title="Sign out"
+          aria-label="Sign out"
+          className={cn(
+            "flex items-center gap-3 w-full py-[9px] rounded-[11px] text-[13px] font-semibold text-inkBody hover:bg-parchment transition-colors",
+            iconOnly ? "px-0 justify-center" : "px-[11px]",
+          )}
+        >
+          <LogOut className="w-5 h-5 shrink-0" />
+          {!iconOnly && <span className="flex-1 text-left">Sign out</span>}
+        </button>
+        <div
+          className={cn(
+            "flex items-center gap-2.5 rounded-md bg-parchment/70 p-2",
+            iconOnly && "justify-center bg-transparent p-0 pt-1",
+          )}
+        >
+          <span className="w-[34px] h-[34px] rounded-full bg-brand-soft text-brand-deep grid place-items-center font-bold text-[12.5px] shrink-0">
+            {initials(profile.fullName)}
+          </span>
+          {!iconOnly && (
+            <div className="min-w-0">
+              <div className="text-[13px] font-semibold truncate">{profile.fullName}</div>
+              <div className="text-[11px] text-inkMuted capitalize truncate">
+                {profile.rbacRoleKey ?? profile.role}
+              </div>
+            </div>
+          )}
         </div>
-      ) : (
-        <div className="py-4 border-t border-brass/15 flex justify-center">
-          <button
-            onClick={handleSignOut}
-            title="Sign out"
-            aria-label="Sign out"
-            className="grid place-items-center w-9 h-9 rounded-md text-cream/60 hover:text-brass hover:bg-cream/5 transition-colors"
-          >
-            <LogOut className="w-4 h-4" />
-          </button>
-        </div>
-      )}
+      </div>
     </aside>
   );
 }

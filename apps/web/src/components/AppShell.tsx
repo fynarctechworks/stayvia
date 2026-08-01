@@ -9,12 +9,40 @@ import { ArrivalAlerts } from "./ArrivalAlerts";
 import { BottomNav } from "./BottomNav";
 import { CheckoutAlerts } from "./CheckoutAlerts";
 import { CommandPalette } from "./CommandPalette";
-import { Sidebar } from "./Sidebar";
+import { Sidebar, initials } from "./Sidebar";
 import { useNotificationToasts } from "./Toast";
 
 interface NotifResp {
   items: Array<{ id: string; readAt: string | null }>;
   unreadCount: number;
+}
+
+// Topbar route titles — longest prefix wins.
+const ROUTE_TITLES: [string, string][] = [
+  ["/reservations/new", "New booking"],
+  ["/reservations", "Reservations"],
+  ["/dashboard", "Dashboard"],
+  ["/rooms", "Rooms"],
+  ["/housekeeping", "Housekeeping"],
+  ["/maintenance", "Maintenance"],
+  ["/calendar", "Calendar"],
+  ["/guests", "Guests"],
+  ["/invoices", "Invoices"],
+  ["/collections", "Collections"],
+  ["/credits", "Wallet credits"],
+  ["/expenses", "Expenses"],
+  ["/reports", "Reports"],
+  ["/activity", "Activity"],
+  ["/messages", "Messages"],
+  ["/notifications", "Notifications"],
+  ["/staff", "Staff"],
+  ["/billing", "Billing"],
+  ["/settings", "Settings"],
+];
+
+function routeTitle(pathname: string): string {
+  if (pathname === "/") return "Dashboard";
+  return ROUTE_TITLES.find(([p]) => pathname.startsWith(p))?.[1] ?? "Stayvia";
 }
 
 export function AppShell({ children }: { children: ReactNode }) {
@@ -33,7 +61,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   );
   const location = useLocation();
   const navigate = useNavigate();
-  const { property } = useAuth();
+  const { property, profile } = useAuth();
 
   // 402 SUBSCRIPTION_REQUIRED (fired by lib/api.ts): steer the user to
   // /billing. Several in-flight queries can 402 at once, so navigations
@@ -137,28 +165,29 @@ export function AppShell({ children }: { children: ReactNode }) {
   );
   useNotificationToasts(unreadIds);
 
+  const title = routeTitle(location.pathname);
+
   return (
     <div className="min-h-screen bg-bg">
       <CommandPalette />
 
       {/* Sidebar:
-          - desktop (md+): fixed left rail, width depends on `collapsed`
+          - desktop (md+): fixed left Parchment rail, width depends on `collapsed`
           - mobile (< md): hidden by default; slides in over content when
             mobileOpen=true, with a backdrop tap-to-close. */}
       <div
-        className={`md:hidden fixed inset-0 z-40 bg-brand-dark/40 backdrop-blur-[2px] transition-opacity ${
+        className={`md:hidden fixed inset-0 z-40 bg-inkDark/40 backdrop-blur-[2px] transition-opacity ${
           mobileOpen ? "opacity-100" : "opacity-0 pointer-events-none"
         }`}
         onClick={() => setMobileOpen(false)}
         aria-hidden
       />
       <div
-        className={`md:hidden fixed top-0 left-0 z-50 h-full transition-transform duration-200 ease-out ${
+        className={`md:hidden fixed top-0 left-0 z-50 h-full transition-transform duration-[250ms] ease-out ${
           mobileOpen ? "translate-x-0" : "-translate-x-full"
         }`}
       >
-        {/* Force the sidebar into expanded mode in the drawer. The desktop
-            toggle button is hidden on mobile via Sidebar's own md: guards. */}
+        {/* Force the sidebar into expanded mode in the drawer. */}
         <Sidebar collapsed={false} onToggle={() => setMobileOpen(false)} mobile />
       </div>
       {!focusMode && (
@@ -167,53 +196,60 @@ export function AppShell({ children }: { children: ReactNode }) {
         </div>
       )}
 
-      {/* Watermark — hidden on phones (too noisy on small screens), and
-          hidden in focus mode where the content goes edge-to-edge. */}
       <div
         className={`relative transition-[margin] duration-200 ease-out ${
-          focusMode ? "md:ml-0" : collapsed ? "md:ml-16" : "md:ml-60"
+          focusMode ? "md:ml-0" : collapsed ? "md:ml-[74px]" : "md:ml-60"
         }`}
       >
-        {/* Mobile top bar with hamburger. Only visible <md. Sticky so
-            the user can always reach the menu without scrolling up. */}
-        <header className="md:hidden sticky top-0 z-30 bg-brand-dark text-cream flex items-center gap-1 px-2 h-14 shadow-sm pt-safe">
+        {/* Blurred sticky topbar: route title + hotel subtitle, global
+            search, bell, avatar. Hamburger appears < md. */}
+        <header className="sticky top-0 z-30 h-16 px-4 md:px-6 flex items-center gap-3 bg-paper/80 backdrop-blur-[10px] border-b border-borderc pt-safe">
           <button
             onClick={() => setMobileOpen(true)}
             aria-label="Open menu"
-            className="w-10 h-10 grid place-items-center rounded-full hover:bg-white/10 active:bg-white/15 transition-colors"
+            className="md:hidden w-10 h-10 grid place-items-center rounded-[11px] border border-borderControl bg-surface text-inkBody shrink-0"
           >
             <Menu className="w-5 h-5" />
           </button>
-          <div className="flex items-center gap-2 min-w-0 flex-1">
-            <img
-              src="/logo.png"
-              alt=""
-              className="w-8 h-8 rounded-md object-contain shrink-0 bg-white/5"
-            />
-            <div className="min-w-0">
-              <div className="text-sm font-bold leading-tight truncate uppercase">
-                {property?.name ?? "Stayvia"}
-              </div>
-              <div className="text-[9px] text-brass tracking-[0.15em] leading-none">HOTEL OS</div>
+          <div className="min-w-0">
+            <div className="text-[16.5px] font-semibold tracking-[-0.2px] leading-tight truncate">
+              {title}
             </div>
+            {property?.name && (
+              <div className="text-xs text-inkMuted truncate">{property.name}</div>
+            )}
           </div>
+          <div className="flex-1" />
           <button
             onClick={() => window.dispatchEvent(new Event("stayvia:search"))}
             aria-label="Search"
-            className="w-10 h-10 grid place-items-center rounded-full hover:bg-white/10 active:bg-white/15 transition-colors"
+            className="hidden md:flex items-center gap-2.5 h-10 w-[min(260px,28vw)] rounded-[11px] border border-borderControl bg-surface px-3 text-[13.5px] text-inkFaint hover:bg-surfaceAlt transition-colors"
+          >
+            <Search className="w-5 h-5" />
+            <span className="truncate">Search guests, bookings, rooms</span>
+          </button>
+          <button
+            onClick={() => window.dispatchEvent(new Event("stayvia:search"))}
+            aria-label="Search"
+            className="md:hidden w-10 h-10 grid place-items-center rounded-[11px] border border-borderControl bg-surface text-inkBody shrink-0"
           >
             <Search className="w-5 h-5" />
           </button>
           <button
             onClick={() => navigate("/notifications")}
             aria-label="Notifications"
-            className="relative w-10 h-10 grid place-items-center rounded-full hover:bg-white/10 active:bg-white/15 transition-colors"
+            className="relative w-10 h-10 grid place-items-center rounded-[11px] border border-borderControl bg-surface text-inkBody hover:bg-surfaceAlt transition-colors shrink-0"
           >
             <Bell className="w-5 h-5" />
             {(unreadIds?.length ?? 0) > 0 && (
-              <span className="absolute top-2 right-2 w-2 h-2 rounded-full bg-brand ring-2 ring-brand-dark" />
+              <span className="absolute top-[9px] right-[10px] w-2 h-2 rounded-full bg-danger ring-2 ring-surface" />
             )}
           </button>
+          {profile && (
+            <span className="hidden sm:grid w-9 h-9 rounded-full bg-brand-soft text-brand-deep place-items-center font-bold text-[13px] shrink-0">
+              {initials(profile.fullName)}
+            </span>
+          )}
         </header>
 
         {/* All alert bars pin together as a single header so they
@@ -222,15 +258,19 @@ export function AppShell({ children }: { children: ReactNode }) {
             Cap the stack at 40% of the viewport so a noisy day can't
             push the rest of the page out of sight — internal scroll
             handles overflow. */}
-        <div className="sticky top-0 z-40 max-h-[40vh] overflow-y-auto">
+        <div className="sticky top-16 z-40 max-h-[40vh] overflow-y-auto">
           <CheckoutAlerts />
           <ArrivalAlerts />
         </div>
-        {/* Main content padding tightens on mobile so cards aren't crammed.
-            Extra bottom padding on phone so the fixed bottom tab bar never
-            covers the last row of content (pb-safe handles the home
-            indicator). */}
-        <main className="p-3 pb-bottomnav sm:p-5 md:p-6 md:pb-6">{children}</main>
+        {/* Screen-enter fade-up on route change (keyed remount). Extra
+            bottom padding on phone so the fixed bottom tab bar never
+            covers the last row of content. */}
+        <main
+          key={location.pathname}
+          className="animate-screen-enter p-4 pb-bottomnav sm:p-5 md:p-6 md:pb-8 xl:p-[30px]"
+        >
+          {children}
+        </main>
       </div>
 
       {/* Phone-first bottom tab bar. Hidden on md+ (sidebar handles nav)
@@ -250,21 +290,17 @@ export function AppShell({ children }: { children: ReactNode }) {
         }
         // Position depends on layout state so we never sit underneath
         // the sidebar (left rail) or the toast stack (bottom-right).
-        // In focus mode the sidebar is gone, so we anchor bottom-left.
-        // In normal mode we clear the sidebar by shifting right based
-        // on its current width, and we sit ABOVE the toast stack so
-        // notifications never bury the toggle.
         style={
           focusMode
             ? { left: "1rem", bottom: "1rem" }
             : {
-                left: `calc(${collapsed ? "4rem" : "15rem"} + 1rem)`,
+                left: `calc(${collapsed ? "74px" : "15rem"} + 1rem)`,
                 bottom: "1rem",
               }
         }
         // Hidden on phone (<md): focus mode is a desktop/projection
         // feature, and the bottom tab bar owns that corner on mobile.
-        className="hidden md:grid fixed z-[60] place-items-center w-11 h-11 rounded-full bg-brand-dark text-cream shadow-lg ring-1 ring-brass/30 hover:bg-[#2a2a2a] hover:text-brass transition-[left] duration-200 ease-out"
+        className="hidden md:grid fixed z-[60] place-items-center w-11 h-11 rounded-full bg-surface text-inkBody shadow-card border border-borderControl hover:bg-surfaceAlt hover:text-brand-deep transition-[left] duration-200 ease-out"
         aria-label={focusMode ? "Exit focus mode" : "Enter focus mode"}
         title={
           focusMode
