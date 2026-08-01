@@ -81,6 +81,27 @@
 }
 
 @layer utilities {
+  /* Warm Concierge screen-enter: fade-up 10px on route change. Applied by
+     AppShell to the main content column. Respects reduced motion. */
+  @keyframes screen-enter {
+    from {
+      opacity: 0;
+      transform: translateY(10px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+  .animate-screen-enter {
+    animation: screen-enter 0.5s cubic-bezier(0.2, 0.7, 0.2, 1);
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .animate-screen-enter {
+      animation: none;
+    }
+  }
+
   /* Hide the scrollbar visually while keeping scroll behavior. Used on
      the sidebar nav so the chrome doesn't show even when items overflow
      the viewport. Cross-browser: Firefox uses scrollbar-width, WebKit
