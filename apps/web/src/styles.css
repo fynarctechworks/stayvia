@@ -20,26 +20,28 @@
 }
 
 @layer components {
+  /* Warm Concierge card: white, 16px radius, hairline border, soft
+     double shadow. */
   .card {
-    @apply bg-surface border border-borderc rounded-md p-4 shadow-[0_1px_3px_rgba(0,0,0,0.06)];
+    @apply bg-surface border border-borderc rounded-2xl p-[18px] sm:p-[22px] shadow-card;
   }
-  /* Supabase signature: near-black text on the emerald fill (the button
-     reads as a "lit" surface with dark type), never white. */
+  /* Jade primary: white text on jade with a jade glow. */
   .btn-primary {
-    @apply bg-brand text-textPrimary px-4 h-10 rounded-sm font-medium tracking-wide transition-colors hover:bg-brand-deep disabled:opacity-50 disabled:hover:bg-brand;
+    @apply bg-brand text-white px-4 h-[42px] rounded-md font-semibold text-sm transition-colors shadow-primary hover:bg-brand-deep disabled:opacity-50 disabled:hover:bg-brand;
   }
   .btn-secondary {
-    @apply bg-surface text-textPrimary border border-borderc px-4 h-10 rounded-sm font-medium transition-colors hover:bg-bg hover:border-[#c7c7c7];
+    @apply bg-surface text-ink border border-borderControl px-4 h-[42px] rounded-md font-semibold text-sm transition-colors hover:bg-surfaceAlt hover:border-inkFaint/60;
   }
+  /* Danger is an outline per the spec (white bg, clay border + text). */
   .btn-danger {
-    @apply bg-danger text-cream px-4 h-10 rounded-sm font-medium transition-colors hover:opacity-90;
+    @apply bg-surface text-dangerFg border border-dangerBorder px-4 h-[42px] rounded-md font-semibold text-sm transition-colors hover:bg-dangerBg;
   }
   .input {
     /* min-h instead of fixed h so mobile keyboards don't squish the
        row when content reflows. 16px text on mobile (text-base) avoids
        iOS auto-zoom on focus; sm: shrinks to 14px on desktop where the
-       behaviour doesn't exist. */
-    @apply min-h-10 w-full border border-borderc bg-surface rounded-sm px-3 py-2 text-base sm:text-sm text-textPrimary outline-none transition-colors focus:border-brand focus:ring-2 focus:ring-brand/20 placeholder:text-textSecondary;
+       behaviour doesn't exist. Focus = jade border + soft jade ring. */
+    @apply min-h-[42px] w-full border border-borderControl bg-surface rounded-md px-3 py-2 text-base sm:text-sm text-ink outline-none transition-colors focus:border-brand focus:ring-[3px] focus:ring-brand-soft placeholder:text-inkFaint;
   }
   /* Hide the native up/down spinner on number inputs so fields like
      Adults / Children / rates are plain type-only entries (the arrows
@@ -54,7 +56,7 @@
     margin: 0;
   }
   .label {
-    @apply text-[11px] font-semibold text-textSecondary uppercase tracking-[0.12em];
+    @apply text-[10.5px] font-bold text-inkMuted uppercase tracking-[0.06em];
   }
   .table-base {
     @apply w-full text-sm;
@@ -66,17 +68,16 @@
   .card:has(> .table-base) {
     @apply overflow-x-auto;
   }
+  /* Warm Concierge table: surface-alt header well, 10px overline labels,
+     hairline row dividers, hover tint — no zebra striping. */
   .table-base th {
-    @apply text-left font-semibold text-textSecondary text-[11px] uppercase tracking-[0.12em] px-3 py-2.5 border-b border-borderc bg-bg align-middle whitespace-nowrap;
+    @apply text-left font-bold text-inkMuted text-[10px] uppercase tracking-[0.06em] px-3 py-2.5 border-b border-borderc bg-surfaceAlt align-middle whitespace-nowrap;
   }
   .table-base td {
-    @apply px-3 py-2.5 border-b border-borderc align-middle;
-  }
-  .table-base tbody tr:nth-child(even) {
-    @apply bg-bg;
+    @apply px-3 py-3 border-b border-divider align-middle;
   }
   .table-base tbody tr:hover {
-    @apply bg-brand-soft;
+    @apply bg-surfaceAlt;
   }
 }
 
