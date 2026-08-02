@@ -314,12 +314,12 @@ export function CheckInReceiptModal({ data, onClose, variant = "checkin" }: Prop
       >
         <div className="no-print flex items-center justify-between px-5 py-3 bg-brand-soft">
           <div className="text-sm font-semibold text-brand-deep">{title}</div>
-          <button onClick={onClose} className="text-textSecondary hover:text-textPrimary">
+          <button onClick={onClose} className="text-textSecondary hover:text-ink">
             <X className="w-5 h-5" />
           </button>
         </div>
 
-        <div className="receipt-body relative px-5 py-4 text-[12px] text-textPrimary">
+        <div className="receipt-body relative px-5 py-4 text-[12px] text-ink">
           {/* Watermark is print-only. The on-screen modal is busy enough
               with chrome (header bar, scroll, action buttons); the faint
               logo behind text added more noise than identity. The printed

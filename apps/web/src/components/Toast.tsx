@@ -40,15 +40,15 @@ function ToastItem({ toast, onClose }: { toast: Toast; onClose: () => void }) {
   const Icon = toast.variant === "success" ? CheckCircle2 : toast.variant === "error" ? AlertCircle : Info;
   const color =
     toast.variant === "success"
-      ? "border-success/40 bg-success/5 text-success"
+      ? "border-successBorder bg-successBg text-success"
       : toast.variant === "error"
-        ? "border-danger/40 bg-danger/5 text-danger"
-        : "border-brand/30 bg-brand-soft text-brand-dark";
+        ? "border-dangerBorder bg-dangerBg text-dangerFg"
+        : "border-infoBorder bg-infoBg text-info";
   return (
-    <div className={`flex items-start gap-2 px-3 py-2.5 rounded-md border shadow-md bg-surface ${color}`}>
+    <div className={`flex items-start gap-2.5 px-3.5 py-3 rounded-md border shadow-card ${color}`}>
       <Icon className="w-4 h-4 mt-0.5 shrink-0" />
-      <div className="text-sm flex-1">{toast.message}</div>
-      <button onClick={onClose} className="opacity-60 hover:opacity-100">
+      <div className="text-[13px] leading-snug flex-1">{toast.message}</div>
+      <button onClick={onClose} className="opacity-60 hover:opacity-100 transition-opacity">
         <X className="w-4 h-4" />
       </button>
     </div>

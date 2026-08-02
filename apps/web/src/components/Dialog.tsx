@@ -99,23 +99,23 @@ function toneClasses(tone: Tone | undefined) {
   switch (tone) {
     case "danger":
       return {
-        icon: "text-danger",
-        btn: "bg-danger text-white border-danger hover:opacity-90",
+        icon: "text-dangerFg",
+        btn: "btn-danger",
       };
     case "warning":
       return {
-        icon: "text-warning",
-        btn: "bg-warning text-white border-warning hover:opacity-90",
+        icon: "text-warnFg",
+        btn: "btn-primary",
       };
     case "success":
       return {
         icon: "text-success",
-        btn: "bg-success text-white border-success hover:opacity-90",
+        btn: "btn-primary",
       };
     default:
       return {
-        icon: "text-brand",
-        btn: "bg-brand-dark text-cream border-brand-dark hover:opacity-90",
+        icon: "text-brand-deep",
+        btn: "btn-primary",
       };
   }
 }
@@ -187,29 +187,29 @@ function DialogShell({ state, onClose }: { state: DialogState; onClose: (v: unkn
 
   return (
     <div
-      className="fixed inset-0 z-[200] grid place-items-center bg-brand-dark/40 p-4 animate-in fade-in"
+      className="fixed inset-0 z-[200] grid place-items-center bg-inkDark/50 backdrop-blur-[3px] p-4 animate-in fade-in"
       onMouseDown={(e) => {
         if (e.target === e.currentTarget) cancel();
       }}
     >
-      <div className="w-full max-w-md bg-surface rounded-md shadow-xl border border-borderc">
-        <div className="flex items-start justify-between gap-3 px-5 py-4 border-b border-borderc">
+      <div className="w-full max-w-md bg-surface rounded-2xl shadow-modal overflow-hidden">
+        <div className="flex items-start justify-between gap-3 px-5 py-4 border-b border-divider">
           <div className="flex items-start gap-3">
             <div className={`mt-0.5 ${cls.icon}`}>
               <Icon className="w-5 h-5" />
             </div>
             <div>
-              <div className="font-semibold text-textPrimary">
+              <div className="text-[15px] font-semibold text-ink">
                 {opts.title ?? (kind === "confirm" ? "Confirm" : kind === "prompt" ? "Enter value" : "Notice")}
               </div>
               {(opts as AlertOptions).message && (
-                <div className="text-sm text-textSecondary mt-1">{(opts as AlertOptions).message}</div>
+                <div className="text-[13px] leading-relaxed text-textSecondary mt-1">{(opts as AlertOptions).message}</div>
               )}
             </div>
           </div>
           <button
             onClick={cancel}
-            className="text-textSecondary hover:text-textPrimary shrink-0"
+            className="text-inkFaint hover:text-ink transition-colors shrink-0"
             aria-label="Close"
           >
             <X className="w-4 h-4" />
@@ -230,10 +230,10 @@ function DialogShell({ state, onClose }: { state: DialogState; onClose: (v: unkn
                         setValue(o.value);
                         setError(null);
                       }}
-                      className={`px-3 py-2.5 rounded-sm text-sm font-semibold border-2 transition-colors ${
+                      className={`px-3 py-2.5 rounded-md text-sm font-semibold border transition-colors ${
                         active
-                          ? "border-brand-dark bg-brand-soft text-brand-dark"
-                          : "border-borderc text-textSecondary hover:border-brand-dark"
+                          ? "border-brand bg-brand-soft text-brand-deep"
+                          : "border-borderControl bg-surface text-textSecondary hover:border-brand/40 hover:text-ink"
                       }`}
                     >
                       {o.label}
@@ -253,7 +253,7 @@ function DialogShell({ state, onClose }: { state: DialogState; onClose: (v: unkn
                 }}
                 placeholder={promptOpts.placeholder}
                 rows={3}
-                className="w-full border border-borderc bg-surface rounded-sm px-3 py-2 text-textPrimary outline-none transition-colors focus:border-brand focus:ring-2 focus:ring-brand/20 placeholder:text-textSecondary resize-none leading-relaxed"
+                className="input py-2 resize-none leading-relaxed"
               />
             ) : (
               <input
@@ -270,23 +270,17 @@ function DialogShell({ state, onClose }: { state: DialogState; onClose: (v: unkn
                 className="input w-full"
               />
             )}
-            {error && <div className="text-xs text-danger">{error}</div>}
+            {error && <div className="text-xs text-dangerFg">{error}</div>}
           </div>
         )}
 
-        <div className="flex items-center justify-end gap-2 px-5 py-3 border-t border-borderc bg-bg/50">
+        <div className="flex items-center justify-end gap-2 px-5 py-3.5 border-t border-divider bg-surfaceAlt">
           {kind !== "alert" && (
-            <button
-              onClick={cancel}
-              className="px-4 h-9 text-sm font-semibold rounded-sm border-2 border-borderc text-textSecondary hover:border-textSecondary hover:text-textPrimary transition-colors"
-            >
+            <button onClick={cancel} className="btn-secondary">
               {(opts as ConfirmOptions).cancelLabel ?? "Cancel"}
             </button>
           )}
-          <button
-            onClick={confirm}
-            className={`px-4 h-9 text-sm font-semibold rounded-sm border-2 transition-colors ${cls.btn}`}
-          >
+          <button onClick={confirm} className={cls.btn}>
             {(opts as ConfirmOptions).okLabel ?? (kind === "alert" ? "OK" : kind === "confirm" ? "Confirm" : "Save")}
           </button>
         </div>

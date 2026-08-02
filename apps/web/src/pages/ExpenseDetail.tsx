@@ -275,7 +275,7 @@ export default function ExpenseDetail() {
       <div className="card">
         <h2 className="text-sm font-semibold text-ink mb-2">Notes</h2>
         {data.notes ? (
-          <p className="text-sm text-textPrimary whitespace-pre-wrap">
+          <p className="text-sm text-ink whitespace-pre-wrap">
             {data.notes}
           </p>
         ) : (

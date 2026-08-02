@@ -302,7 +302,7 @@ export default function Login() {
 
           {!mfaStep && (
             <div>
-              <h1 className="text-2xl font-semibold text-navy">Welcome back</h1>
+              <h1 className="text-2xl font-semibold text-ink">Welcome back</h1>
               <p className="text-textSecondary text-sm mt-1">
                 Sign in to continue to your workspace.
               </p>
@@ -395,7 +395,7 @@ export default function Login() {
               <button
                 type="button"
                 onClick={() => setShowPw((v) => !v)}
-                className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 rounded text-textSecondary hover:text-navy hover:bg-bg"
+                className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 rounded text-textSecondary hover:text-ink hover:bg-bg"
                 aria-label={showPw ? "Hide password" : "Show password"}
                 tabIndex={-1}
               >
@@ -455,7 +455,7 @@ export default function Login() {
                   <ShieldCheck className="w-5 h-5 text-brand-deep" />
                 </div>
                 <div className="leading-tight">
-                  <div className="font-semibold text-navy">Two-factor verification</div>
+                  <div className="font-semibold text-ink">Two-factor verification</div>
                   <p className="text-textSecondary text-xs">
                     Enter the 6-digit code from your authenticator app.
                   </p>

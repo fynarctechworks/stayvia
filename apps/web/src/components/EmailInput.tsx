@@ -168,7 +168,7 @@ export function EmailInput({
       {open && suggestions.length > 0 && (
         <ul
           ref={listRef}
-          className="absolute z-50 left-0 right-0 top-full mt-1 max-h-52 overflow-y-auto rounded-sm border border-borderc bg-surface shadow-lg"
+          className="absolute z-50 left-0 right-0 top-full mt-1.5 max-h-52 overflow-y-auto rounded-xl border border-borderc bg-surface shadow-lift"
         >
           {suggestions.map((s, i) => {
             const atIdx = s.indexOf("@");
@@ -183,14 +183,14 @@ export function EmailInput({
                   e.preventDefault();
                   pick(s);
                 }}
-                className={`px-3 py-2 text-sm cursor-pointer ${
+                className={`px-3 py-2 text-sm cursor-pointer transition-colors ${
                   i === highlight
-                    ? "bg-brand-soft text-brand-dark"
-                    : "text-textPrimary hover:bg-bg"
+                    ? "bg-brand-soft text-brand-deep"
+                    : "text-ink hover:bg-surfaceAlt"
                 }`}
               >
                 <span className="font-medium">{local}</span>
-                <span className="text-textSecondary">{domain}</span>
+                <span className="text-inkMuted">{domain}</span>
               </li>
             );
           })}

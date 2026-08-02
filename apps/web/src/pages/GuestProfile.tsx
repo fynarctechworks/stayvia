@@ -191,7 +191,7 @@ export default function GuestProfile() {
             </div>
           )}
           <div>
-          <h1 className="text-2xl font-semibold tracking-tight text-textPrimary">{data.fullName}</h1>
+          <h1 className="text-2xl font-semibold tracking-tight text-ink">{data.fullName}</h1>
           <div className="text-sm text-inkMuted font-mono mt-0.5">{data.phone}</div>
           <div className="mt-2 flex flex-wrap items-center gap-2">
             {outstanding > 0 && (
@@ -347,8 +347,8 @@ function EditGuestModal({ guest, onClose }: { guest: Guest; onClose: () => void 
     >
       <div className="w-full max-w-2xl bg-surface rounded-2xl shadow-modal border border-borderc max-h-[90vh] overflow-hidden flex flex-col">
         <div className="flex items-center justify-between px-5 py-3 border-b border-borderc">
-          <div className="font-semibold text-textPrimary">Edit Guest · {guest.fullName}</div>
-          <button onClick={onClose} className="text-textSecondary hover:text-textPrimary">
+          <div className="font-semibold text-ink">Edit Guest · {guest.fullName}</div>
+          <button onClick={onClose} className="text-textSecondary hover:text-ink">
             <X className="w-5 h-5" />
           </button>
         </div>
@@ -510,7 +510,7 @@ function EditGuestModal({ guest, onClose }: { guest: Guest; onClose: () => void 
 
           <Field label="Notes">
             <textarea
-              className="w-full border border-borderc bg-surface rounded-sm px-3 py-2 text-textPrimary outline-none transition-colors focus:border-brand focus:ring-2 focus:ring-brand/20 placeholder:text-textSecondary resize-none"
+              className="w-full border border-borderc bg-surface rounded-sm px-3 py-2 text-ink outline-none transition-colors focus:border-brand focus:ring-2 focus:ring-brand/20 placeholder:text-textSecondary resize-none"
               rows={3}
               value={form.notes}
               placeholder="Allergies, preferences, anniversary etc."
@@ -700,7 +700,7 @@ function Stat({
   tone?: "danger" | "success";
 }) {
   const valueColor =
-    tone === "danger" ? "text-dangerFg" : tone === "success" ? "text-success" : "text-textPrimary";
+    tone === "danger" ? "text-dangerFg" : tone === "success" ? "text-success" : "text-ink";
   return (
     <div className="card">
       <div className="label">{label}</div>
@@ -782,7 +782,7 @@ function ProfileTab({ g }: { g: Guest }) {
         {g.notes && (
           <div className="col-span-full pt-2 border-t border-borderc mt-1">
             <div className="label">Notes</div>
-            <div className="mt-1 whitespace-pre-wrap text-textPrimary text-sm">{g.notes}</div>
+            <div className="mt-1 whitespace-pre-wrap text-ink text-sm">{g.notes}</div>
           </div>
         )}
       </Section>
@@ -852,7 +852,7 @@ function KycSection({ guestId, idProofType }: { guestId: string; idProofType: st
         <div className="flex items-center gap-3 py-4 text-sm text-textSecondary">
           <FileImage className="w-8 h-8 opacity-40 shrink-0" />
           <div>
-            <div className="font-medium text-textPrimary">No KYC uploaded yet</div>
+            <div className="font-medium text-ink">No KYC uploaded yet</div>
             <div className="text-xs mt-0.5">
               Capture {proofLabel} photos to complete verification.
             </div>
@@ -1027,7 +1027,7 @@ function ImagePreview({
     >
       <div className="w-full max-w-4xl h-[90vh] bg-surface rounded-2xl shadow-modal border border-borderc flex flex-col overflow-hidden">
         <div className="flex items-center justify-between gap-3 px-5 py-3 border-b border-borderc bg-surfaceAlt">
-          <div className="font-semibold text-textPrimary truncate">{label ?? "KYC document"}</div>
+          <div className="font-semibold text-ink truncate">{label ?? "KYC document"}</div>
           <div className="flex items-center gap-1">
             <button
               onClick={() => setZoom((z) => Math.max(z - 0.25, 0.25))}
@@ -1076,7 +1076,7 @@ function ImagePreview({
             )}
             <button
               onClick={onClose}
-              className="ml-1 text-textSecondary hover:text-textPrimary"
+              className="ml-1 text-textSecondary hover:text-ink"
               title="Close (Esc)"
             >
               <X className="w-5 h-5" />
@@ -1160,7 +1160,7 @@ function WalletSection({ guestId }: { guestId: string }) {
         )}
       </div>
 
-      <div className="text-2xl font-bold text-textPrimary">{inr(balance)}</div>
+      <div className="text-2xl font-bold text-ink">{inr(balance)}</div>
       <div className="text-xs text-inkMuted mt-0.5">Available for future bookings - no expiry</div>
 
       {data?.entries && data.entries.length > 0 && (
@@ -1174,7 +1174,7 @@ function WalletSection({ guestId }: { guestId: string }) {
               return (
                 <div key={e.id} className="flex items-center justify-between text-xs py-1.5 border-b border-divider last:border-0">
                   <div className="min-w-0">
-                    <div className="font-semibold capitalize text-textPrimary">
+                    <div className="font-semibold capitalize text-ink">
                       {e.entryType.replace("_", " ")}
                     </div>
                     {e.note && <div className="text-inkMuted truncate">{e.note}</div>}
@@ -1193,7 +1193,7 @@ function WalletSection({ guestId }: { guestId: string }) {
       {showCashout && (
         <div className="fixed inset-0 bg-inkDark/50 flex items-center justify-center z-50" onClick={() => setShowCashout(false)}>
           <div className="bg-surface rounded-2xl shadow-modal w-full max-w-md p-6 space-y-1" onClick={(e) => e.stopPropagation()}>
-            <h3 className="text-lg font-semibold text-textPrimary mb-4">Cash out wallet credit</h3>
+            <h3 className="text-lg font-semibold text-ink mb-4">Cash out wallet credit</h3>
             <div className="text-sm text-textSecondary mb-3">Available: <strong>{inr(balance)}</strong></div>
             <div className="space-y-3">
               <div>
@@ -1301,7 +1301,7 @@ function StaysTab({ guestId }: { guestId: string }) {
       <div className="card text-textSecondary text-sm flex items-center gap-3 py-6">
         <BedDouble className="w-8 h-8 opacity-40 shrink-0" />
         <div>
-          <div className="font-medium text-textPrimary">No bookings yet</div>
+          <div className="font-medium text-ink">No bookings yet</div>
           <div className="text-xs mt-0.5">
             Reservations this guest is on will appear here once they're created.
           </div>
@@ -1341,7 +1341,7 @@ function StayCard({ r, onOpen }: { r: GuestReservation; onOpen: () => void }) {
     >
       <div className="flex items-center justify-between gap-3 mb-3 pb-2 border-b border-divider">
         <div className="flex items-center gap-2 min-w-0">
-          <span className="font-mono font-bold text-textPrimary">{r.reservationNumber}</span>
+          <span className="font-mono font-bold text-ink">{r.reservationNumber}</span>
           <span
             className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-[6px] ${statusTone}`}
           >
@@ -1364,25 +1364,25 @@ function StayCard({ r, onOpen }: { r: GuestReservation; onOpen: () => void }) {
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-sm">
         <div>
           <div className="label">Check-in</div>
-          <div className="font-medium text-textPrimary mt-0.5">
+          <div className="font-medium text-ink mt-0.5">
             {format(new Date(r.checkInDate), "dd MMM yyyy")}
           </div>
         </div>
         <div>
           <div className="label">Check-out</div>
-          <div className="font-medium text-textPrimary mt-0.5">
+          <div className="font-medium text-ink mt-0.5">
             {format(new Date(r.checkOutDate), "dd MMM yyyy")}
           </div>
         </div>
         <div>
           <div className="label">{r.stayType === "short_stay" ? "Duration" : "Nights"}</div>
-          <div className="font-medium text-textPrimary mt-0.5">
+          <div className="font-medium text-ink mt-0.5">
             {r.stayType === "short_stay" ? "Day use" : `${r.numNights} night${r.numNights === 1 ? "" : "s"}`}
           </div>
         </div>
         <div>
           <div className="label">Total · balance</div>
-          <div className="font-mono font-medium text-textPrimary mt-0.5">
+          <div className="font-mono font-medium text-ink mt-0.5">
             {inr(Number(r.grandTotal))}{" "}
             {balance > 0.009 ? (
               <span className="text-dangerFg">· {inr(balance)} due</span>
@@ -1633,7 +1633,7 @@ function Row({ label, value }: { label: string; value: React.ReactNode }) {
     <div>
       <div className="label">{label}</div>
       <div
-        className={`mt-0.5 ${isEmpty ? "text-inkFaint italic" : "text-textPrimary"}`}
+        className={`mt-0.5 ${isEmpty ? "text-inkFaint italic" : "text-ink"}`}
       >
         {isEmpty ? "Not provided" : value}
       </div>

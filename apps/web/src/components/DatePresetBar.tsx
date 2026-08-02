@@ -127,10 +127,10 @@ export function DatePresetBar({
             <button
               key={p.key}
               onClick={() => pick(p.key)}
-              className={`px-3 h-8 text-xs font-semibold rounded-sm border transition-colors ${
+              className={`px-3.5 h-8 text-xs font-semibold rounded-full border transition-colors ${
                 active
-                  ? "bg-brand-dark text-cream border-brand-dark"
-                  : "bg-surface text-textSecondary border-borderc hover:border-brand hover:text-brand"
+                  ? "bg-inkDark text-cream border-inkDark"
+                  : "bg-surface text-textSecondary border-borderControl hover:border-brand/50 hover:text-brand-deep"
               }`}
             >
               {p.label}
@@ -139,10 +139,10 @@ export function DatePresetBar({
         })}
         <button
           onClick={() => pick("custom")}
-          className={`px-3 h-8 text-xs font-semibold rounded-sm border transition-colors inline-flex items-center gap-1 ${
+          className={`px-3.5 h-8 text-xs font-semibold rounded-full border transition-colors inline-flex items-center gap-1 ${
             preset === "custom"
-              ? "bg-brand-dark text-cream border-brand-dark"
-              : "bg-surface text-textSecondary border-borderc hover:border-brand hover:text-brand"
+              ? "bg-inkDark text-cream border-inkDark"
+              : "bg-surface text-textSecondary border-borderControl hover:border-brand/50 hover:text-brand-deep"
           }`}
         >
           Custom
@@ -153,10 +153,10 @@ export function DatePresetBar({
         {allowAll && (
           <button
             onClick={() => pick("all")}
-            className={`px-3 h-8 text-xs font-semibold rounded-sm border transition-colors ${
+            className={`px-3.5 h-8 text-xs font-semibold rounded-full border transition-colors ${
               preset === "all"
-                ? "bg-brand-dark text-cream border-brand-dark"
-                : "bg-surface text-textSecondary border-borderc hover:border-brand hover:text-brand"
+                ? "bg-inkDark text-cream border-inkDark"
+                : "bg-surface text-textSecondary border-borderControl hover:border-brand/50 hover:text-brand-deep"
             }`}
           >
             All
@@ -170,7 +170,7 @@ export function DatePresetBar({
             <label className="label block mb-1 text-[10px]">From</label>
             <input
               type="date"
-              className="input h-8 text-xs w-36"
+              className="input !min-h-[32px] h-8 text-xs w-36 font-mono"
               value={from}
               max={to || undefined}
               onChange={(e) =>
@@ -182,7 +182,7 @@ export function DatePresetBar({
             <label className="label block mb-1 text-[10px]">To</label>
             <input
               type="date"
-              className="input h-8 text-xs w-36"
+              className="input !min-h-[32px] h-8 text-xs w-36 font-mono"
               value={to}
               min={from || undefined}
               onChange={(e) =>

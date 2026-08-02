@@ -21,7 +21,7 @@ export function Loader({ label, size = "md", fullscreen = false }: LoaderProps) 
     >
       <div className={`relative grid place-items-center ${d.ring}`}>
         <div
-          className="absolute inset-0 rounded-full border-2 border-brand/20 border-t-brand"
+          className="absolute inset-0 rounded-full border-2 border-brand-soft border-t-brand"
           style={{ animation: "loader-spin-cw 1.2s cubic-bezier(0.5, 0.1, 0.5, 0.9) infinite" }}
         />
         <div
@@ -32,14 +32,14 @@ export function Loader({ label, size = "md", fullscreen = false }: LoaderProps) 
         </div>
       </div>
       {label && (
-        <div className={`${d.text} font-medium loader-shimmer-text tracking-wide`}>{label}</div>
+        <div className={`${d.text} font-medium text-inkMuted tracking-wide`}>{label}</div>
       )}
     </div>
   );
 
   if (fullscreen) {
     return (
-      <div className="fixed inset-0 flex items-center justify-center bg-bg/70 backdrop-blur-sm z-50">
+      <div className="fixed inset-0 flex items-center justify-center bg-bg/80 backdrop-blur-[3px] z-50">
         {spinner}
       </div>
     );

@@ -584,12 +584,12 @@ export default function ReservationDetail() {
         <span className="w-20 shrink-0 text-[11px] uppercase tracking-wider text-textSecondary">
           {label}
         </span>
-        <span className="text-sm text-textPrimary">{children}</span>
+        <span className="text-sm text-ink">{children}</span>
       </div>
     );
     return (
       <div className="mt-1">
-        <div className="rounded-sm border border-borderc bg-bg px-3 py-2">
+        <div className="rounded-sm border border-divider bg-surfaceAlt px-3 py-2">
           <Row label="Check-out">
             <span className="line-through text-textSecondary">
               {fmtDay(r.checkOutDate)}
@@ -1026,7 +1026,7 @@ export default function ReservationDetail() {
             <ShieldAlert className="w-6 h-6 text-danger" />
           )}
           <div>
-            <div className="font-semibold text-navy">
+            <div className="font-semibold text-ink">
               KYC {kycVerified ? "Verified" : "Required"}
             </div>
             <div className="text-xs text-textSecondary">
@@ -1120,7 +1120,7 @@ export default function ReservationDetail() {
         <div className="ml-auto flex flex-wrap gap-2">
         {r.status === "confirmed" && can("cancel_reservations") && (
           <button
-            className="btn-secondary !text-danger !border-danger/40 hover:!bg-danger/5 inline-flex items-center gap-2"
+            className="btn-danger inline-flex items-center gap-2"
             onClick={async () => {
               const advance = Number(r.advancePaid ?? 0);
               const advanceLine =
@@ -1454,7 +1454,7 @@ export default function ReservationDetail() {
                 <li key={inv.id} className="px-4 py-3 flex items-start justify-between gap-3">
                   <div className="min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
-                      <span className="font-mono font-bold text-navy">{richInv.invoiceNumber}</span>
+                      <span className="font-mono font-bold text-ink">{richInv.invoiceNumber}</span>
                       {isCreditNote ? (
                         <span className="text-[10px] uppercase tracking-wider font-semibold px-2 py-0.5 rounded-full border bg-dangerBg text-dangerFg border-dangerBorder">
                           Credit note
@@ -1549,14 +1549,14 @@ export default function ReservationDetail() {
             };
             return (
               <>
-                <ul className="divide-y divide-borderc">
+                <ul className="divide-y divide-divider">
                   {activeDocs.map(renderInvoiceRow)}
                 </ul>
                 {reversedDocs.length > 0 && (
-                  <div className="border-t border-borderc">
+                  <div className="border-t border-divider">
                     <button
                       onClick={() => setShowReversed((v) => !v)}
-                      className="w-full px-4 py-2 text-left text-xs text-textSecondary hover:bg-bg flex items-center gap-1.5"
+                      className="w-full px-4 py-2 text-left text-xs text-textSecondary hover:bg-surfaceAlt flex items-center gap-1.5"
                     >
                       <ChevronDown
                         className={`w-3.5 h-3.5 transition-transform ${showReversed ? "rotate-180" : ""}`}
@@ -1567,7 +1567,7 @@ export default function ReservationDetail() {
                       </span>
                     </button>
                     {showReversed && (
-                      <ul className="divide-y divide-borderc bg-bg/30">
+                      <ul className="divide-y divide-divider bg-surfaceAlt">
                         {reversedDocs.map(renderInvoiceRow)}
                       </ul>
                     )}
@@ -1729,7 +1729,7 @@ export default function ReservationDetail() {
                 <img
                   src={guest.photoUrl}
                   alt=""
-                  className="w-11 h-11 object-cover rounded-full border border-borderc shrink-0"
+                  className="w-11 h-11 object-cover rounded-full border border-borderControl shrink-0"
                 />
               ) : (
                 <span className="w-11 h-11 shrink-0 rounded-full bg-parchment text-inkBody grid place-items-center font-bold text-sm">
@@ -1776,9 +1776,28 @@ export default function ReservationDetail() {
                 ))}
               </div>
             )}
+            {/* KYC state, restated on the rail so the desk can read the
+                booking's compliance status without scrolling back up to
+                the KYC card. Same source of truth, no new data. */}
+            <div
+              className={`mt-3 flex items-center gap-2 rounded-[9px] px-3 py-2 text-[12.5px] font-semibold ${
+                kycVerified ? "bg-successBg text-success" : "bg-warnBg text-warnFg"
+              }`}
+            >
+              {kycVerified ? (
+                <ShieldCheck className="w-4 h-4 shrink-0" />
+              ) : (
+                <ShieldAlert className="w-4 h-4 shrink-0" />
+              )}
+              <span className="min-w-0 truncate">
+                {kycVerified
+                  ? `KYC verified · ${guest?.idProofType?.toUpperCase() ?? "ID"} ••${guest?.idProofLast4 ?? ""}`
+                  : "KYC pending"}
+              </span>
+            </div>
             <button
               onClick={() => guest?.phone && navigate(`/guests/${guest.phone}`)}
-              className="btn-secondary w-full mt-3 !h-9 text-[13px]"
+              className="btn-secondary w-full mt-2 !h-9 text-[13px]"
             >
               View guest profile
             </button>
@@ -2343,13 +2362,13 @@ function SwapClosedLegRow(props: {
   const hasAnyAmenity =
     props.fromRoom.hasAc || props.fromRoom.hasTv || props.fromRoom.hasWifi;
   return (
-    <tr className="bg-bg/40">
+    <tr className="bg-surfaceAlt">
       <td className="font-mono">
         <div className="flex items-center gap-2 flex-wrap">
           <span className="text-textSecondary">{props.fromRoom.roomNumber}</span>
         </div>
         <div className="mt-1 flex items-center gap-1.5 flex-wrap">
-          <span className="text-[9px] uppercase tracking-wide font-semibold px-1.5 py-0.5 rounded border bg-neutralBg text-inkMuted border-neutralBorder">
+          <span className="text-[9px] uppercase tracking-wide font-semibold px-1.5 py-0.5 rounded-full border bg-neutralBg text-inkMuted border-neutralBorder">
             Swapped to Room {props.toRoomNumber}
           </span>
           <span className="text-[11px] text-textSecondary font-mono">{segLabel}</span>
@@ -2362,17 +2381,17 @@ function SwapClosedLegRow(props: {
         {hasAnyAmenity && (
           <div className="flex flex-wrap gap-1 mt-1 opacity-60">
             {props.fromRoom.hasAc && (
-              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-sm text-[10px] font-semibold bg-infoBg text-info">
+              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] font-semibold bg-infoBg text-info">
                 <Snowflake className="w-2.5 h-2.5" /> AC
               </span>
             )}
             {props.fromRoom.hasTv && (
-              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-sm text-[10px] font-semibold bg-neutralBg text-inkMuted">
+              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] font-semibold bg-neutralBg text-inkMuted">
                 <Tv className="w-2.5 h-2.5" /> TV
               </span>
             )}
             {props.fromRoom.hasWifi && (
-              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-sm text-[10px] font-semibold bg-neutralBg text-inkMuted">
+              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] font-semibold bg-neutralBg text-inkMuted">
                 <Wifi className="w-2.5 h-2.5" /> Wi-Fi
               </span>
             )}
@@ -2383,7 +2402,7 @@ function SwapClosedLegRow(props: {
       <td className="font-mono tabular-nums text-textSecondary">-</td>
       <td className="font-mono tabular-nums text-textSecondary">-</td>
       <td className="text-right">
-        <span className="text-[10px] uppercase tracking-wider font-semibold px-2 py-0.5 rounded-sm bg-textSecondary/10 text-textSecondary">
+        <span className="text-[10px] uppercase tracking-wider font-semibold px-2 py-0.5 rounded-full bg-neutralBg border border-neutralBorder text-inkMuted">
           closed
         </span>
       </td>
@@ -2442,12 +2461,12 @@ function ExtensionBreakdownRows(props: {
     n: number,
     badge: { text: string; cls: string },
   ) => (
-    <tr className="bg-bg/40">
+    <tr className="bg-surfaceAlt">
       <td className="font-mono">
         <div className="mt-0.5 flex items-center gap-1.5 flex-wrap pl-3">
           <span className="text-textSecondary">↳</span>
           <span
-            className={`text-[9px] uppercase tracking-wide font-semibold px-1.5 py-0.5 rounded border ${badge.cls}`}
+            className={`text-[9px] uppercase tracking-wide font-semibold px-1.5 py-0.5 rounded-full border ${badge.cls}`}
           >
             {badge.text}
           </span>
@@ -2653,7 +2672,7 @@ function RoomRow(props: {
               on a vacated room confuses staff. */}
           {props.room.roomStatus && !isClosedSwapLeg && (
             <span
-              className={`text-[9px] uppercase tracking-wide font-semibold px-1.5 py-0.5 rounded border ${roomStatusBadge[props.room.roomStatus]}`}
+              className={`text-[9px] uppercase tracking-wide font-semibold px-1.5 py-0.5 rounded-full border ${roomStatusBadge[props.room.roomStatus]}`}
             >
               {props.room.roomStatus.replace("_", " ")}
             </span>
@@ -2668,7 +2687,7 @@ function RoomRow(props: {
             !isClosedSwapLeg &&
             props.room.roomStatus !== "cancelled" &&
             props.room.roomStatus !== "checked_out" && (
-              <span className={`text-[9px] uppercase tracking-wide font-semibold px-1.5 py-0.5 rounded border ${statusBadge}`}>
+              <span className={`text-[9px] uppercase tracking-wide font-semibold px-1.5 py-0.5 rounded-full border ${statusBadge}`}>
                 {status}
               </span>
             )}
@@ -2707,7 +2726,7 @@ function RoomRow(props: {
           // itself were under maintenance — confusing for staff.
           return (
             <div className="mt-1 flex items-center gap-1.5 flex-wrap">
-              <span className="text-[9px] uppercase tracking-wide font-semibold px-1.5 py-0.5 rounded border bg-infoBg text-info border-infoBorder">
+              <span className="text-[9px] uppercase tracking-wide font-semibold px-1.5 py-0.5 rounded-full border bg-infoBg text-info border-infoBorder">
                 Swapped from Room {prevRoomNumber}
               </span>
             </div>
@@ -2719,7 +2738,7 @@ function RoomRow(props: {
             sibling leg to name. */}
         {isSegmented && props.isAddedRoom && (
           <div className="mt-1 flex items-center gap-1.5 flex-wrap">
-            <span className="text-[9px] uppercase tracking-wide font-semibold px-1.5 py-0.5 rounded border bg-brand-soft text-brand-deep border-brand-tint">
+            <span className="text-[9px] uppercase tracking-wide font-semibold px-1.5 py-0.5 rounded-full border bg-brand-soft text-brand-deep border-brand-tint">
               Added mid-stay
             </span>
             <span className="text-[11px] text-textSecondary font-mono">
@@ -2736,7 +2755,7 @@ function RoomRow(props: {
         {isSegmented && !props.isAddedRoom && (
           <div className="mt-1 flex items-center gap-1.5 flex-wrap">
             <span
-              className={`text-[9px] uppercase tracking-wide font-semibold px-1.5 py-0.5 rounded border ${
+              className={`text-[9px] uppercase tracking-wide font-semibold px-1.5 py-0.5 rounded-full border ${
                 props.swapDirection === "to"
                   ? "bg-neutralBg text-inkMuted border-neutralBorder"
                   : "bg-infoBg text-info border-infoBorder"
@@ -2779,21 +2798,21 @@ function RoomRow(props: {
         {hasAnyAmenity && (
           <div className="flex flex-wrap gap-1 mt-1">
             {props.room.hasAc ? (
-              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-sm text-[10px] font-semibold bg-infoBg text-info">
+              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] font-semibold bg-infoBg text-info">
                 <Snowflake className="w-2.5 h-2.5" /> AC
               </span>
             ) : (
-              <span className="inline-flex items-center px-1.5 py-0.5 rounded-sm text-[10px] font-semibold bg-neutralBg text-inkMuted">
+              <span className="inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] font-semibold bg-neutralBg text-inkMuted">
                 Non-AC
               </span>
             )}
             {props.room.hasTv && (
-              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-sm text-[10px] font-semibold bg-brand-soft text-brand-deep">
+              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] font-semibold bg-brand-soft text-brand-deep">
                 <Tv className="w-2.5 h-2.5" /> TV
               </span>
             )}
             {props.room.hasWifi && (
-              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-sm text-[10px] font-semibold bg-success/15 text-success">
+              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] font-semibold bg-successBg text-success">
                 <Wifi className="w-2.5 h-2.5" /> Wi-Fi
               </span>
             )}
@@ -2853,7 +2872,7 @@ function RoomRow(props: {
                     invalidateKeys={[["reservation"], ["dashboard"]]}
                     trigger={
                       <span
-                        className="inline-block !h-7 !px-2 text-xs font-medium rounded-sm border border-borderc bg-surface hover:bg-bg cursor-pointer leading-[1.5rem] capitalize"
+                        className="inline-block !h-7 !px-2 text-xs font-medium rounded-sm border border-borderControl bg-surface hover:bg-surfaceAlt cursor-pointer leading-[1.5rem] capitalize"
                         title="Change room status"
                       >
                         Status…
@@ -3403,7 +3422,7 @@ function SwapRoomModal(props: {
                         active
                           ? "border-brand bg-brand-soft"
                           : isDirty
-                            ? "border-warning/50 bg-warning/5"
+                            ? "border-warnBorder bg-warnBg"
                             : "border-borderControl hover:border-brand hover:bg-surfaceAlt"
                       }`}
                     >
@@ -3424,7 +3443,7 @@ function SwapRoomModal(props: {
                             {rm.roomNumber}
                           </span>
                           {isDirty && (
-                            <span className="inline-flex items-center gap-0.5 px-1 py-0.5 rounded-sm text-[9px] font-semibold bg-warning/15 text-warning">
+                            <span className="inline-flex items-center gap-0.5 px-1 py-0.5 rounded-full text-[9px] font-semibold bg-warnBg text-warnFg">
                               <SprayCan className="w-2.5 h-2.5" /> DIRTY
                             </span>
                           )}
@@ -3444,7 +3463,7 @@ function SwapRoomModal(props: {
                             e.stopPropagation();
                             markClean.mutate(rm.id, { onSuccess: () => select() });
                           }}
-                          className="mt-2 w-full inline-flex items-center justify-center gap-1 px-1.5 h-7 rounded-sm border border-warning/50 text-warning hover:bg-warning/10 text-[11px] font-semibold disabled:opacity-50"
+                          className="mt-2 w-full inline-flex items-center justify-center gap-1 px-1.5 h-7 rounded-sm border border-warnBorder text-warnFg hover:bg-warnBg text-[11px] font-semibold disabled:opacity-50"
                         >
                           <SprayCan className="w-3 h-3" />
                           {cleanInFlight ? "Cleaning…" : "Mark clean & select"}
@@ -3468,7 +3487,7 @@ function SwapRoomModal(props: {
           const rate = Number(rateOverride || 0);
           const lineTotal = remainingNights > 0 ? rate * remainingNights : 0;
           return (
-            <div className="border border-borderc rounded p-3 bg-bg/40 space-y-2">
+            <div className="border border-divider rounded-sm p-3 bg-surfaceAlt space-y-2">
               <div className="text-xs font-semibold uppercase tracking-wider text-textSecondary">
                 Rate per room
               </div>
@@ -3496,7 +3515,7 @@ function SwapRoomModal(props: {
                     onChange={(e) => setRateOverride(e.target.value)}
                   />
                 </div>
-                <div className="w-24 text-right text-xs font-mono text-textPrimary">
+                <div className="w-24 text-right text-xs font-mono text-ink">
                   {remainingNights > 0 ? `= ₹${lineTotal.toFixed(2)}` : ""}
                 </div>
               </div>
@@ -3511,7 +3530,7 @@ function SwapRoomModal(props: {
         })()}
 
         {err && (
-          <div className="text-sm text-danger bg-danger/5 border border-danger/30 rounded p-2">
+          <div className="text-sm text-dangerFg bg-dangerBg border border-dangerBorder rounded-sm p-2">
             {err}
           </div>
         )}
@@ -3803,7 +3822,7 @@ function PaymentRow(props: {
       <td className="font-mono text-xs">
         <div>
           {props.payment.receiptNumber && (
-            <div className="text-[10px] text-navy">{props.payment.receiptNumber}</div>
+            <div className="text-[10px] text-ink">{props.payment.receiptNumber}</div>
           )}
           <div className="text-textSecondary">{props.payment.notes ?? ""}</div>
         </div>
@@ -4002,7 +4021,7 @@ function AddRoomModal(props: {
       <div className="space-y-4">
         <OverdueWarning minutesOverdue={props.minutesOverdue ?? 0} />
         {isShortStay ? (
-          <div className="text-xs text-textSecondary rounded-sm bg-bg/60 border border-borderc px-3 py-2">
+          <div className="text-xs text-textSecondary rounded-sm bg-surfaceAlt border border-divider px-3 py-2">
             Day-use booking - the added room covers the same date (
             <strong>{format(new Date(props.checkInDate), "dd MMM yyyy")}</strong>) at a
             flat rate. Date pickers don't apply.
@@ -4101,7 +4120,7 @@ function AddRoomModal(props: {
                                 active
                                   ? "border-brand bg-brand-soft"
                                   : isDirty
-                                    ? "border-warning/50 bg-warning/5"
+                                    ? "border-warnBorder bg-warnBg"
                                     : "border-borderControl hover:border-brand hover:bg-surfaceAlt"
                               }`}
                             >
@@ -4119,7 +4138,7 @@ function AddRoomModal(props: {
                                     {rm.roomNumber}
                                   </span>
                                   {isDirty && (
-                                    <span className="inline-flex items-center gap-0.5 px-1 py-0.5 rounded-sm text-[9px] font-semibold bg-warning/15 text-warning">
+                                    <span className="inline-flex items-center gap-0.5 px-1 py-0.5 rounded-full text-[9px] font-semibold bg-warnBg text-warnFg">
                                       <SprayCan className="w-2.5 h-2.5" /> DIRTY
                                     </span>
                                   )}
@@ -4127,7 +4146,7 @@ function AddRoomModal(props: {
                                 <div className="text-[11px] capitalize text-textSecondary mt-0.5 truncate">
                                   {rm.roomType}
                                 </div>
-                                <div className="text-xs font-mono text-textPrimary mt-1">
+                                <div className="text-xs font-mono text-ink mt-1">
                                   ₹{Number(rm.baseRate).toFixed(0)}/n
                                 </div>
                               </button>
@@ -4141,7 +4160,7 @@ function AddRoomModal(props: {
                                       onSuccess: () => toggleRoom(rm),
                                     });
                                   }}
-                                  className="mt-2 w-full inline-flex items-center justify-center gap-1 px-1.5 h-7 rounded-sm border border-warning/50 text-warning hover:bg-warning/10 text-[11px] font-semibold disabled:opacity-50"
+                                  className="mt-2 w-full inline-flex items-center justify-center gap-1 px-1.5 h-7 rounded-sm border border-warnBorder text-warnFg hover:bg-warnBg text-[11px] font-semibold disabled:opacity-50"
                                 >
                                   <SprayCan className="w-3 h-3" />
                                   {cleanInFlight ? "Cleaning…" : "Mark clean & select"}
@@ -4160,7 +4179,7 @@ function AddRoomModal(props: {
         </div>
 
         {pickedIds.length > 0 && (
-          <div className="border border-borderc rounded p-3 bg-bg/40 space-y-2">
+          <div className="border border-divider rounded-sm p-3 bg-surfaceAlt space-y-2">
             <div className="text-xs font-semibold uppercase tracking-wider text-textSecondary">
               Rate per room
             </div>
@@ -4195,14 +4214,14 @@ function AddRoomModal(props: {
                       }
                     />
                   </div>
-                  <div className="w-24 text-right text-xs font-mono text-textPrimary">
+                  <div className="w-24 text-right text-xs font-mono text-ink">
                     {nights > 0 ? `= ₹${(rate * nights).toFixed(2)}` : ""}
                   </div>
                 </div>
               );
             })}
             {nights > 0 && (
-              <div className="flex justify-between border-t border-borderc pt-2 mt-2 text-sm">
+              <div className="flex justify-between border-t border-divider pt-2 mt-2 text-sm">
                 <strong>
                   {pickedIds.length} room{pickedIds.length === 1 ? "" : "s"}
                   {isShortStay
@@ -4227,13 +4246,13 @@ function AddRoomModal(props: {
         )}
         <div className="flex justify-end gap-2 pt-1">
           <button
-            className="px-4 h-9 text-sm font-semibold rounded-sm border border-borderControl text-textSecondary hover:border-inkMuted hover:text-textPrimary transition-colors"
+            className="btn-secondary"
             onClick={props.onClose}
           >
             Cancel
           </button>
           <button
-            className="px-4 h-9 text-sm font-semibold rounded-sm bg-brand text-white border border-brand hover:bg-brand-deep transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+            className="btn-primary disabled:opacity-40 disabled:cursor-not-allowed"
             disabled={
               pickedIds.length === 0 ||
               pickedIds.some((id) => (picked[id] ?? 0) <= 0) ||
@@ -4495,7 +4514,7 @@ function ExtendModal(props: {
                 · {pickedRooms.size} of {props.rooms.length}
               </span>
             </label>
-            <div className="border border-borderc rounded-sm divide-y divide-borderc">
+            <div className="border border-borderControl rounded-sm divide-y divide-divider">
               {props.rooms.map((rm) => {
                 const isOn = pickedRooms.has(rm.id);
                 const opt = optByRoom.get(rm.id);
@@ -4524,7 +4543,7 @@ function ExtendModal(props: {
                         ? "opacity-50 cursor-not-allowed"
                         : isOn
                           ? "bg-brand-soft/40 cursor-pointer"
-                          : "hover:bg-bg cursor-pointer"
+                          : "hover:bg-surfaceAlt cursor-pointer"
                     }`}
                   >
                     <input
@@ -4569,7 +4588,7 @@ function ExtendModal(props: {
         )}
 
         {blockedRooms.length > 0 && (
-          <div className="rounded-sm border border-danger/30 bg-danger/5 p-3 space-y-2">
+          <div className="rounded-sm border border-dangerBorder bg-dangerBg p-3 space-y-2">
             <div className="text-xs font-semibold uppercase tracking-wider text-danger">
               {blockedRooms.length === 1
                 ? "Room isn't free for the new night(s)"
@@ -4633,7 +4652,7 @@ function ExtendModal(props: {
         )}
 
         {moveEntries.length > 0 && (
-          <div className="rounded-sm border border-borderc bg-bg/40 p-3 space-y-2">
+          <div className="rounded-sm border border-divider bg-surfaceAlt p-3 space-y-2">
             <div className="text-xs font-semibold uppercase tracking-wider text-textSecondary">
               Guest confirmation (OTP)
             </div>
@@ -4817,7 +4836,7 @@ function CancelReservationModal(props: {
 
         {hasAdvance && (
           <>
-            <div className="rounded-sm border border-borderc bg-bg/40 p-3 space-y-2">
+            <div className="rounded-sm border border-divider bg-surfaceAlt p-3 space-y-2">
               <div className="text-xs font-semibold uppercase tracking-wider text-textSecondary">
                 Advance handling
               </div>
@@ -4840,7 +4859,7 @@ function CancelReservationModal(props: {
                   />
                 </div>
               </div>
-              <div className="flex items-center justify-between border-t border-borderc pt-2 text-sm">
+              <div className="flex items-center justify-between border-t border-divider pt-2 text-sm">
                 <strong>Refundable to guest</strong>
                 <strong className="font-mono">₹{refundable.toFixed(2)}</strong>
               </div>
@@ -5127,7 +5146,7 @@ function ChargeModal(props: {
                 · {selectedCount === 0 ? "all rooms" : `${selectedCount} selected`}
               </span>
             </label>
-            <div className="border border-borderc rounded-sm divide-y divide-borderc">
+            <div className="border border-borderControl rounded-sm divide-y divide-divider">
               {props.rooms.map((rm) => {
                 const isOn = pickedRooms.has(rm.id);
                 return (
@@ -5138,7 +5157,7 @@ function ChargeModal(props: {
                         ? "opacity-50 cursor-not-allowed"
                         : isOn
                           ? "bg-brand-soft/40"
-                          : "hover:bg-bg"
+                          : "hover:bg-surfaceAlt"
                     }`}
                   >
                     <input
@@ -5482,7 +5501,7 @@ function PerRoomCheckoutModal(props: {
               <> Guest: <strong className="text-ink">{props.occupantName}</strong>.</>
             )}
           </div>
-          <div className="border border-borderc rounded p-3 space-y-1 bg-bg/40">
+          <div className="border border-divider rounded-sm p-3 space-y-1 bg-surfaceAlt">
             <div className="flex justify-between text-sm">
               <span className="text-textSecondary">Subtotal (room charges + extras, pre-GST)</span>
               <span className="font-mono">{inr(quoteQ.data.subtotal)}</span>
@@ -5499,7 +5518,7 @@ function PerRoomCheckoutModal(props: {
               <span className="text-textSecondary">Total GST</span>
               <span className="font-mono">{inr(quoteQ.data.gst)}</span>
             </div>
-            <div className="flex justify-between text-sm border-t border-borderc pt-2 mt-2">
+            <div className="flex justify-between text-sm border-t border-divider pt-2 mt-2">
               <span className="text-textSecondary">Grand Total</span>
               <span className="font-mono">{inr(quoteQ.data.grandTotal)}</span>
             </div>
@@ -5520,7 +5539,7 @@ function PerRoomCheckoutModal(props: {
                   </span>
                 </div>
               )}
-            <div className="flex justify-between border-t border-borderc pt-2 mt-2">
+            <div className="flex justify-between border-t border-divider pt-2 mt-2">
               <strong>{due <= 0.009 ? "Due now" : "Balance due now"}</strong>
               <strong className={`font-mono ${due <= 0.009 ? "text-success" : ""}`}>
                 {inr(due)}
@@ -5799,7 +5818,7 @@ function CombinedInvoiceModal({
           <div className="text-[10px] uppercase tracking-wider text-textSecondary font-semibold mb-1.5">
             Rooms to combine ({selected.size} of {uninvoicedRooms.length})
           </div>
-          <div className="space-y-1.5 border border-borderc rounded-sm divide-y divide-borderc">
+          <div className="space-y-1.5 border border-borderControl rounded-sm divide-y divide-divider">
             {uninvoicedRooms.map((rm) => {
               const isOn = selected.has(rm.id);
               const lineTotal = Number(rm.ratePerNight) * units;
@@ -5807,7 +5826,7 @@ function CombinedInvoiceModal({
                 <label
                   key={rm.id}
                   className={`flex items-center gap-3 px-3 py-2 cursor-pointer transition-colors ${
-                    isOn ? "bg-brand-soft/40" : "hover:bg-bg"
+                    isOn ? "bg-brand-soft/40" : "hover:bg-surfaceAlt"
                   }`}
                 >
                   <input
@@ -5830,7 +5849,7 @@ function CombinedInvoiceModal({
                       {stayType !== "short_stay" && units > 1 && ` × ${units} nights`}
                     </div>
                   </div>
-                  <div className="text-xs font-mono text-textPrimary shrink-0">
+                  <div className="text-xs font-mono text-ink shrink-0">
                     {inr(lineTotal)}
                   </div>
                 </label>
@@ -5839,7 +5858,7 @@ function CombinedInvoiceModal({
           </div>
         </div>
 
-        <div className="border border-borderc rounded-sm p-3 bg-bg/40 space-y-1 text-sm">
+        <div className="border border-divider rounded-sm p-3 bg-surfaceAlt space-y-1 text-sm">
           <div className="flex justify-between">
             <span className="text-textSecondary">
               Subtotal (pre-GST{gstMode === "inclusive" ? ", extracted from rate" : ""})
@@ -5852,7 +5871,7 @@ function CombinedInvoiceModal({
             </span>
             <span className="font-mono">{inr(gstEstimate)}</span>
           </div>
-          <div className="flex justify-between border-t border-borderc pt-1 mt-1">
+          <div className="flex justify-between border-t border-divider pt-1 mt-1">
             <strong>Estimated total (guest pays)</strong>
             <strong className="font-mono">{inr(grandEstimate)}</strong>
           </div>
@@ -5862,7 +5881,7 @@ function CombinedInvoiceModal({
           </div>
         </div>
 
-        <div className="border border-borderc rounded-sm p-3 space-y-2">
+        <div className="border border-borderControl rounded-sm p-3 space-y-2">
           <label className="flex items-center gap-2 cursor-pointer">
             <input
               type="checkbox"
@@ -5955,7 +5974,7 @@ function InvoiceModeToggle({
   count: number;
 }) {
   return (
-    <div className="rounded-sm border border-borderc bg-bg/40 p-3 space-y-2">
+    <div className="rounded-sm border border-divider bg-surfaceAlt p-3 space-y-2">
       <div className="text-xs font-semibold uppercase tracking-wider text-textSecondary">
         Invoice mode · {count} rooms remaining
       </div>
@@ -5968,7 +5987,7 @@ function InvoiceModeToggle({
           className="mt-1 accent-brand"
         />
         <div className="flex-1 text-sm">
-          <div className="font-medium text-textPrimary">
+          <div className="font-medium text-ink">
             One combined invoice <span className="text-success text-xs">· default</span>
           </div>
           <div className="text-xs text-textSecondary">
@@ -5987,7 +6006,7 @@ function InvoiceModeToggle({
           className="mt-1 accent-brand"
         />
         <div className="flex-1 text-sm">
-          <div className="font-medium text-textPrimary">One tax invoice per room</div>
+          <div className="font-medium text-ink">One tax invoice per room</div>
           <div className="text-xs text-textSecondary">
             Each room gets its own separate GST invoice. Only needed when each guest requires a
             standalone tax invoice with its own number; payment is split proportionally.
@@ -6321,24 +6340,24 @@ function CheckoutModal(props: {
       <ModalShell title="Check Out & Generate Invoice" onClose={props.onClose}>
         <div className="space-y-4">
           {hasOverpayment ? (
-            <div className="rounded-sm border-2 border-warning/40 bg-warning/5 p-4 flex items-start gap-3">
+            <div className="rounded-sm border-2 border-warnBorder bg-warnBg p-4 flex items-start gap-3">
               <AlertTriangle className="w-5 h-5 text-warning mt-0.5 shrink-0" />
               <div>
                 <div className="font-semibold text-warning">
                   Guest overpaid ₹{alreadyOverpaid.toFixed(2)}
                 </div>
-                <div className="text-sm text-textPrimary mt-1">
+                <div className="text-sm text-ink mt-1">
                   Paid ₹{props.totalPaid.toFixed(2)} against a ₹{props.grandTotal.toFixed(2)}{" "}
                   bill. Choose how to return the difference before completing check-out.
                 </div>
               </div>
             </div>
           ) : (
-            <div className="rounded-sm border-2 border-success/40 bg-success/5 p-4 flex items-start gap-3">
+            <div className="rounded-sm border-2 border-successBorder bg-successBg p-4 flex items-start gap-3">
               <CheckCircle2 className="w-5 h-5 text-success mt-0.5 shrink-0" />
               <div>
                 <div className="font-semibold text-success">Bill fully paid</div>
-                <div className="text-sm text-textPrimary mt-1">
+                <div className="text-sm text-ink mt-1">
                   Nothing to collect. Closing the stay will{" "}
                   {props.remainingRoomCount > 1 && !combineIntoOne
                     ? `issue ${props.remainingRoomCount} per-room invoices`
@@ -6366,7 +6385,7 @@ function CheckoutModal(props: {
                     className={`border rounded-sm px-3 py-2 text-sm transition-colors ${
                       refundMode === opt.v
                         ? "border-brand bg-brand-soft text-brand-deep font-semibold"
-                        : "border-borderc hover:border-brand/40"
+                        : "border-borderControl hover:border-brand/40"
                     }`}
                   >
                     {opt.label}
@@ -6424,7 +6443,7 @@ function CheckoutModal(props: {
         {/* Late-checkout fee — entered HERE and applied ONLY when Complete
             Check-out is pressed. Nothing is saved while you type. */}
         {(props.overdueLabel || lateFeeAmount > 0) && (
-          <div className="rounded-sm border border-warning/40 bg-warning/5 p-3 space-y-1.5">
+          <div className="rounded-sm border border-warnBorder bg-warnBg p-3 space-y-1.5">
             <div className="text-xs font-semibold uppercase tracking-wide text-warning">
               Late-checkout fee (optional)
             </div>
@@ -6450,7 +6469,7 @@ function CheckoutModal(props: {
           </div>
         )}
 
-        <div className="border border-borderc rounded p-3 space-y-1 bg-bg/40">
+        <div className="border border-divider rounded-sm p-3 space-y-1 bg-surfaceAlt">
           {(() => {
             const chargesTotal = props.additionalCharges.reduce(
               (s, c) => s + c.amount,
@@ -6481,7 +6500,7 @@ function CheckoutModal(props: {
                     <span className="font-mono">{inr(c.amount)}</span>
                   </div>
                 ))}
-                <div className="flex justify-between text-sm border-t border-borderc/60 pt-1 mt-1">
+                <div className="flex justify-between text-sm border-t border-divider pt-1 mt-1">
                   <span className="text-textSecondary">Subtotal (pre-GST)</span>
                   <span className="font-mono">{inr(props.subtotal)}</span>
                 </div>
@@ -6506,7 +6525,7 @@ function CheckoutModal(props: {
               <span className="font-mono">{inr(lateFeeAmount)}</span>
             </div>
           )}
-          <div className="flex justify-between text-sm border-t border-borderc pt-2 mt-2">
+          <div className="flex justify-between text-sm border-t border-divider pt-2 mt-2">
             <span className="text-textSecondary">Grand Total (bill for this stay)</span>
             <span className="font-mono">{inr(props.grandTotal + lateFeeAmount)}</span>
           </div>
@@ -6514,7 +6533,7 @@ function CheckoutModal(props: {
             <span className="text-textSecondary">Already paid</span>
             <span className="font-mono">− {inr(props.totalPaid)}</span>
           </div>
-          <div className="flex justify-between border-t border-borderc pt-2 mt-2">
+          <div className="flex justify-between border-t border-divider pt-2 mt-2">
             <strong>Balance before final payment</strong>
             <strong className="font-mono">{inr(props.balance + lateFeeAmount)}</strong>
           </div>
@@ -6529,7 +6548,7 @@ function CheckoutModal(props: {
         )}
 
         {hasPrevious && (
-          <div className="rounded-sm border-2 border-danger/40 bg-danger/5 p-3 space-y-2">
+          <div className="rounded-sm border-2 border-dangerBorder bg-dangerBg p-3 space-y-2">
             <label className="flex items-start gap-2 cursor-pointer">
               <input
                 type="checkbox"
@@ -6544,7 +6563,7 @@ function CheckoutModal(props: {
                 <div className="font-bold text-danger uppercase tracking-wider text-xs">
                   Previous unpaid balance
                 </div>
-                <div className="text-textPrimary mt-0.5">
+                <div className="text-ink mt-0.5">
                   Guest also owes{" "}
                   <span className="font-mono font-bold text-danger">{inr(previousTotal)}</span>{" "}
                   from {previousItems.length === 1
@@ -6635,13 +6654,13 @@ function CheckoutModal(props: {
           </div>
         </div>
         {collectingPreviousWithUnpaid && (
-          <div className="rounded-sm border border-danger/40 bg-danger/5 p-3 text-xs text-danger">
+          <div className="rounded-sm border border-dangerBorder bg-dangerBg p-3 text-xs text-dangerFg">
             Can't record an "unpaid" method while collecting previous balance. Pick Cash / UPI /
             Card / Bank Transfer, or uncheck "Collect previous balance".
           </div>
         )}
         {isUnpaid && (
-          <div className="rounded-sm border border-warning/40 bg-warning/5 p-3 space-y-2">
+          <div className="rounded-sm border border-warnBorder bg-warnBg p-3 space-y-2">
             <div className="text-xs text-warning font-semibold uppercase tracking-wider">
               Unpaid checkout
             </div>
@@ -6663,7 +6682,7 @@ function CheckoutModal(props: {
           </div>
         )}
         {mightOverpay && (
-          <div className="rounded-sm border border-accentBlue/30 bg-accentBlue/5 p-3 space-y-2">
+          <div className="rounded-sm border border-infoBorder bg-infoBg p-3 space-y-2">
             <div className="text-xs text-accentBlue font-semibold uppercase tracking-wider">
               If guest overpaid (e.g. early check-out)
             </div>
@@ -6672,7 +6691,7 @@ function CheckoutModal(props: {
               how to handle the refund.
             </div>
             <div className="grid grid-cols-2 gap-2">
-              <label className={`flex items-center gap-2 px-3 py-2 rounded-sm border cursor-pointer ${refundMode === "credit" ? "border-brand bg-brand/5" : "border-borderc"}`}>
+              <label className={`flex items-center gap-2 px-3 py-2 rounded-sm border cursor-pointer ${refundMode === "credit" ? "border-brand bg-brand-soft" : "border-borderControl"}`}>
                 <input
                   type="radio"
                   name="refundMode"
@@ -6685,7 +6704,7 @@ function CheckoutModal(props: {
                   <div className="text-[11px] text-textSecondary">Saved against guest, no expiry</div>
                 </div>
               </label>
-              <label className={`flex items-center gap-2 px-3 py-2 rounded-sm border cursor-pointer ${refundMode === "cash" ? "border-brand bg-brand/5" : "border-borderc"}`}>
+              <label className={`flex items-center gap-2 px-3 py-2 rounded-sm border cursor-pointer ${refundMode === "cash" ? "border-brand bg-brand-soft" : "border-borderControl"}`}>
                 <input
                   type="radio"
                   name="refundMode"
@@ -6752,7 +6771,7 @@ function MakeCompModal(props: {
   return (
     <ModalShell title="Make Complimentary" onClose={props.onClose}>
       <div className="space-y-3 text-sm">
-        <div className="rounded-sm border border-warning/40 bg-warning/5 p-3 text-xs text-textPrimary leading-snug">
+        <div className="rounded-sm border border-warnBorder bg-warnBg p-3 text-xs text-ink leading-snug">
           <div className="font-bold text-warning uppercase tracking-wider text-[10px] mb-1">
             What this does
           </div>
@@ -6822,7 +6841,7 @@ function OverdueWarning({ minutesOverdue }: { minutesOverdue: number }) {
   const lateText =
     h > 0 ? `${h}h ${m}m` : `${m} min`;
   return (
-    <div className="rounded-sm border border-warning/40 bg-warning/10 text-warning text-xs px-3 py-2 flex items-start gap-2">
+    <div className="rounded-sm border border-warnBorder bg-warnBg text-warnFg text-xs px-3 py-2 flex items-start gap-2">
       <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
       <div>
         <strong>{lateText} past check-out time.</strong> For a{" "}
@@ -6858,17 +6877,17 @@ function ModalShell({
     // full width, rounded top corners, slides up. sm+: the classic
     // centered card. Same markup, responsive positioning.
     <div
-      className="fixed inset-0 bg-black/50 flex items-end justify-center sm:items-center z-50 sm:p-4"
+      className="fixed inset-0 bg-inkDark/50 backdrop-blur-[3px] flex items-end justify-center sm:items-center z-50 sm:p-4"
       onClick={onClose}
     >
       <div
-        className={`bg-surface w-full rounded-t-2xl sm:rounded-md ${widthCls} p-6 sm:p-7 pb-safe max-h-[92vh] sm:max-h-[90vh] overflow-y-auto`}
+        className={`bg-surface shadow-modal w-full rounded-t-2xl sm:rounded-2xl ${widthCls} p-6 sm:p-7 pb-safe max-h-[92vh] sm:max-h-[90vh] overflow-y-auto`}
         onClick={(e) => e.stopPropagation()}
       >
         {/* Grab handle — a small affordance that this sheet drags up
             from the bottom on phone. Hidden on sm+. */}
-        <div className="sm:hidden mx-auto mb-4 h-1 w-10 rounded-full bg-borderc" aria-hidden />
-        <h2 className="text-lg font-semibold text-navy mb-5 pb-3 border-b border-borderc">
+        <div className="sm:hidden mx-auto mb-4 h-1 w-10 rounded-full bg-borderControl" aria-hidden />
+        <h2 className="text-lg font-semibold text-ink mb-5 pb-3 border-b border-divider">
           {title}
         </h2>
         {children}

@@ -208,14 +208,12 @@ export function CheckoutAlerts() {
       ? "imminent"
       : "approaching";
 
-  // Bar tone — solid backgrounds (no translucency) so the dashboard
-  // content scrolling under the sticky bar doesn't bleed through. We
-  // use brand-soft tints layered on the page bg colour instead of
-  // alpha-on-transparent.
+  // Bar tone — solid semantic-triad backgrounds (no translucency) so the
+  // dashboard content scrolling under the sticky bar doesn't bleed through.
   const toneClasses: Record<AlertLevel, string> = {
-    approaching: "bg-[#fef3c7] border-warning text-warning",
-    imminent: "bg-[#fee2e2] border-danger text-danger",
-    overdue: "bg-danger text-cream border-danger",
+    approaching: "bg-warnBg border-warnBorder text-warnFg",
+    imminent: "bg-dangerBg border-dangerBorder text-dangerFg",
+    overdue: "bg-dangerBg border-dangerBorder text-dangerFg",
   };
 
   // Headline strategy: when rooms span multiple states, show a tally so
@@ -271,11 +269,11 @@ export function CheckoutAlerts() {
           it follows staff to every page until resolved. Blinks (via the
           animate-overdue-pulse class) so it's impossible to ignore. */}
       {overdueStays.length > 0 && (
-        <div className="border-b-2 border-danger bg-danger text-cream animate-overdue-pulse">
+        <div className="border-b border-dangerBorder bg-dangerBg text-dangerFg animate-overdue-pulse">
           <div className="px-4 py-2.5">
             <div className="flex items-center gap-2 mb-2">
               <AlertTriangle className="w-4 h-4 shrink-0" />
-              <div className="font-bold text-[12px] uppercase tracking-[0.14em] leading-tight">
+              <div className="font-bold text-[11px] uppercase tracking-[0.08em] leading-tight">
                 {overdueStays.length} overdue check-out
                 {overdueStays.length === 1 ? "" : "s"} · guest stayed past scheduled date
               </div>
@@ -293,16 +291,16 @@ export function CheckoutAlerts() {
                       navigate(`/reservations/${o.reservationNumber}`);
                     }
                   }}
-                  className="flex items-center gap-3 px-3 py-2 rounded-md bg-cream/10 border border-cream/30 cursor-pointer hover:bg-cream/20 transition-colors focus:outline-none focus:ring-2 focus:ring-cream/60"
+                  className="flex items-center gap-3 px-3 py-2 rounded-md bg-surface border border-dangerBorder cursor-pointer hover:bg-surfaceAlt transition-colors focus:outline-none focus:ring-[3px] focus:ring-dangerBorder"
                 >
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2 flex-wrap">
-                      <span className="font-mono text-[11px] text-cream/90">
+                      <span className="font-mono text-[11px] text-inkMuted">
                         {o.reservationNumber}
                       </span>
-                      <span className="font-semibold text-[14px] truncate">{o.guestName}</span>
+                      <span className="font-semibold text-[14px] text-ink truncate">{o.guestName}</span>
                     </div>
-                    <div className="text-[11px] text-cream/80 mt-0.5">
+                    <div className="text-[11px] text-textSecondary mt-0.5">
                       Scheduled out {o.checkOutDate} · {o.daysOverdue} day
                       {o.daysOverdue === 1 ? "" : "s"} late
                     </div>
@@ -315,7 +313,7 @@ export function CheckoutAlerts() {
                       e.stopPropagation();
                       navigate(`/reservations/${o.reservationNumber}`);
                     }}
-                    className="inline-flex items-center px-3 h-8 text-xs font-bold rounded-sm bg-cream text-danger hover:opacity-90 transition-colors shrink-0"
+                    className="inline-flex items-center px-3 h-8 text-xs font-bold rounded-sm bg-inkDark text-cream hover:opacity-90 transition-opacity shrink-0"
                   >
                     Open →
                   </button>
@@ -330,12 +328,12 @@ export function CheckoutAlerts() {
           by *time today*). Only render when there's a same-day alert —
           a pure multi-day-overdue situation shows just the block above. */}
       {decorated.length > 0 && (
-      <div className={`border-b-2 ${toneClasses[worst]}`}>
+      <div className={`border-b ${toneClasses[worst]}`}>
         <div className="px-4 py-2.5">
           {/* Headline */}
           <div className="flex items-center gap-2 mb-2">
             <Icon className="w-4 h-4 shrink-0" />
-            <div className="font-bold text-[12px] uppercase tracking-[0.14em] leading-tight">
+            <div className="font-bold text-[11px] uppercase tracking-[0.08em] leading-tight">
               {headline}
             </div>
           </div>
@@ -364,12 +362,12 @@ export function CheckoutAlerts() {
           would overlap the primary submit button (see suppressFloatingChip). */}
       {!suppressFloatingChip && (overdueRows.length > 0 || imminentRows.length > 0) && (
         <div
-          className={`fixed bottom-5 right-5 z-50 px-4 py-3 rounded-md shadow-[0_8px_24px_-4px_rgba(0,0,0,0.35)] border-2 inline-flex items-center gap-3 ${
+          className={`fixed bottom-5 right-5 z-50 px-4 py-3 rounded-md shadow-lift border-2 inline-flex items-center gap-3 ${
             overdueRows.length > 0
-              ? "border animate-checkout-blink"
+              ? "animate-checkout-blink"
               : imminentRows.length > 0
-                ? "border animate-checkout-blink"
-                : "bg-warning text-cream border-warning"
+                ? "animate-checkout-blink"
+                : "bg-warnBg text-warnFg border-warnBorder"
           }`}
         >
           <Icon className="w-6 h-6" />
@@ -408,45 +406,45 @@ function CheckoutRow({
   const minsAbs = Math.abs(row.minutesLeft);
 
   // Time pill — sits on the right of the row.
-  //   - overdue → cream pill, dark-red text, breathing pulse (pops on
+  //   - overdue → cream pill, clay text, breathing pulse (pops on
   //     blinking row).
-  //   - imminent → cream pill, dark-red text, no inner pulse (the row
+  //   - imminent → cream pill, clay text, no inner pulse (the row
   //     itself is already blinking; double-animation is noisy).
-  //   - approaching → warning yellow.
+  //   - approaching → warning triad.
   const pillBase =
-    "inline-flex items-center px-2.5 h-7 rounded-md text-[11px] font-bold uppercase tracking-wider shrink-0";
+    "inline-flex items-center px-2.5 h-7 rounded-full text-[11px] font-bold uppercase tracking-wider shrink-0";
   const pillTone =
     row.level === "overdue"
-      ? "bg-cream text-danger animate-checkout-pulse"
+      ? "bg-cream text-dangerFg animate-checkout-pulse"
       : row.level === "imminent"
-        ? "bg-cream text-danger"
-        : "bg-warning text-cream";
+        ? "bg-cream text-dangerFg"
+        : "bg-warnBg text-warnFg border border-warnBorder";
   const pillLabel = isOverdue ? `${minsAbs} min late` : `${row.minutesLeft} min left`;
 
   // Card frame:
   //   - row's own level is imminent or overdue → HARD BLINK (red ⇄ deep
   //     red, 1s). Forced cream text so contrast stays readable on both
   //     peaks of the blink.
-  //   - approaching → calm static card.
-  // The overall bar tone (worstLevel) still influences the calm rows so
-  // they read sensibly when nested under a red bar.
+  //   - approaching → calm white card on the tinted bar.
+  // The bar itself is now a light semantic-triad strip, so non-blinking
+  // rows always read as plain surface cards regardless of worstLevel.
   const blinks = row.level === "imminent" || row.level === "overdue";
   const cardClass = blinks
     ? "border animate-checkout-blink"
     : worstLevel === "overdue"
-      ? "bg-cream/10 border border-cream/30"
+      ? "bg-surface border border-dangerBorder"
       : "bg-surface border border-borderc";
 
   // Buttons read against the row background. When the row is blinking
   // red the buttons need cream backgrounds to stay readable.
-  const onRedRow = blinks || worstLevel === "overdue";
+  const onRedRow = blinks;
   const primaryBtn = onRedRow
-    ? "bg-cream text-danger hover:opacity-90"
-    : "bg-brand text-textPrimary hover:bg-brand-deep";
+    ? "bg-cream text-dangerFg hover:opacity-90"
+    : "bg-brand text-white hover:bg-brand-deep shadow-primary";
 
   const secondaryBtn = onRedRow
     ? "text-cream hover:underline"
-    : "text-textSecondary hover:text-brand-dark";
+    : "text-textSecondary hover:text-ink";
 
   return (
     <li className={`flex items-center gap-3 px-3 py-2 rounded-md ${cardClass}`}>
@@ -458,25 +456,25 @@ function CheckoutRow({
               <span
                 key={rm}
                 title={isSwap ? "Room swapped mid-stay" : undefined}
-                className={`font-mono text-[13px] font-extrabold px-2 py-0.5 rounded ${
+                className={`font-mono text-[13px] font-extrabold px-2 py-0.5 rounded-sm ${
                   onRedRow
                     ? "bg-cream/20 text-cream"
-                    : "bg-bg text-brand-dark border border-borderc"
+                    : "bg-surfaceAlt text-ink border border-borderc"
                 }`}
               >
                 Room {rm.replace("→", " → ")}
               </span>
             );
           })}
-          <span className="font-semibold text-[14px] truncate">
+          <span className={`font-semibold text-[14px] truncate ${onRedRow ? "" : "text-ink"}`}>
             {row.guestName}
           </span>
           {row.stayType === "short_stay" && (
             <span
-              className={`text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded ${
+              className={`text-[10px] uppercase tracking-wider px-2 py-0.5 rounded-full ${
                 onRedRow
                   ? "bg-cream/15 text-cream"
-                  : "bg-brand/10 text-brand-dark border border-brand/30"
+                  : "bg-brand-soft text-brand-deep border border-brand-tint"
               }`}
               title={`Day-use booking · ${Number(row.durationHours ?? 0)} hours`}
             >
@@ -485,10 +483,10 @@ function CheckoutRow({
           )}
           {row.lateCheckoutHours > 0 && (
             <span
-              className={`text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded ${
-                worstLevel === "overdue"
+              className={`text-[10px] uppercase tracking-wider px-2 py-0.5 rounded-full ${
+                onRedRow
                   ? "bg-cream/15 text-cream"
-                  : "bg-bg text-textSecondary border border-borderc"
+                  : "bg-neutralBg text-inkMuted border border-neutralBorder"
               }`}
               title={`Late checkout extension of +${row.lateCheckoutHours}h granted`}
             >
@@ -499,7 +497,7 @@ function CheckoutRow({
         <div className="flex items-center gap-2 mt-0.5">
           <span
             className={`font-mono text-[11px] ${
-              onRedRow ? "text-cream" : "text-textSecondary"
+              onRedRow ? "text-cream" : "text-inkMuted"
             }`}
           >
             {row.reservationNumber}

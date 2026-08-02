@@ -44,9 +44,9 @@ function mutateRoomStatus(old: unknown, roomId: string, next: HkStatus): unknown
 
 // Status pill colour map for the popover header.
 const STATUS_BADGE: Record<HkStatus, string> = {
-  dirty: "bg-warning/20 text-[#B45309]",
-  available: "bg-success/15 text-success",
-  maintenance: "bg-danger/15 text-danger",
+  dirty: "bg-warnBg text-warnFg border-warnBorder",
+  available: "bg-successBg text-success border-successBorder",
+  maintenance: "bg-dangerBg text-dangerFg border-dangerBorder",
 };
 
 // Picks the icon that best telegraphs what each action does.
@@ -245,22 +245,22 @@ export function RoomActionPopover({ roomId, roomNumber, status, trigger, onChang
           <div
             ref={menuRef}
             style={{ position: "fixed", top: pos.top, left: pos.left, width: MENU_WIDTH }}
-            className="z-[100] bg-surface border border-borderc rounded-lg shadow-xl ring-1 ring-black/5 overflow-hidden"
+            className="z-[100] bg-surface border border-borderc rounded-xl shadow-lift overflow-hidden"
           >
-            <div className="px-3 py-2.5 border-b border-borderc bg-brand-soft/60 flex items-center justify-between">
+            <div className="px-3 py-2.5 border-b border-divider bg-surfaceAlt flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <span className="font-mono text-sm font-bold text-brand-dark">
+                <span className="font-mono text-sm font-bold text-ink">
                   {roomNumber}
                 </span>
                 <span
-                  className={`inline-flex items-center px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider rounded-sm ${STATUS_BADGE[status]}`}
+                  className={`inline-flex items-center px-2 py-0.5 text-[9px] font-bold uppercase tracking-[0.06em] rounded-full border ${STATUS_BADGE[status]}`}
                 >
                   {status}
                 </span>
               </div>
               <button
                 onClick={() => setOpen(false)}
-                className="text-textSecondary hover:text-textPrimary"
+                className="text-inkFaint hover:text-ink transition-colors"
                 aria-label="Close"
               >
                 <X className="w-3.5 h-3.5" />
@@ -274,7 +274,7 @@ export function RoomActionPopover({ roomId, roomNumber, status, trigger, onChang
                     setOpen(false);
                     navigate(`/rooms/${roomNumber}`);
                   }}
-                  className="w-full flex items-center gap-2.5 px-3 py-2 text-sm font-medium rounded-md text-left transition-colors bg-brand-dark text-cream hover:bg-brand-dark/90 shadow-sm"
+                  className="w-full flex items-center gap-2.5 px-3 py-2.5 text-sm font-semibold rounded-md text-left transition-opacity bg-inkDark text-cream hover:opacity-90"
                 >
                   <Wrench className="w-4 h-4 shrink-0" />
                   <span className="flex-1">View Issue</span>
@@ -284,18 +284,18 @@ export function RoomActionPopover({ roomId, roomNumber, status, trigger, onChang
                 const Icon = iconForTarget(opt);
                 const cls =
                   opt.direction === "forward"
-                    ? "bg-brand-dark text-cream hover:bg-brand-dark/90 shadow-sm"
+                    ? "bg-brand text-white hover:bg-brand-deep shadow-primary"
                     : opt.direction === "reverse"
-                      ? "bg-surface text-textPrimary border border-borderc hover:bg-bg"
+                      ? "bg-surface text-ink border border-borderControl hover:bg-surfaceAlt"
                       : opt.to === "maintenance"
-                        ? "bg-surface text-danger border border-danger/30 hover:bg-danger/5"
-                        : "bg-surface text-textPrimary border border-borderc hover:bg-bg";
+                        ? "bg-surface text-dangerFg border border-dangerBorder hover:bg-dangerBg"
+                        : "bg-surface text-ink border border-borderControl hover:bg-surfaceAlt";
                 return (
                   <button
                     key={opt.to}
                     onClick={() => update.mutate({ to: opt.to })}
                     disabled={update.isPending}
-                    className={`w-full flex items-center gap-2.5 px-3 py-2 text-sm font-medium rounded-md text-left transition-colors disabled:opacity-50 ${cls}`}
+                    className={`w-full flex items-center gap-2.5 px-3 py-2.5 text-sm font-semibold rounded-md text-left transition-colors disabled:opacity-50 ${cls}`}
                   >
                     {update.isPending ? (
                       <Loader2 className="w-4 h-4 animate-spin shrink-0" />

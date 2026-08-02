@@ -484,7 +484,7 @@ function EditStaffModal({ staff, onClose }: { staff: Staff; onClose: () => void 
                             className="flex items-center justify-between gap-2 text-sm py-1"
                           >
                             <div className="flex-1 min-w-0">
-                              <div className="text-textPrimary truncate">{d.label}</div>
+                              <div className="text-ink truncate">{d.label}</div>
                               <div className="text-[11px] text-textSecondary font-mono">
                                 {d.key} · role:{" "}
                                 {inRole ? (

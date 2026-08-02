@@ -152,26 +152,30 @@ export function RoomTypesManager() {
           <tbody>
             {types.length === 0 && (
               <tr>
-                <td colSpan={7} className="p-4 text-textSecondary text-center">
+                <td colSpan={7} className="p-6 text-textSecondary text-center text-sm">
                   No room types yet. Add one to start creating rooms.
                 </td>
               </tr>
             )}
             {types.map((t) => (
               <tr key={t.id} className={t.isActive ? "" : "opacity-60"}>
-                <td className="font-medium text-navy">{t.label}</td>
-                <td className="font-mono text-xs text-textSecondary">{t.slug}</td>
-                <td className="text-right font-mono tabular-nums">{inr(t.defaultRate)}</td>
-                <td className="text-right tabular-nums">{t.maxOccupancy}</td>
-                <td className="text-right font-mono tabular-nums">
-                  {Number(t.extraPersonRate) > 0 ? inr(t.extraPersonRate) : "-"}
+                <td className="font-semibold text-ink">{t.label}</td>
+                <td className="font-mono text-xs text-inkMuted">{t.slug}</td>
+                <td className="text-right font-mono tabular-nums text-ink">{inr(t.defaultRate)}</td>
+                <td className="text-right tabular-nums font-mono text-ink">{t.maxOccupancy}</td>
+                <td className="text-right font-mono tabular-nums text-ink">
+                  {Number(t.extraPersonRate) > 0 ? (
+                    inr(t.extraPersonRate)
+                  ) : (
+                    <span className="text-inkFaint">-</span>
+                  )}
                 </td>
                 <td>
                   <span
-                    className={`inline-block px-2 py-0.5 rounded-sm text-xs font-medium ${
+                    className={`inline-block px-2 py-0.5 rounded-full border text-[10px] font-bold uppercase tracking-[0.06em] ${
                       t.isActive
-                        ? "bg-success/15 text-success"
-                        : "bg-gray-200 text-textSecondary"
+                        ? "bg-successBg text-success border-successBorder"
+                        : "bg-neutralBg text-inkMuted border-neutralBorder"
                     }`}
                   >
                     {t.isActive ? "Active" : "Archived"}
@@ -180,14 +184,14 @@ export function RoomTypesManager() {
                 <td>
                   <div className="flex items-center justify-end gap-3">
                     <button
-                      className="text-accentBlue text-xs hover:underline"
+                      className="text-accentBlue text-xs font-semibold hover:underline"
                       onClick={() => setEditing(t)}
                     >
                       Edit
                     </button>
                     {!t.isActive && (
                       <button
-                        className="text-success text-xs hover:underline"
+                        className="text-success text-xs font-semibold hover:underline"
                         onClick={() => restore.mutate(t)}
                         disabled={restore.isPending}
                         title="Make this room type active again"
@@ -196,7 +200,7 @@ export function RoomTypesManager() {
                       </button>
                     )}
                     <button
-                      className="text-danger text-xs hover:underline inline-flex items-center gap-1"
+                      className="text-dangerFg text-xs font-semibold hover:underline inline-flex items-center gap-1"
                       onClick={() => handleDelete(t)}
                       disabled={del.isPending}
                     >
@@ -281,14 +285,14 @@ function RoomTypeModal({ row, onClose }: { row: RoomTypeRow | null; onClose: () 
 
   return (
     <div
-      className="fixed inset-0 bg-black/50 flex items-center justify-center z-50"
+      className="fixed inset-0 bg-inkDark/50 backdrop-blur-[3px] flex items-end sm:items-center justify-center z-50 sm:p-4"
       onClick={onClose}
     >
       <div
-        className="bg-surface rounded-md w-full max-w-md p-6 space-y-4 max-h-[90vh] overflow-y-auto"
+        className="bg-surface rounded-t-2xl sm:rounded-2xl shadow-modal w-full sm:max-w-md p-6 sm:p-7 pb-safe space-y-4 max-h-[92vh] overflow-y-auto"
         onClick={(e) => e.stopPropagation()}
       >
-        <h2 className="text-lg font-semibold text-navy">
+        <h2 className="text-base font-semibold text-ink">
           {isEdit ? `Edit ${row!.label}` : "Add Room Type"}
         </h2>
         <Field label="Label (shown to staff)">
@@ -317,7 +321,7 @@ function RoomTypeModal({ row, onClose }: { row: RoomTypeRow | null; onClose: () 
             placeholder="penthouse_suite"
           />
           {isEdit && form.slug !== row!.slug && (
-            <div className="text-xs text-warning mt-1">
+            <div className="text-xs text-warnFg mt-1">
               Renaming the slug will update every room and reservation referencing "{row!.slug}".
             </div>
           )}
@@ -358,7 +362,7 @@ function RoomTypeModal({ row, onClose }: { row: RoomTypeRow | null; onClose: () 
               setForm({ ...form, extraPersonRate: v === "" ? 0 : Math.max(0, Number(v)) });
             }}
           />
-          <div className="text-xs text-textSecondary mt-1">
+          <div className="text-xs text-inkMuted mt-1 leading-relaxed">
             Per-night charge for each extra person beyond Max Occupancy. Leave 0 to
             disable extra persons for this room type.
           </div>
@@ -370,27 +374,28 @@ function RoomTypeModal({ row, onClose }: { row: RoomTypeRow | null; onClose: () 
             onChange={(e) => setForm({ ...form, description: e.target.value })}
           />
         </Field>
-        <label className="inline-flex items-center gap-2 text-sm">
+        <label className="inline-flex items-center gap-2 text-sm text-inkBody">
           <input
             type="checkbox"
+            className="accent-brand"
             checked={form.isActive}
             onChange={(e) => setForm({ ...form, isActive: e.target.checked })}
           />
           Active (available in new-room forms)
         </label>
 
-        <div className="pt-3 border-t border-borderc/40">
+        <div className="pt-3 border-t border-divider">
           <div className="flex items-center justify-between mb-2">
             <div>
-              <div className="text-sm font-semibold text-navy">Day-use price bands</div>
-              <div className="text-[11px] text-textSecondary">
+              <div className="text-sm font-semibold text-ink">Day-use price bands</div>
+              <div className="text-[11px] text-inkMuted leading-relaxed">
                 Hourly tiers shown when staff picks "Day use" on a booking. Leave
                 empty to pro-rate from the nightly default rate.
               </div>
             </div>
             <button
               type="button"
-              className="text-xs text-accentBlue hover:underline"
+              className="text-xs font-semibold text-accentBlue hover:underline shrink-0"
               onClick={() =>
                 setForm({
                   ...form,
@@ -407,10 +412,10 @@ function RoomTypeModal({ row, onClose }: { row: RoomTypeRow | null; onClose: () 
           {form.shortStayBands.length > 0 && (
             <table className="w-full text-xs">
               <thead>
-                <tr className="text-left text-textSecondary">
-                  <th className="py-1 font-medium">Label</th>
-                  <th className="py-1 font-medium w-20">Hours</th>
-                  <th className="py-1 font-medium w-24">Rate (₹)</th>
+                <tr className="text-left text-inkMuted">
+                  <th className="py-1 text-[10px] font-bold uppercase tracking-[0.06em]">Label</th>
+                  <th className="py-1 text-[10px] font-bold uppercase tracking-[0.06em] w-20">Hours</th>
+                  <th className="py-1 text-[10px] font-bold uppercase tracking-[0.06em] w-24">Rate (₹)</th>
                   <th className="w-8"></th>
                 </tr>
               </thead>
@@ -419,7 +424,7 @@ function RoomTypeModal({ row, onClose }: { row: RoomTypeRow | null; onClose: () 
                   <tr key={i}>
                     <td className="py-1 pr-1">
                       <input
-                        className="input !h-8 text-xs"
+                        className="input !min-h-[32px] !h-8 !py-0 text-xs"
                         value={b.label}
                         placeholder="e.g. 6 hrs"
                         onChange={(e) => {
@@ -431,7 +436,7 @@ function RoomTypeModal({ row, onClose }: { row: RoomTypeRow | null; onClose: () 
                     </td>
                     <td className="py-1 pr-1">
                       <input
-                        className="input !h-8 text-xs"
+                        className="input !min-h-[32px] !h-8 !py-0 text-xs"
                         type="number"
                         min={1}
                         max={23.5}
@@ -446,7 +451,7 @@ function RoomTypeModal({ row, onClose }: { row: RoomTypeRow | null; onClose: () 
                     </td>
                     <td className="py-1 pr-1">
                       <input
-                        className="input !h-8 text-xs"
+                        className="input !min-h-[32px] !h-8 !py-0 text-xs"
                         type="number"
                         min={0}
                         value={b.rate || ""}
@@ -460,7 +465,7 @@ function RoomTypeModal({ row, onClose }: { row: RoomTypeRow | null; onClose: () 
                     <td className="py-1 text-right">
                       <button
                         type="button"
-                        className="text-danger text-xs hover:underline"
+                        className="text-dangerFg text-xs font-semibold hover:underline"
                         onClick={() =>
                           setForm({
                             ...form,
@@ -478,7 +483,11 @@ function RoomTypeModal({ row, onClose }: { row: RoomTypeRow | null; onClose: () 
           )}
         </div>
 
-        {err && <div className="text-danger text-sm">{err}</div>}
+        {err && (
+          <div className="rounded-md border border-dangerBorder bg-dangerBg text-dangerFg text-sm px-3 py-2">
+            {err}
+          </div>
+        )}
         <div className="flex justify-end gap-2 pt-2">
           <button className="btn-secondary" onClick={onClose}>Cancel</button>
           <button

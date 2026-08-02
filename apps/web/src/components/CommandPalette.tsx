@@ -63,6 +63,8 @@ interface PaletteItem {
   id: string;
   group: "Quick actions" | "Reservations" | "Guests" | "Rooms";
   icon: React.ReactNode;
+  // Monospaced prefix (RES code, room number) rendered before the label.
+  code?: string;
   label: string;
   sub?: string;
   badge?: string;
@@ -183,7 +185,8 @@ export function CommandPalette() {
           id: `res-${r.id}`,
           group: "Reservations",
           icon: <CalendarPlus className="w-4 h-4" />,
-          label: `${r.reservationNumber} · ${r.guestName}`,
+          code: r.reservationNumber,
+          label: r.guestName,
           sub: `${r.status} · ${r.checkInDate} → ${r.checkOutDate}`,
           href: `/reservations/${r.reservationNumber}`,
         });
@@ -204,7 +207,8 @@ export function CommandPalette() {
           id: `room-${r.id}`,
           group: "Rooms",
           icon: <DoorOpen className="w-4 h-4" />,
-          label: `Room ${r.roomNumber}`,
+          code: `Room ${r.roomNumber}`,
+          label: "",
           sub: `Floor ${r.floor} · ${r.roomType.replace(/_/g, " ")} · ${r.status}`,
           href: `/rooms/${r.roomNumber}`,
         });
@@ -252,7 +256,7 @@ export function CommandPalette() {
       rendered.push(
         <div
           key={`hdr-${it.group}`}
-          className="px-3 pt-3 pb-1 text-[10px] uppercase tracking-wider text-textSecondary font-semibold"
+          className="px-3 py-1.5 text-[10px] uppercase tracking-[0.06em] text-inkMuted font-bold bg-surfaceAlt border-y border-divider"
         >
           {it.group}
         </div>,
@@ -265,18 +269,24 @@ export function CommandPalette() {
         key={it.id}
         onMouseEnter={() => setActiveIdx(idx)}
         onClick={() => choose(it)}
-        className={`w-full text-left px-3 py-2 flex items-center gap-3 ${isActive ? "bg-brand-dark text-cream" : "hover:bg-bg"}`}
+        className={`w-full text-left px-3 py-2.5 flex items-center gap-3 transition-colors ${isActive ? "bg-brand-soft" : "hover:bg-surfaceAlt"}`}
       >
         <span
-          className={`shrink-0 grid place-items-center w-8 h-8 rounded ${isActive ? "bg-cream/10" : "bg-brand-soft/40 text-brand-dark"}`}
+          className={`shrink-0 grid place-items-center w-8 h-8 rounded-md ${isActive ? "bg-brand-tint text-brand-deep" : "bg-surfaceAlt text-inkMuted"}`}
         >
           {it.icon}
         </span>
         <span className="flex-1 min-w-0">
-          <span className="block text-sm font-medium truncate">{it.label}</span>
+          <span
+            className={`block text-sm font-medium truncate ${isActive ? "text-brand-deep" : "text-ink"}`}
+          >
+            {it.code && <span className="font-mono text-[12.5px] font-semibold">{it.code}</span>}
+            {it.code && it.label ? " · " : ""}
+            {it.label}
+          </span>
           {it.sub && (
             <span
-              className={`block text-[11px] truncate ${isActive ? "text-cream/80" : "text-textSecondary"}`}
+              className={`block text-[11px] truncate ${isActive ? "text-brand-deep/75" : "text-inkMuted"}`}
             >
               {it.sub}
             </span>
@@ -284,56 +294,56 @@ export function CommandPalette() {
         </span>
         {it.badge && (
           <span
-            className={`text-[10px] font-semibold px-1.5 py-0.5 rounded ${
+            className={`text-[10px] font-bold uppercase tracking-[0.06em] px-2 py-0.5 rounded-full border ${
               it.badge === "BLACKLIST"
-                ? "bg-danger/20 text-danger"
-                : "bg-brass/20 text-brand-dark"
+                ? "bg-dangerBg text-dangerFg border-dangerBorder"
+                : "bg-warnBg text-warnDeep border-warnBorder"
             }`}
           >
             {it.badge}
           </span>
         )}
-        <ChevronRight className={`w-4 h-4 shrink-0 ${isActive ? "text-cream" : "text-textSecondary"}`} />
+        <ChevronRight className={`w-4 h-4 shrink-0 ${isActive ? "text-brand-deep" : "text-inkFaint"}`} />
       </button>,
     );
   });
 
   return (
     <div
-      className="fixed inset-0 z-50 bg-brand-dark/40 backdrop-blur-sm grid place-items-start pt-[12vh] px-4"
+      className="fixed inset-0 z-50 bg-inkDark/50 backdrop-blur-[3px] grid place-items-start pt-[12vh] px-4"
       onClick={() => setOpen(false)}
       role="dialog"
       aria-modal="true"
       aria-label="Global search"
     >
       <div
-        className="w-full max-w-xl bg-surface border border-borderc rounded-md shadow-xl overflow-hidden"
+        className="w-full max-w-xl bg-surface rounded-2xl shadow-modal overflow-hidden"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex items-center gap-2 px-3 py-2 border-b border-borderc">
-          <Search className="w-4 h-4 text-textSecondary" />
+        <div className="flex items-center gap-2 px-3.5 py-2.5 border-b border-divider">
+          <Search className="w-4 h-4 text-inkFaint" />
           <input
             ref={inputRef}
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             onKeyDown={onInputKey}
             placeholder="Search reservations, guests, rooms…"
-            className="flex-1 bg-transparent outline-none text-sm py-1"
+            className="flex-1 bg-transparent outline-none text-sm py-1 text-ink placeholder:text-inkFaint"
             autoComplete="off"
             spellCheck={false}
           />
           {isFetching && (
-            <span className="text-[10px] text-textSecondary uppercase tracking-wider">
+            <span className="text-[10px] text-inkMuted uppercase tracking-[0.06em] font-bold">
               Searching…
             </span>
           )}
-          <kbd className="text-[10px] font-mono px-1.5 py-0.5 bg-bg border border-borderc rounded text-textSecondary">
+          <kbd className="text-[10px] font-mono px-1.5 py-0.5 bg-surfaceAlt border border-borderControl rounded-sm text-inkMuted">
             Esc
           </kbd>
         </div>
         <div className="max-h-[60vh] overflow-y-auto">
           {items.length === 0 ? (
-            <div className="px-3 py-8 text-sm text-textSecondary text-center">
+            <div className="px-3 py-10 text-sm text-textSecondary text-center">
               {debounced.length < 2
                 ? "Type at least 2 characters to search."
                 : "No results."}
@@ -342,15 +352,15 @@ export function CommandPalette() {
             rendered
           )}
         </div>
-        <div className="px-3 py-2 border-t border-borderc bg-bg/60 flex items-center justify-between text-[10px] text-textSecondary">
+        <div className="px-3.5 py-2.5 border-t border-divider bg-surfaceAlt flex items-center justify-between text-[10px] text-inkMuted">
           <span className="flex items-center gap-2">
-            <kbd className="font-mono px-1 py-0.5 bg-surface border border-borderc rounded">↑↓</kbd>
+            <kbd className="font-mono px-1 py-0.5 bg-surface border border-borderControl rounded-sm">↑↓</kbd>
             navigate
-            <kbd className="font-mono px-1 py-0.5 bg-surface border border-borderc rounded">↵</kbd>
+            <kbd className="font-mono px-1 py-0.5 bg-surface border border-borderControl rounded-sm">↵</kbd>
             open
           </span>
           <span>
-            <kbd className="font-mono px-1 py-0.5 bg-surface border border-borderc rounded">
+            <kbd className="font-mono px-1 py-0.5 bg-surface border border-borderControl rounded-sm">
               ⌘K
             </kbd>{" "}
             anywhere to reopen

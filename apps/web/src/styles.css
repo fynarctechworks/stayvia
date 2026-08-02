@@ -229,11 +229,11 @@
   .loader-shimmer-text {
     background: linear-gradient(
       90deg,
-      #666 0%,
-      #666 40%,
-      #24b47e 50%,
-      #666 60%,
-      #666 100%
+      #8a9088 0%,
+      #8a9088 40%,
+      #0f6e52 50%,
+      #8a9088 60%,
+      #8a9088 100%
     );
     background-size: 200% 100%;
     -webkit-background-clip: text;

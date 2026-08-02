@@ -655,7 +655,7 @@ export function ExpenseModal({
           <div className="font-semibold text-ink">
             {isEdit ? "Edit expense" : "Record expense"}
           </div>
-          <button onClick={onClose} className="text-textSecondary hover:text-textPrimary">
+          <button onClick={onClose} className="text-textSecondary hover:text-ink">
             ✕
           </button>
         </div>

@@ -123,11 +123,11 @@ export function OtpModal({ reservationId, guestId, phone, email, open, onClose, 
     <div className="fixed inset-0 z-50 flex items-end justify-center sm:grid sm:place-items-center bg-inkDark/50 backdrop-blur-[3px] sm:p-4">
       <div ref={dialogRef} className="w-full sm:max-w-[400px] bg-surface rounded-t-2xl sm:rounded-2xl shadow-modal max-h-[92vh] overflow-y-auto pb-safe sm:pb-0">
         <div className="flex items-center justify-between px-5 py-3.5 border-b border-divider">
-          <div className="flex items-center gap-2 text-[15px] font-semibold text-textPrimary">
+          <div className="flex items-center gap-2 text-[15px] font-semibold text-ink">
             <ShieldCheck className="w-5 h-5 text-brand-deep" />
             Verify guest
           </div>
-          <button onClick={onClose} className="text-textSecondary hover:text-textPrimary">
+          <button onClick={onClose} className="text-textSecondary hover:text-ink">
             <X className="w-5 h-5" />
           </button>
         </div>
@@ -184,7 +184,7 @@ export function OtpModal({ reservationId, guestId, phone, email, open, onClose, 
           {step === "verify" && send && (
             <>
               <p className="px-3.5 py-3 rounded-[11px] border border-divider bg-surfaceAlt text-[12.5px] text-textSecondary">
-                Code sent to <strong className="text-textPrimary font-mono">{send.target}</strong>. Ask the guest to read it back.
+                Code sent to <strong className="text-ink font-mono">{send.target}</strong>. Ask the guest to read it back.
               </p>
               {send.devCode && (
                 <div className="rounded-sm border border-warnBorder bg-warnBg px-3 py-2 text-sm text-warnFg">

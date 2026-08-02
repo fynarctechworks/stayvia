@@ -1254,7 +1254,7 @@ function HotelTab() {
           </Field>
           <Field label="Send owner alerts">
             <div className="flex items-center justify-between px-3.5 py-2.5 border border-borderControl rounded-md bg-surface select-none">
-              <span className="text-sm font-medium text-textPrimary">
+              <span className="text-sm font-medium text-ink">
                 Owner alerts
                 <span className="ml-2 text-xs font-normal text-textSecondary">
                   {form.ownerNotifyEnabled ? "On" : "Off"}
@@ -1290,7 +1290,7 @@ function HotelTab() {
           without OTP.
         </p>
         <div className="flex items-center justify-between px-3.5 py-2.5 border border-borderControl rounded-md bg-surface select-none">
-          <span className="text-sm font-medium text-textPrimary">
+          <span className="text-sm font-medium text-ink">
             Require OTP verification
             <span className="ml-2 text-xs font-normal text-textSecondary">
               {form.otpRequiredForCheckin ? "On" : "Off"}
@@ -1327,7 +1327,7 @@ function HotelTab() {
           never counted as revenue either way.
         </p>
         <div className="flex items-center justify-between px-3.5 py-2.5 border border-borderControl rounded-md bg-surface select-none">
-          <span className="text-sm font-medium text-textPrimary">
+          <span className="text-sm font-medium text-ink">
             Hide complimentary bookings
             <span className="ml-2 text-xs font-normal text-textSecondary">
               {form.hideComplimentary ? "On" : "Off"}

@@ -191,25 +191,25 @@ export function EditInvoiceModal({ invoiceId, onClose, onSaved }: Props) {
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-brand-dark/40 p-4"
+      className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-inkDark/50 backdrop-blur-[3px] p-4"
       onClick={onClose}
     >
       <div
-        className="my-auto w-full max-w-3xl bg-white rounded-md shadow-xl border border-borderc"
+        className="my-auto w-full max-w-3xl bg-surface rounded-2xl shadow-modal overflow-hidden"
         role="dialog"
         aria-modal="true"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex items-center justify-between px-5 py-3 border-b border-borderc bg-brand-soft">
+        <div className="flex items-center justify-between px-5 py-3.5 border-b border-divider">
           <div>
-            <div className="font-semibold text-brand-dark">Edit Invoice</div>
+            <div className="text-[15px] font-semibold text-ink">Edit Invoice</div>
             {data && (
-              <div className="text-xs text-textSecondary font-mono">{data.invoiceNumber}</div>
+              <div className="text-xs text-inkMuted font-mono">{data.invoiceNumber}</div>
             )}
           </div>
           <button
             onClick={onClose}
-            className="text-textSecondary hover:text-textPrimary"
+            className="text-inkFaint hover:text-ink transition-colors"
             aria-label="Close"
           >
             <X className="w-5 h-5" />
@@ -219,7 +219,7 @@ export function EditInvoiceModal({ invoiceId, onClose, onSaved }: Props) {
         <div className="px-5 py-4 space-y-4 max-h-[75vh] overflow-y-auto">
           {isLoading && <div className="text-sm text-textSecondary">Loading invoice…</div>}
           {loadErr && (
-            <div className="p-2 rounded-sm bg-danger/10 text-danger text-sm">
+            <div className="px-3 py-2 rounded-md border border-dangerBorder bg-dangerBg text-dangerFg text-sm">
               {loadErr instanceof Error ? loadErr.message : "Failed to load"}
             </div>
           )}
@@ -228,9 +228,7 @@ export function EditInvoiceModal({ invoiceId, onClose, onSaved }: Props) {
             <>
               {/* Guest details (printed on the bill) */}
               <section>
-                <div className="text-xs uppercase tracking-[0.12em] text-textSecondary font-semibold mb-2">
-                  Billed to
-                </div>
+                <div className="label mb-2">Billed to</div>
                 <div className="grid grid-cols-2 gap-3">
                   <div>
                     <label className="label block mb-1">Name on bill</label>
@@ -262,10 +260,10 @@ export function EditInvoiceModal({ invoiceId, onClose, onSaved }: Props) {
 
               {/* Dates: stay window + issue date */}
               <section>
-                <div className="text-xs uppercase tracking-[0.12em] text-textSecondary font-semibold mb-2 flex items-center justify-between">
+                <div className="label mb-2 flex items-center justify-between">
                   <span>Stay & invoice dates</span>
                   {nights !== null && !datesInvalid && (
-                    <span className="text-[10px] font-normal text-textSecondary normal-case tracking-normal">
+                    <span className="text-[10px] font-normal text-inkMuted normal-case tracking-normal">
                       {nights} night{nights === 1 ? "" : "s"}
                     </span>
                   )}
@@ -274,7 +272,7 @@ export function EditInvoiceModal({ invoiceId, onClose, onSaved }: Props) {
                   <div>
                     <label className="label block mb-1">Check-in</label>
                     <input
-                      className="input"
+                      className="input font-mono"
                       type="date"
                       value={checkInDate}
                       max={checkOutDate || undefined}
@@ -284,7 +282,7 @@ export function EditInvoiceModal({ invoiceId, onClose, onSaved }: Props) {
                   <div>
                     <label className="label block mb-1">Check-out</label>
                     <input
-                      className="input"
+                      className="input font-mono"
                       type="date"
                       value={checkOutDate}
                       min={checkInDate || undefined}
@@ -294,7 +292,7 @@ export function EditInvoiceModal({ invoiceId, onClose, onSaved }: Props) {
                   <div>
                     <label className="label block mb-1">Issue date</label>
                     <input
-                      className="input"
+                      className="input font-mono"
                       type="date"
                       value={issueDate}
                       onChange={(e) => setIssueDate(e.target.value)}
@@ -302,7 +300,7 @@ export function EditInvoiceModal({ invoiceId, onClose, onSaved }: Props) {
                   </div>
                 </div>
                 {datesInvalid && (
-                  <div className="text-[11px] text-danger mt-1">
+                  <div className="text-[11px] text-dangerFg mt-1">
                     Check-out must be after check-in.
                   </div>
                 )}
@@ -311,21 +309,19 @@ export function EditInvoiceModal({ invoiceId, onClose, onSaved }: Props) {
               {/* Line items */}
               <section>
                 <div className="flex items-center justify-between mb-2">
-                  <div className="text-xs uppercase tracking-[0.12em] text-textSecondary font-semibold">
-                    Line items
-                  </div>
+                  <div className="label">Line items</div>
                   <button
                     type="button"
                     onClick={addLine}
-                    className="inline-flex items-center gap-1 px-2 h-7 text-xs font-semibold rounded-sm border border-borderc hover:border-brand hover:text-brand"
+                    className="inline-flex items-center gap-1 px-2.5 h-7 text-xs font-semibold rounded-full border border-borderControl bg-surface text-textSecondary transition-colors hover:border-brand/50 hover:text-brand-deep"
                   >
                     <Plus className="w-3 h-3" /> Add line
                   </button>
                 </div>
-                <div className="border border-borderc rounded-sm overflow-x-auto">
+                <div className="border border-borderc rounded-xl overflow-x-auto">
                   <table className="w-full text-sm">
-                    <thead className="bg-bg">
-                      <tr className="text-[10px] uppercase tracking-[0.12em] text-textSecondary">
+                    <thead className="bg-surfaceAlt">
+                      <tr className="text-[10px] font-bold uppercase tracking-[0.06em] text-inkMuted">
                         <th className="text-left px-2 py-2">Description</th>
                         <th className="text-left px-2 py-2 w-20">SAC</th>
                         <th className="text-right px-2 py-2 w-14">Qty</th>
@@ -340,7 +336,7 @@ export function EditInvoiceModal({ invoiceId, onClose, onSaved }: Props) {
                         <tr>
                           <td
                             colSpan={7}
-                            className="px-2 py-4 text-center text-textSecondary text-xs"
+                            className="px-2 py-5 text-center text-inkMuted text-xs"
                           >
                             No line items. Click "Add line" to start.
                           </td>
@@ -349,10 +345,10 @@ export function EditInvoiceModal({ invoiceId, onClose, onSaved }: Props) {
                       {lines.map((l, idx) => {
                         const amount = +(l.rate * l.quantity).toFixed(2);
                         return (
-                          <tr key={idx} className="border-t border-borderc">
+                          <tr key={idx} className="border-t border-divider">
                             <td className="px-2 py-1.5">
                               <input
-                                className="input !h-8 !py-0 text-sm"
+                                className="input !min-h-[32px] !h-8 !py-0 text-sm"
                                 value={l.description}
                                 onChange={(e) =>
                                   updateLine(idx, { description: e.target.value })
@@ -361,14 +357,14 @@ export function EditInvoiceModal({ invoiceId, onClose, onSaved }: Props) {
                             </td>
                             <td className="px-2 py-1.5">
                               <input
-                                className="input !h-8 !py-0 text-sm font-mono"
+                                className="input !min-h-[32px] !h-8 !py-0 text-sm font-mono"
                                 value={l.sacCode}
                                 onChange={(e) => updateLine(idx, { sacCode: e.target.value })}
                               />
                             </td>
                             <td className="px-2 py-1.5">
                               <input
-                                className="input !h-8 !py-0 text-sm text-right tabular-nums"
+                                className="input !min-h-[32px] !h-8 !py-0 text-sm text-right tabular-nums"
                                 type="number"
                                 min={1}
                                 value={l.quantity === 0 ? "" : l.quantity}
@@ -385,7 +381,7 @@ export function EditInvoiceModal({ invoiceId, onClose, onSaved }: Props) {
                             </td>
                             <td className="px-2 py-1.5">
                               <input
-                                className="input !h-8 !py-0 text-sm text-right tabular-nums font-mono"
+                                className="input !min-h-[32px] !h-8 !py-0 text-sm text-right tabular-nums font-mono"
                                 type="number"
                                 min={0}
                                 step="0.01"
@@ -398,7 +394,7 @@ export function EditInvoiceModal({ invoiceId, onClose, onSaved }: Props) {
                             </td>
                             <td className="px-2 py-1.5">
                               <input
-                                className="input !h-8 !py-0 text-sm text-right tabular-nums"
+                                className="input !min-h-[32px] !h-8 !py-0 text-sm text-right tabular-nums"
                                 type="number"
                                 min={0}
                                 max={100}
@@ -415,14 +411,14 @@ export function EditInvoiceModal({ invoiceId, onClose, onSaved }: Props) {
                                 }}
                               />
                             </td>
-                            <td className="px-2 py-1.5 text-right font-mono tabular-nums text-sm">
+                            <td className="px-2 py-1.5 text-right font-mono tabular-nums text-sm text-ink">
                               {inr(amount)}
                             </td>
                             <td className="px-2 py-1.5">
                               <button
                                 type="button"
                                 onClick={() => removeLine(idx)}
-                                className="text-textSecondary hover:text-danger"
+                                className="text-inkFaint hover:text-dangerFg transition-colors"
                                 aria-label="Remove line"
                               >
                                 <Trash2 className="w-3.5 h-3.5" />
@@ -437,18 +433,18 @@ export function EditInvoiceModal({ invoiceId, onClose, onSaved }: Props) {
               </section>
 
               {/* Live recomputed totals */}
-              <section className="rounded-sm border border-borderc bg-bg/60 p-3">
+              <section className="rounded-xl border border-borderc bg-surfaceAlt p-4">
                 <div className="grid grid-cols-2 gap-1 text-sm">
                   <div className="text-textSecondary">Subtotal</div>
-                  <div className="text-right font-mono">{inr(computed.subtotal)}</div>
+                  <div className="text-right font-mono text-ink">{inr(computed.subtotal)}</div>
                   <div className="text-textSecondary">CGST</div>
-                  <div className="text-right font-mono">{inr(computed.cgst)}</div>
+                  <div className="text-right font-mono text-ink">{inr(computed.cgst)}</div>
                   <div className="text-textSecondary">SGST</div>
-                  <div className="text-right font-mono">{inr(computed.sgst)}</div>
-                  <div className="font-semibold text-brand-dark border-t border-borderc pt-1">
+                  <div className="text-right font-mono text-ink">{inr(computed.sgst)}</div>
+                  <div className="font-semibold text-ink border-t border-divider pt-1.5 mt-1">
                     Grand Total
                   </div>
-                  <div className="text-right font-mono font-bold text-brand-dark border-t border-borderc pt-1">
+                  <div className="text-right font-mono font-bold text-ink border-t border-divider pt-1.5 mt-1">
                     {inr(computed.grandTotal)}
                   </div>
                   <div className="text-textSecondary">Already paid</div>
@@ -463,10 +459,10 @@ export function EditInvoiceModal({ invoiceId, onClose, onSaved }: Props) {
                       </div>
                     </>
                   )}
-                  <div className="font-semibold text-danger border-t border-borderc pt-1">
+                  <div className="font-semibold text-dangerFg border-t border-divider pt-1.5 mt-1">
                     New balance
                   </div>
-                  <div className="text-right font-mono font-bold text-danger border-t border-borderc pt-1">
+                  <div className="text-right font-mono font-bold text-dangerFg border-t border-divider pt-1.5 mt-1">
                     {inr(newBalance)}
                   </div>
                 </div>
@@ -476,7 +472,7 @@ export function EditInvoiceModal({ invoiceId, onClose, onSaved }: Props) {
               <section>
                 <label className="label block mb-1">Notes (printed on bill)</label>
                 <textarea
-                  className="input !h-20 py-2"
+                  className="input !min-h-[80px] py-2 resize-none leading-relaxed"
                   rows={3}
                   value={notes}
                   onChange={(e) => setNotes(e.target.value)}
@@ -485,14 +481,16 @@ export function EditInvoiceModal({ invoiceId, onClose, onSaved }: Props) {
               </section>
 
               {error && (
-                <div className="p-2 rounded-sm bg-danger/10 text-danger text-sm">{error}</div>
+                <div className="px-3 py-2 rounded-md border border-dangerBorder bg-dangerBg text-dangerFg text-sm">
+                  {error}
+                </div>
               )}
             </>
           )}
         </div>
 
-        <div className="flex items-center justify-between gap-2 px-5 py-3 border-t border-borderc bg-bg">
-          <div className="text-[11px] text-textSecondary">
+        <div className="flex items-center justify-between gap-2 px-5 py-3.5 border-t border-divider bg-surfaceAlt">
+          <div className="text-[11px] text-inkMuted">
             Edits are recorded in the audit log with before/after totals.
           </div>
           <div className="flex gap-2">

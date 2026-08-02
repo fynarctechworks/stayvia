@@ -322,12 +322,12 @@ function AddCreditModal({
             <Plus className="w-4 h-4 text-brand" />
             <div className="font-semibold text-ink">Add wallet credit</div>
           </div>
-          <button onClick={onClose} className="text-textSecondary hover:text-textPrimary">
+          <button onClick={onClose} className="text-textSecondary hover:text-ink">
             <X className="w-5 h-5" />
           </button>
         </div>
 
-        <div className="px-5 py-4 text-[13px] text-textPrimary space-y-3">
+        <div className="px-5 py-4 text-[13px] text-ink space-y-3">
           {/* Step 1: pick a guest */}
           <div>
             <label className="label block mb-1">Guest</label>
@@ -477,12 +477,12 @@ function CashoutModal({
             <Wallet className="w-4 h-4 text-brand" />
             <div className="font-semibold text-ink">Cashout wallet credit</div>
           </div>
-          <button onClick={onClose} className="text-textSecondary hover:text-textPrimary">
+          <button onClick={onClose} className="text-textSecondary hover:text-ink">
             <X className="w-5 h-5" />
           </button>
         </div>
 
-        <div className="px-5 py-4 text-[13px] text-textPrimary space-y-3">
+        <div className="px-5 py-4 text-[13px] text-ink space-y-3">
           <div>
             <div className="font-semibold text-ink">{guest.fullName}</div>
             <div className="font-mono text-xs text-textSecondary">{guest.phone}</div>

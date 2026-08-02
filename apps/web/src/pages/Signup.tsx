@@ -337,7 +337,7 @@ export default function Signup() {
             className="relative w-full p-7 sm:p-9 space-y-4 bg-surface rounded-[20px] border border-borderc shadow-modal"
           >
             <div>
-              <h1 className="text-2xl font-semibold text-navy">Create your hotel</h1>
+              <h1 className="text-2xl font-semibold text-ink">Create your hotel</h1>
               <p className="text-textSecondary text-sm mt-1">
                 Start your free 14-day trial. No card required.
               </p>
@@ -438,7 +438,7 @@ export default function Signup() {
                 <button
                   type="button"
                   onClick={() => setShowPw((v) => !v)}
-                  className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 rounded text-textSecondary hover:text-navy hover:bg-bg"
+                  className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 rounded text-textSecondary hover:text-ink hover:bg-bg"
                   aria-label={showPw ? "Hide password" : "Show password"}
                   tabIndex={-1}
                 >
@@ -469,7 +469,7 @@ export default function Signup() {
                 <button
                   type="button"
                   onClick={() => setShowPw2((v) => !v)}
-                  className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 rounded text-textSecondary hover:text-navy hover:bg-bg"
+                  className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 rounded text-textSecondary hover:text-ink hover:bg-bg"
                   aria-label={showPw2 ? "Hide password" : "Show password"}
                   tabIndex={-1}
                 >
@@ -546,9 +546,9 @@ export default function Signup() {
             className="relative w-full p-7 sm:p-9 space-y-4 bg-surface rounded-[20px] border border-borderc shadow-modal"
           >
             <div>
-              <h1 className="text-2xl font-semibold text-navy">Verify your {channel === "email" ? "email" : "WhatsApp"}</h1>
+              <h1 className="text-2xl font-semibold text-ink">Verify your {channel === "email" ? "email" : "WhatsApp"}</h1>
               <p className="text-textSecondary text-sm mt-1">
-                We sent a code to <span className="font-semibold text-navy">{maskedTarget}</span>.
+                We sent a code to <span className="font-semibold text-ink">{maskedTarget}</span>.
                 Enter it below to create your hotel.
               </p>
             </div>
@@ -564,7 +564,7 @@ export default function Signup() {
             )}
 
             {devCode && (
-              <div className="rounded-sm border border-brass/40 bg-brass/10 px-3 py-2 text-xs text-navy">
+              <div className="rounded-sm border border-brass/40 bg-brass/10 px-3 py-2 text-xs text-ink">
                 Dev mode - your code is <span className="font-mono font-semibold">{devCode}</span>
               </div>
             )}
@@ -639,14 +639,14 @@ export default function Signup() {
               <CheckCircle2 className="w-6 h-6 text-brand-deep" />
             </div>
             <div>
-              <h1 className="text-2xl font-semibold text-navy">Your hotel is ready!</h1>
+              <h1 className="text-2xl font-semibold text-ink">Your hotel is ready!</h1>
               <p className="text-textSecondary text-sm mt-1">
                 The 14-day free trial is live - full access, nothing locked.
               </p>
             </div>
             <div className="rounded-sm border border-borderc bg-surfaceAlt px-4 py-3 text-sm text-textSecondary">
               Want uninterrupted service after the trial? Set up your
-              subscription payment with <strong className="text-navy">Razorpay</strong> now
+              subscription payment with <strong className="text-ink">Razorpay</strong> now
               - UPI, card or netbanking. Completely optional; you can also do
               it any time from the Billing page.
             </div>
@@ -672,7 +672,7 @@ export default function Signup() {
               type="button"
               onClick={() => finish("/")}
               disabled={busy}
-              className="w-full flex items-center justify-center gap-2 h-11 rounded-sm border border-borderControl bg-surface text-sm font-semibold text-textSecondary hover:text-navy hover:border-navy/40 transition-colors disabled:opacity-50"
+              className="w-full flex items-center justify-center gap-2 h-11 rounded-sm border border-borderControl bg-surface text-sm font-semibold text-textSecondary hover:text-ink hover:border-navy/40 transition-colors disabled:opacity-50"
             >
               Skip for now - go to my dashboard <ArrowRight className="w-4 h-4" />
             </button>

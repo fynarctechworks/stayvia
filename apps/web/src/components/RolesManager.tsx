@@ -73,24 +73,24 @@ export function RolesManager() {
               return (
                 <tr key={r.id}>
                   <td>
-                    <div className="font-semibold text-brand-dark">{r.label}</div>
-                    <div className="text-xs text-textSecondary font-mono">{r.key}</div>
+                    <div className="font-semibold text-ink">{r.label}</div>
+                    <div className="text-xs text-inkMuted font-mono">{r.key}</div>
                     {r.description && (
                       <div className="text-xs text-textSecondary mt-0.5">{r.description}</div>
                     )}
                   </td>
                   <td className="text-xs">
                     {r.isSystem ? (
-                      <span className="px-1.5 py-0.5 rounded-sm bg-brand-soft text-brand-dark font-semibold">
+                      <span className="inline-block px-2 py-0.5 rounded-full border bg-brand-soft text-brand-deep border-brand-tint text-[10px] font-bold uppercase tracking-[0.06em]">
                         System
                       </span>
                     ) : (
-                      <span className="px-1.5 py-0.5 rounded-sm bg-bg text-textSecondary border border-borderc">
+                      <span className="inline-block px-2 py-0.5 rounded-full border bg-neutralBg text-inkMuted border-neutralBorder text-[10px] font-bold uppercase tracking-[0.06em]">
                         Custom
                       </span>
                     )}
                   </td>
-                  <td className="text-sm font-mono">{permCount}</td>
+                  <td className="text-sm font-mono text-ink">{permCount}</td>
                   <td className="text-right">
                     <div className="inline-flex gap-2">
                       {/* Editing a shared system role copy-on-writes it into a
@@ -98,7 +98,7 @@ export function RolesManager() {
                           only. Admin stays locked. */}
                       {!isAdmin && (
                         <button
-                          className="text-brand text-xs hover:underline inline-flex items-center gap-1"
+                          className="text-brand-deep text-xs font-semibold hover:underline inline-flex items-center gap-1"
                           onClick={() => setEditing(r)}
                         >
                           <Pencil className="w-3 h-3" /> Edit
@@ -106,7 +106,7 @@ export function RolesManager() {
                       )}
                       {!r.isSystem && (
                         <button
-                          className="text-danger text-xs hover:underline inline-flex items-center gap-1"
+                          className="text-dangerFg text-xs font-semibold hover:underline inline-flex items-center gap-1"
                           onClick={async () => {
                             const ok = await dialog.confirm({
                               title: `Delete role "${r.label}"?`,
@@ -200,17 +200,17 @@ function RoleEditor({
 
   return (
     <div
-      className="fixed inset-0 z-[150] grid place-items-center bg-brand-dark/40 p-4"
+      className="fixed inset-0 z-[150] grid place-items-center bg-inkDark/50 backdrop-blur-[3px] p-4"
       onMouseDown={(e) => {
         if (e.target === e.currentTarget) onClose();
       }}
     >
-      <div className="w-full max-w-3xl bg-surface rounded-md shadow-xl border border-borderc max-h-[90vh] overflow-hidden flex flex-col">
-        <div className="flex items-center justify-between px-5 py-3 border-b border-borderc">
-          <div className="font-semibold text-textPrimary">
+      <div className="w-full max-w-3xl bg-surface rounded-2xl shadow-modal max-h-[90vh] overflow-hidden flex flex-col">
+        <div className="flex items-center justify-between px-5 py-3.5 border-b border-divider">
+          <div className="text-[15px] font-semibold text-ink">
             {role ? `Edit role · ${role.label}` : "Create role"}
           </div>
-          <button onClick={onClose} className="text-textSecondary hover:text-textPrimary text-lg">
+          <button onClick={onClose} className="text-inkFaint hover:text-ink transition-colors text-lg">
             ×
           </button>
         </div>
@@ -219,7 +219,7 @@ function RoleEditor({
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <Field label="Role key (lowercase, _)">
               <input
-                className="input font-mono disabled:bg-bg/50 disabled:text-textSecondary"
+                className="input font-mono disabled:bg-surfaceAlt disabled:text-inkMuted"
                 value={key}
                 disabled={!!role}
                 placeholder="e.g. front_desk_lead"
@@ -251,12 +251,12 @@ function RoleEditor({
                 const all = defs.every((d) => perms.has(d.key));
                 const some = defs.some((d) => perms.has(d.key));
                 return (
-                  <div key={area} className="border border-borderc rounded-sm p-3">
+                  <div key={area} className="border border-borderc rounded-xl p-3">
                     <div className="flex items-center justify-between mb-2">
-                      <div className="text-sm font-bold text-brand-dark">{area}</div>
+                      <div className="text-sm font-bold text-ink">{area}</div>
                       <button
                         type="button"
-                        className="text-xs font-semibold text-brand hover:underline"
+                        className="text-xs font-semibold text-brand-deep hover:underline"
                         onClick={() => toggleArea(area, !all)}
                       >
                         {all ? "Clear all" : some ? "Select all" : "Select all"}
@@ -268,19 +268,19 @@ function RoleEditor({
                         return (
                           <label
                             key={d.key}
-                            className={`flex items-start gap-2 px-2 py-1.5 rounded-sm cursor-pointer text-sm transition-colors ${
-                              on ? "bg-brand-soft" : "hover:bg-bg"
+                            className={`flex items-start gap-2 px-2 py-1.5 rounded-md cursor-pointer text-sm transition-colors ${
+                              on ? "bg-brand-soft" : "hover:bg-surfaceAlt"
                             }`}
                           >
                             <input
                               type="checkbox"
-                              className="mt-0.5"
+                              className="mt-0.5 accent-brand"
                               checked={on}
                               onChange={() => toggle(d.key)}
                             />
                             <div className="flex-1 min-w-0">
-                              <div className="font-medium text-textPrimary">{d.label}</div>
-                              <div className="text-[11px] text-textSecondary font-mono truncate">
+                              <div className={`font-medium ${on ? "text-brand-deep" : "text-ink"}`}>{d.label}</div>
+                              <div className="text-[11px] text-inkMuted font-mono truncate">
                                 {d.key}
                               </div>
                             </div>
@@ -294,20 +294,21 @@ function RoleEditor({
             </div>
           </div>
 
-          {err && <div className="text-danger text-sm">{err}</div>}
+          {err && (
+            <div className="rounded-md border border-dangerBorder bg-dangerBg text-dangerFg text-sm px-3 py-2">
+              {err}
+            </div>
+          )}
         </div>
 
-        <div className="flex items-center justify-end gap-2 px-5 py-3 border-t border-borderc bg-bg/50">
-          <button
-            onClick={onClose}
-            className="px-4 h-9 text-sm font-semibold rounded-sm border-2 border-borderc text-textSecondary hover:border-textSecondary hover:text-textPrimary transition-colors"
-          >
+        <div className="flex items-center justify-end gap-2 px-5 py-3.5 border-t border-divider bg-surfaceAlt">
+          <button onClick={onClose} className="btn-secondary">
             Cancel
           </button>
           <button
             onClick={() => save.mutate()}
             disabled={save.isPending || !key.trim() || !label.trim()}
-            className="px-4 h-9 text-sm font-semibold rounded-sm bg-brand-dark text-cream border-2 border-brand-dark hover:opacity-90 transition-opacity disabled:opacity-40"
+            className="btn-primary"
           >
             {save.isPending ? "Saving…" : role ? "Save changes" : "Create role"}
           </button>

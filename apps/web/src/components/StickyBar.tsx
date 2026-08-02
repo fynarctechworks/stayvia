@@ -8,7 +8,7 @@ import type { ReactNode } from "react";
 // alert stack (z-40) and modals (z-50).
 export function StickyBar({ children }: { children: ReactNode }) {
   return (
-    <div className="sticky top-0 z-30 -mx-3 sm:-mx-5 md:-mx-6 px-3 sm:px-5 md:px-6 py-2 bg-bg/95 backdrop-blur-sm space-y-3">
+    <div className="sticky top-0 z-30 -mx-3 sm:-mx-5 md:-mx-6 px-3 sm:px-5 md:px-6 py-2 bg-paper/85 backdrop-blur-[10px] border-b border-divider space-y-3">
       {children}
     </div>
   );

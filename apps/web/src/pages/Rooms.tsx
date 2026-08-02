@@ -519,7 +519,7 @@ function RoomImagesManager({ roomId, roomNumber }: { roomId: string; roomNumber:
       ) : (
         <div className="grid grid-cols-3 gap-2">
           {ordered.map((im) => (
-            <div key={im.id} className="relative group aspect-square rounded-md overflow-hidden border border-borderc">
+            <div key={im.id} className="relative group aspect-square rounded-[10px] overflow-hidden border border-borderc">
               <img src={im.url} alt="" className="w-full h-full object-cover" />
               {im.isPrimary && (
                 <span className="absolute top-1 left-1 bg-brand text-white text-[9px] font-bold rounded-full px-1.5 py-0.5 inline-flex items-center gap-0.5">
@@ -531,7 +531,7 @@ function RoomImagesManager({ roomId, roomNumber }: { roomId: string; roomNumber:
                   <button
                     type="button"
                     title="Set as cover"
-                    className="w-7 h-7 rounded-full bg-white/90 grid place-items-center hover:bg-white"
+                    className="w-7 h-7 rounded-full bg-surface/90 grid place-items-center hover:bg-surface"
                     onClick={() => setPrimary.mutate(im.id)}
                   >
                     <Star className="w-3.5 h-3.5 text-ink" />
@@ -540,7 +540,7 @@ function RoomImagesManager({ roomId, roomNumber }: { roomId: string; roomNumber:
                 <button
                   type="button"
                   title="Remove"
-                  className="w-7 h-7 rounded-full bg-white/90 grid place-items-center hover:bg-white"
+                  className="w-7 h-7 rounded-full bg-surface/90 grid place-items-center hover:bg-surface"
                   onClick={() => remove.mutate(im.id)}
                 >
                   <X className="w-3.5 h-3.5 text-danger" />
@@ -670,11 +670,11 @@ function RoomModal({ room, onClose }: { room: Room | null; onClose: () => void }
 
   return (
     <div
-      className="fixed inset-0 bg-black/50 flex items-center justify-center z-50"
+      className="fixed inset-0 bg-inkDark/50 backdrop-blur-[3px] flex items-center justify-center z-50 p-4"
       onClick={onClose}
     >
       <div
-        className="bg-surface rounded-2xl shadow-modal w-full max-w-lg p-6 space-y-4"
+        className="bg-surface rounded-2xl shadow-modal w-full max-w-lg p-6 space-y-4 max-h-[90vh] overflow-y-auto"
         onClick={(e) => e.stopPropagation()}
       >
         <h2 className="text-lg font-semibold text-ink">
@@ -755,7 +755,7 @@ function RoomModal({ room, onClose }: { room: Room | null; onClose: () => void }
         {/* Photos — only after the room exists (needs an id to attach to).
             These are what guests see on the booking QR page. */}
         {isEdit && room && (
-          <div className="border-t border-borderc pt-4">
+          <div className="border-t border-divider pt-4">
             <RoomImagesManager roomId={room.id} roomNumber={room.roomNumber} />
           </div>
         )}

@@ -198,7 +198,7 @@ export default function Notifications() {
                         {!n.readAt && (
                           <span className="w-2 h-2 rounded-full bg-brand shrink-0" />
                         )}
-                        <div className="font-semibold text-sm text-textPrimary truncate">{n.title}</div>
+                        <div className="font-semibold text-sm text-ink truncate">{n.title}</div>
                         <span
                           className={`shrink-0 text-[9px] uppercase tracking-[0.05em] px-[7px] py-0.5 rounded-[5px] font-bold ${meta.tint}`}
                         >

@@ -120,11 +120,11 @@ export function ArrivalAlerts() {
     <>
       {/* Likely no-shows — RED, sticky, highest priority. */}
       {noShows.length > 0 && (
-        <div className="border-b-2 border-danger bg-danger text-cream">
+        <div className="border-b border-dangerBorder bg-dangerBg text-dangerFg">
           <div className="px-4 py-2.5">
             <div className="flex items-center gap-2 mb-2">
               <AlertTriangle className="w-4 h-4 shrink-0" />
-              <div className="font-bold text-[12px] uppercase tracking-[0.14em] leading-tight">
+              <div className="font-bold text-[11px] uppercase tracking-[0.08em] leading-tight">
                 {noShows.length} likely no-show{noShows.length === 1 ? "" : "s"} · verify or mark
               </div>
             </div>
@@ -141,26 +141,26 @@ export function ArrivalAlerts() {
                       navigate(`/reservations/${n.reservationNumber}`);
                     }
                   }}
-                  className="flex items-center gap-3 px-3 py-2 rounded-md bg-cream/10 border border-cream/30 cursor-pointer hover:bg-cream/20 transition-colors focus:outline-none focus:ring-2 focus:ring-cream/60"
+                  className="flex items-center gap-3 px-3 py-2 rounded-md bg-surface border border-dangerBorder cursor-pointer hover:bg-surfaceAlt transition-colors focus:outline-none focus:ring-[3px] focus:ring-dangerBorder"
                 >
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2 flex-wrap">
-                      <span className="font-mono text-[11px] text-cream/90">
+                      <span className="font-mono text-[11px] text-inkMuted">
                         {n.reservationNumber}
                       </span>
-                      <span className="font-semibold text-[14px] truncate">{n.guestName}</span>
-                      <span className="font-mono text-[11px] text-cream/80">
+                      <span className="font-semibold text-[14px] text-ink truncate">{n.guestName}</span>
+                      <span className="font-mono text-[11px] text-inkMuted">
                         {n.guestPhone}
                       </span>
                     </div>
-                    <div className="text-[11px] text-cream/80 mt-0.5">
+                    <div className="text-[11px] text-textSecondary mt-0.5">
                       Scheduled in {n.checkInDate}
                       {n.daysLate > 0
                         ? ` · ${n.daysLate} day${n.daysLate === 1 ? "" : "s"} ago`
                         : " · past cutoff"}
                     </div>
                   </div>
-                  <span className="inline-flex items-center px-2.5 h-7 rounded-md text-[11px] font-bold uppercase tracking-wider shrink-0 bg-cream text-danger">
+                  <span className="inline-flex items-center px-2.5 h-7 rounded-full border text-[11px] font-bold uppercase tracking-wider shrink-0 bg-dangerBg text-dangerFg border-dangerBorder">
                     {n.daysLate > 0 ? `${n.daysLate}d late` : "late"}
                   </span>
                   <button
@@ -168,7 +168,7 @@ export function ArrivalAlerts() {
                       e.stopPropagation();
                       navigate(`/reservations/${n.reservationNumber}`);
                     }}
-                    className="inline-flex items-center px-3 h-8 text-xs font-bold rounded-sm bg-cream text-danger hover:opacity-90 transition-colors shrink-0"
+                    className="inline-flex items-center px-3 h-8 text-xs font-bold rounded-sm bg-inkDark text-cream hover:opacity-90 transition-opacity shrink-0"
                   >
                     Open →
                   </button>
@@ -182,11 +182,11 @@ export function ArrivalAlerts() {
       {/* Late arrivals — AMBER. Guest is overdue but still inside the
           no-show cutoff, so the ask is "call them", not "write them off". */}
       {lateArrivals.length > 0 && (
-        <div className="border-b-2 border-warning bg-warning text-cream">
+        <div className="border-b border-warnBorder bg-warnBg text-warnFg">
           <div className="px-4 py-2.5">
             <div className="flex items-center gap-2 mb-2">
               <CalendarClock className="w-4 h-4 shrink-0" />
-              <div className="font-bold text-[12px] uppercase tracking-[0.14em] leading-tight">
+              <div className="font-bold text-[11px] uppercase tracking-[0.08em] leading-tight">
                 {lateArrivals.length} late arrival
                 {lateArrivals.length === 1 ? "" : "s"} · not checked in
               </div>
@@ -204,33 +204,33 @@ export function ArrivalAlerts() {
                       navigate(`/reservations/${a.reservationNumber}`);
                     }
                   }}
-                  className="flex items-center gap-3 px-3 py-2 rounded-md bg-cream/10 border border-cream/30 cursor-pointer hover:bg-cream/20 transition-colors focus:outline-none focus:ring-2 focus:ring-cream/60"
+                  className="flex items-center gap-3 px-3 py-2 rounded-md bg-surface border border-warnBorder cursor-pointer hover:bg-surfaceAlt transition-colors focus:outline-none focus:ring-[3px] focus:ring-warnBorder"
                 >
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2 flex-wrap">
-                      <span className="font-mono text-[11px] text-cream/90">
+                      <span className="font-mono text-[11px] text-inkMuted">
                         {a.reservationNumber}
                       </span>
-                      <span className="font-semibold text-[14px] truncate">
+                      <span className="font-semibold text-[14px] text-ink truncate">
                         {a.guestName}
                       </span>
-                      <span className="font-mono text-[11px] text-cream/80">
+                      <span className="font-mono text-[11px] text-inkMuted">
                         {a.guestPhone}
                       </span>
                       {a.reminderSent && (
                         <span
-                          className="text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded bg-cream/15 text-cream"
+                          className="text-[10px] uppercase tracking-wider px-2 py-0.5 rounded-full border bg-successBg text-success border-successBorder"
                           title="WhatsApp reminder sent"
                         >
                           ✓ reminded
                         </span>
                       )}
                     </div>
-                    <div className="text-[11px] text-cream/80 mt-0.5">
+                    <div className="text-[11px] text-textSecondary mt-0.5">
                       Expected earlier today · still not arrived
                     </div>
                   </div>
-                  <span className="inline-flex items-center px-2.5 h-7 rounded-md text-[11px] font-bold uppercase tracking-wider shrink-0 bg-cream text-[#B45309]">
+                  <span className="inline-flex items-center px-2.5 h-7 rounded-full border text-[11px] font-bold uppercase tracking-wider shrink-0 bg-warnBg text-warnFg border-warnBorder">
                     {fmtLate(a.lateMinutes)}
                   </span>
                   <button
@@ -238,7 +238,7 @@ export function ArrivalAlerts() {
                       e.stopPropagation();
                       navigate(`/reservations/${a.reservationNumber}`);
                     }}
-                    className="inline-flex items-center px-3 h-8 text-xs font-bold rounded-sm bg-cream text-[#B45309] hover:opacity-90 transition-colors shrink-0"
+                    className="inline-flex items-center px-3 h-8 text-xs font-bold rounded-sm bg-inkDark text-cream hover:opacity-90 transition-opacity shrink-0"
                   >
                     Open →
                   </button>
@@ -251,11 +251,11 @@ export function ArrivalAlerts() {
 
       {/* Upcoming arrivals — BLUE, sticky, informational. */}
       {expected.length > 0 && (
-        <div className="border-b-2 border-info bg-info text-cream">
+        <div className="border-b border-infoBorder bg-infoBg text-info">
           <div className="px-4 py-2.5">
             <div className="flex items-center gap-2 mb-2">
               <BellRing className="w-4 h-4 shrink-0" />
-              <div className="font-bold text-[12px] uppercase tracking-[0.14em] leading-tight">
+              <div className="font-bold text-[11px] uppercase tracking-[0.08em] leading-tight">
                 {arrivalsHeadline}
               </div>
             </div>
@@ -279,31 +279,31 @@ export function ArrivalAlerts() {
                         navigate(`/reservations/${a.reservationNumber}`);
                       }
                     }}
-                    className="flex items-center gap-3 px-3 py-2 rounded-md bg-cream/10 border border-cream/30 cursor-pointer hover:bg-cream/20 transition-colors focus:outline-none focus:ring-2 focus:ring-cream/60"
+                    className="flex items-center gap-3 px-3 py-2 rounded-md bg-surface border border-infoBorder cursor-pointer hover:bg-surfaceAlt transition-colors focus:outline-none focus:ring-[3px] focus:ring-infoBorder"
                   >
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-2 flex-wrap">
-                        <span className="font-mono text-[11px] text-cream/90">
+                        <span className="font-mono text-[11px] text-inkMuted">
                           {a.reservationNumber}
                         </span>
-                        <span className="font-semibold text-[14px] truncate">{a.guestName}</span>
-                        <span className="font-mono text-[11px] text-cream/80">
+                        <span className="font-semibold text-[14px] text-ink truncate">{a.guestName}</span>
+                        <span className="font-mono text-[11px] text-inkMuted">
                           {a.guestPhone}
                         </span>
                         {a.reminderSent && (
                           <span
-                            className="text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded bg-cream/15 text-cream"
+                            className="text-[10px] uppercase tracking-wider px-2 py-0.5 rounded-full border bg-successBg text-success border-successBorder"
                             title="WhatsApp reminder sent"
                           >
                             ✓ reminded
                           </span>
                         )}
                       </div>
-                      <div className="text-[11px] text-cream/80 mt-0.5">
+                      <div className="text-[11px] text-textSecondary mt-0.5">
                         Check-in {a.checkInDate}
                       </div>
                     </div>
-                    <span className="inline-flex items-center px-2.5 h-7 rounded-md text-[11px] font-bold uppercase tracking-wider shrink-0 bg-cream text-info">
+                    <span className="inline-flex items-center px-2.5 h-7 rounded-full border text-[11px] font-bold uppercase tracking-wider shrink-0 bg-infoBg text-info border-infoBorder">
                       {pillLabel}
                     </span>
                     <button
@@ -311,7 +311,7 @@ export function ArrivalAlerts() {
                         e.stopPropagation();
                         navigate(`/reservations/${a.reservationNumber}`);
                       }}
-                      className="inline-flex items-center px-3 h-8 text-xs font-bold rounded-sm bg-cream text-info hover:opacity-90 transition-colors shrink-0"
+                      className="inline-flex items-center px-3 h-8 text-xs font-bold rounded-sm bg-inkDark text-cream hover:opacity-90 transition-opacity shrink-0"
                     >
                       Open →
                     </button>

@@ -60,7 +60,7 @@ const STATUS_STYLES: Record<MaintenanceStatus, string> = {
 const SEVERITY_STYLES: Record<MaintenanceSeverity, string> = {
   urgent: "bg-dangerBg text-dangerFg border-dangerBorder",
   normal: "bg-warnBg text-warning border-warnBorder",
-  low: "bg-bg text-textSecondary border-borderControl",
+  low: "bg-neutralBg text-inkMuted border-neutralBorder",
 };
 
 export default function MaintenanceDetail() {
@@ -135,8 +135,8 @@ export default function MaintenanceDetail() {
           issue-info card so staff don't have to scan across to
           change status / severity / category. */}
       <div className="space-y-4">
-          <div className="card space-y-3">
-            <div className="grid grid-cols-2 gap-3 text-sm">
+          <div className="card space-y-3.5">
+            <div className="grid grid-cols-[repeat(auto-fit,minmax(150px,1fr))] gap-4 text-sm">
               <div>
                 <div className="label">Room</div>
                 <button
@@ -193,9 +193,9 @@ export default function MaintenanceDetail() {
             </div>
 
             {issue.description && (
-              <div>
+              <div className="border-t border-divider pt-3.5">
                 <div className="label mb-1">Description</div>
-                <div className="text-sm text-textPrimary whitespace-pre-wrap">
+                <div className="text-sm leading-relaxed text-ink whitespace-pre-wrap">
                   {issue.description}
                 </div>
               </div>
@@ -204,7 +204,7 @@ export default function MaintenanceDetail() {
             {issue.resolutionNotes && (
               <div className="border-t border-divider pt-3">
                 <div className="label mb-1">Resolution Notes</div>
-                <div className="text-sm text-textPrimary whitespace-pre-wrap bg-successBg border border-successBorder p-3 rounded-md">
+                <div className="text-sm leading-relaxed text-ink whitespace-pre-wrap bg-successBg border border-successBorder p-3 rounded-md">
                   {issue.resolutionNotes}
                 </div>
               </div>
@@ -221,7 +221,7 @@ export default function MaintenanceDetail() {
             {!isClosed ? (
               <button
                 onClick={() => setShowResolve(true)}
-                className="w-full sm:w-auto text-sm h-[42px] px-[18px] bg-success text-white rounded-[11px] hover:opacity-90 font-semibold inline-flex items-center justify-center gap-1.5 shadow-sm transition-opacity"
+                className="w-full sm:w-auto text-sm h-[42px] px-[18px] bg-success text-white border border-success rounded-[11px] hover:opacity-90 font-semibold inline-flex items-center justify-center gap-1.5 shadow-primary transition-opacity"
               >
                 <CheckCircle2 className="w-[18px] h-[18px]" />
                 Mark Closed
@@ -293,7 +293,7 @@ export default function MaintenanceDetail() {
       {/* Resolve modal — required resolution notes + optional actual cost */}
       {showResolve && (
         <div
-          className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
+          className="fixed inset-0 bg-inkDark/50 backdrop-blur-[3px] flex items-center justify-center z-50 p-4"
           onClick={() => setShowResolve(false)}
         >
           <div

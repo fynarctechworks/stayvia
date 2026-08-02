@@ -147,7 +147,7 @@ export default function Guests() {
     <div className="space-y-4">
       <div className="flex items-center justify-between gap-4 flex-wrap">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight text-textPrimary">Guests</h1>
+          <h1 className="text-2xl font-semibold tracking-tight text-ink">Guests</h1>
           <p className="text-sm text-textSecondary mt-1">
             Everyone who's ever stayed. Search, filter and open a profile.
           </p>
@@ -313,7 +313,7 @@ function GuestCard({ g, onOpen }: { g: Guest; onOpen: () => void }) {
           {initialsOf(g.fullName)}
         </div>
         <div className="min-w-0 flex-1">
-          <div className="text-base font-semibold text-textPrimary truncate">{g.fullName}</div>
+          <div className="text-base font-semibold text-ink truncate">{g.fullName}</div>
           <div className="text-xs text-inkMuted font-mono flex items-center gap-1 mt-0.5">
             <Phone className="w-3 h-3" />
             {g.phone}
@@ -455,7 +455,7 @@ function AddGuestModal({ onClose }: { onClose: () => void }) {
         className="bg-surface rounded-2xl shadow-modal w-full max-w-2xl p-6 space-y-4 max-h-[90vh] overflow-y-auto"
         onClick={(e) => e.stopPropagation()}
       >
-        <h2 className="text-lg font-semibold text-textPrimary">Add Guest</h2>
+        <h2 className="text-lg font-semibold text-ink">Add Guest</h2>
 
         <div className="grid grid-cols-2 gap-3">
           <Field label="Full Name" required>

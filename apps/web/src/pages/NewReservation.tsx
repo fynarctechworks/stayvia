@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { addDays, differenceInCalendarDays, format } from "date-fns";
-import { AlertTriangle, ChevronDown, ChevronLeft, FileText, Minus, Plus, ShieldCheck, Snowflake, SprayCan, Trash2, Tv, Upload, Users, Wifi, X } from "@/lib/micons";
+import { AlertTriangle, CheckCircle2, ChevronDown, ChevronLeft, FileText, Info, Minus, Plus, Search, ShieldCheck, Snowflake, SprayCan, Trash2, Tv, Upload, UserPlus, Users, Wifi, X } from "@/lib/micons";
 import { CheckInReceiptModal, type CheckInReceiptData } from "@/components/CheckInReceiptModal";
 import { OtpModal } from "@/components/OtpModal";
 import { TimePicker12h } from "@/components/TimePicker12h";
@@ -1393,18 +1393,31 @@ export default function NewReservation() {
   return (
     <div className="space-y-4" onKeyDown={handleFormKeyDown}>
       <div className="flex items-center gap-3 flex-wrap">
-        <button onClick={() => navigate(-1)} className="btn-secondary !h-9 !px-2">
-          <ChevronLeft className="w-4 h-4" />
+        <button
+          onClick={() => navigate(-1)}
+          aria-label="Go back"
+          className="w-10 h-10 shrink-0 grid place-items-center rounded-[11px] border border-borderControl bg-surface text-inkBody hover:bg-surfaceAlt transition-colors"
+        >
+          <ChevronLeft className="w-5 h-5" />
         </button>
-        <h1 className="text-2xl font-bold text-brand-dark">
-          {mode === "walkin" ? "Walk-in Check-in" : "Pre-booking"}
-        </h1>
-        <ArrowKeyGroup className="ml-auto inline-flex rounded-sm border border-borderc overflow-hidden text-xs">
+        <div>
+          <h1 className="text-2xl font-semibold tracking-tight text-ink">
+            {mode === "walkin" ? "New walk-in" : "Pre-booking"}
+          </h1>
+          {mode === "walkin" && (
+            <p className="text-sm text-textSecondary mt-1">
+              Book &amp; check in a guest at the counter.
+            </p>
+          )}
+        </div>
+        <ArrowKeyGroup className="ml-auto inline-flex items-center gap-0.5 p-[3px] rounded-[10px] border border-borderControl bg-surfaceSubtle">
           <button
             type="button"
             onClick={() => setMode("reservation")}
-            className={`px-3 py-1.5 transition ${
-              mode === "reservation" ? "bg-brand text-textPrimary" : "bg-bg text-textSecondary hover:bg-borderc/40"
+            className={`px-3 py-1.5 rounded-[7px] text-xs font-semibold transition-colors ${
+              mode === "reservation"
+                ? "bg-brand text-white shadow-primary"
+                : "text-textSecondary hover:text-ink hover:bg-surface"
             }`}
           >
             Pre-booking
@@ -1412,8 +1425,10 @@ export default function NewReservation() {
           <button
             type="button"
             onClick={() => setMode("walkin")}
-            className={`px-3 py-1.5 transition ${
-              mode === "walkin" ? "bg-brand text-textPrimary" : "bg-bg text-textSecondary hover:bg-borderc/40"
+            className={`px-3 py-1.5 rounded-[7px] text-xs font-semibold transition-colors ${
+              mode === "walkin"
+                ? "bg-brand text-white shadow-primary"
+                : "text-textSecondary hover:text-ink hover:bg-surface"
             }`}
           >
             Walk-in
@@ -1422,15 +1437,18 @@ export default function NewReservation() {
       </div>
 
       {mode === "walkin" && (
-        <div className="card bg-accentBlue/5 border-accentBlue/30 text-sm">
-          <strong className="text-navy">Walk-in mode:</strong> Check-in is today. KYC documents are
-          required, and the reservation will be checked in immediately.
+        <div className="card !py-3 !rounded-[14px] !bg-infoBg !border-infoBorder text-[13px] text-inkBody flex items-start gap-2.5">
+          <Info className="w-4 h-4 text-info shrink-0 mt-0.5" />
+          <div>
+            <strong className="font-semibold text-ink">Walk-in mode:</strong> Check-in is today. KYC
+            documents are required, and the reservation will be checked in immediately.
+          </div>
         </div>
       )}
 
       {/* Step rail — jump-scroll chips mirroring the numbered sections.
           Pure navigation; no section is hidden or gated. */}
-      <div className="sticky top-0 z-30 -mx-1 px-1 py-2 bg-bg/95 backdrop-blur border-b border-borderc/60 flex gap-1.5 overflow-x-auto">
+      <div className="sticky top-0 z-30 -mx-1 px-1 py-2 bg-paper/85 backdrop-blur-[10px] border-b border-divider flex gap-1.5 overflow-x-auto">
         {[
           [1, "Stay"],
           [2, "Guest"],
@@ -1444,7 +1462,7 @@ export default function NewReservation() {
             onClick={() =>
               document.getElementById(`step-${n}`)?.scrollIntoView({ behavior: "smooth" })
             }
-            className="inline-flex items-center gap-1.5 h-8 px-2.5 rounded-full border border-borderc bg-surface text-xs font-medium text-textPrimary hover:border-brand whitespace-nowrap transition-colors"
+            className="inline-flex items-center gap-1.5 h-8 px-3 rounded-full border border-borderControl bg-surface text-xs font-semibold text-inkBody hover:border-brand hover:text-brand-deep whitespace-nowrap transition-colors"
           >
             <span className="w-4.5 h-4.5 min-w-[18px] grid place-items-center rounded-full bg-brand-soft text-brand-deep text-[10px] font-bold">
               {n}
@@ -1454,12 +1472,20 @@ export default function NewReservation() {
         ))}
       </div>
 
-      <div id="step-1" className="card space-y-3 scroll-mt-20">
-        <h2 className="font-semibold text-navy">1. Stay Details</h2>
+      <div className="flex flex-wrap items-start gap-4">
+      <div className="flex-[3_1_380px] min-w-0 space-y-4">
+
+      <div id="step-1" className="card space-y-4 scroll-mt-20">
+        <h2 className="text-base font-semibold text-ink flex items-center gap-2">
+          <span className="w-5 h-5 grid place-items-center rounded-full bg-brand-soft text-brand-deep text-[10px] font-bold">
+            1
+          </span>
+          Stay details
+        </h2>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
           <div>
             <label className="label block mb-1">
-              Check-in <span className="text-danger">*</span>
+              Check-in <span className="text-dangerFg">*</span>
             </label>
             <input
               className="input"
@@ -1483,8 +1509,8 @@ export default function NewReservation() {
               }}
             />
             {checkInDate < todayStr && (
-              <div className="text-[11px] text-warning mt-1 flex items-start gap-1">
-                <span>⚠</span>
+              <div className="text-[11px] text-warnFg mt-1 flex items-start gap-1">
+                <AlertTriangle className="w-3 h-3 shrink-0 mt-[2px]" />
                 <span>Backdated check-in - only log this if it's a booking you forgot to enter earlier.</span>
               </div>
             )}
@@ -1496,9 +1522,9 @@ export default function NewReservation() {
               onChange={setCheckInTime}
             />
             {!checkInTime && (
-              <div className="text-[11px] text-danger mt-1">Check-in time is required</div>
+              <div className="text-[11px] text-dangerFg mt-1">Check-in time is required</div>
             )}
-            <div className="text-[11px] text-textSecondary mt-1">
+            <div className="text-[11px] text-inkMuted mt-1">
               {checkInTime
                 ? `Custom: ${formatTime(checkInTime)}`
                 : publicSettings.data?.checkInTime
@@ -1508,12 +1534,12 @@ export default function NewReservation() {
           </div>
           <div>
             <label className="label block mb-1">
-              Check-out <span className="text-danger">*</span>
+              Check-out <span className="text-dangerFg">*</span>
             </label>
             <input
               className={`input ${
                 overnightDateError
-                  ? "border-danger focus:border-danger focus:ring-danger/30"
+                  ? "!border-dangerBorder focus:!border-danger focus:!ring-dangerBg"
                   : ""
               }`}
               type="date"
@@ -1525,7 +1551,7 @@ export default function NewReservation() {
               onChange={(e) => setCheckOutDate(e.target.value)}
             />
             {overnightDateError && (
-              <div className="text-[11px] text-danger mt-1">{overnightDateError}</div>
+              <div className="text-[11px] text-dangerFg mt-1">{overnightDateError}</div>
             )}
             {/* Check-out time is required (0023). */}
             <TimePicker12h
@@ -1534,42 +1560,83 @@ export default function NewReservation() {
               onChange={setCheckOutTime}
             />
             {!checkOutTime && (
-              <div className="text-[11px] text-danger mt-1">Check-out time is required</div>
+              <div className="text-[11px] text-dangerFg mt-1">Check-out time is required</div>
             )}
           </div>
           <div>
             <label className="label block mb-1">
-              Adults <span className="text-danger">*</span>
+              Adults <span className="text-dangerFg">*</span>
             </label>
-            <input
-              className="input"
-              type="number"
-              min={1}
-              required
-              // Empty string while the field is cleared so the user can
-              // type "2" without battling a sticky "0".
-              value={adults === 0 ? "" : adults}
-              onChange={(e) => {
-                const v = e.target.value;
-                setAdults(v === "" ? 0 : Math.max(0, Number(v)));
-              }}
-            />
+            {/* Stepper shell: −/+ buttons flanking the same numeric input,
+                so the field stays type-able (and keyboard-navigable) while
+                the counter is one tap away at the counter. */}
+            <div className="flex items-center h-[42px] rounded-md border border-borderControl bg-surface transition-colors focus-within:border-brand focus-within:ring-[3px] focus-within:ring-brand-soft">
+              <button
+                type="button"
+                aria-label="Fewer adults"
+                disabled={adults <= 0}
+                onClick={() => setAdults(Math.max(0, adults - 1))}
+                className="w-[30px] h-[30px] ml-1.5 shrink-0 grid place-items-center rounded-[8px] bg-surfaceSubtle text-inkBody hover:bg-parchment disabled:opacity-40 transition-colors"
+              >
+                <Minus className="w-3.5 h-3.5" />
+              </button>
+              <input
+                className="flex-1 min-w-0 h-full bg-transparent border-0 outline-none text-center text-base sm:text-sm font-mono font-semibold text-ink [-moz-appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                type="number"
+                min={1}
+                required
+                // Empty string while the field is cleared so the user can
+                // type "2" without battling a sticky "0".
+                value={adults === 0 ? "" : adults}
+                onChange={(e) => {
+                  const v = e.target.value;
+                  setAdults(v === "" ? 0 : Math.max(0, Number(v)));
+                }}
+              />
+              <button
+                type="button"
+                aria-label="More adults"
+                onClick={() => setAdults(adults + 1)}
+                className="w-[30px] h-[30px] mr-1.5 shrink-0 grid place-items-center rounded-[8px] bg-surfaceSubtle text-inkBody hover:bg-parchment transition-colors"
+              >
+                <Plus className="w-3.5 h-3.5" />
+              </button>
+            </div>
             {adults < 1 && (
-              <div className="text-[11px] text-danger mt-1">At least 1 adult is required</div>
+              <div className="text-[11px] text-dangerFg mt-1">At least 1 adult is required</div>
             )}
           </div>
           <div>
             <label className="label block mb-1">Children</label>
-            <input
-              className="input"
-              type="number"
-              min={0}
-              value={children === 0 ? "" : children}
-              onChange={(e) => {
-                const v = e.target.value;
-                setChildren(v === "" ? 0 : Math.max(0, Number(v)));
-              }}
-            />
+            <div className="flex items-center h-[42px] rounded-md border border-borderControl bg-surface transition-colors focus-within:border-brand focus-within:ring-[3px] focus-within:ring-brand-soft">
+              <button
+                type="button"
+                aria-label="Fewer children"
+                disabled={children <= 0}
+                onClick={() => setChildren(Math.max(0, children - 1))}
+                className="w-[30px] h-[30px] ml-1.5 shrink-0 grid place-items-center rounded-[8px] bg-surfaceSubtle text-inkBody hover:bg-parchment disabled:opacity-40 transition-colors"
+              >
+                <Minus className="w-3.5 h-3.5" />
+              </button>
+              <input
+                className="flex-1 min-w-0 h-full bg-transparent border-0 outline-none text-center text-base sm:text-sm font-mono font-semibold text-ink [-moz-appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                type="number"
+                min={0}
+                value={children === 0 ? "" : children}
+                onChange={(e) => {
+                  const v = e.target.value;
+                  setChildren(v === "" ? 0 : Math.max(0, Number(v)));
+                }}
+              />
+              <button
+                type="button"
+                aria-label="More children"
+                onClick={() => setChildren(children + 1)}
+                className="w-[30px] h-[30px] mr-1.5 shrink-0 grid place-items-center rounded-[8px] bg-surfaceSubtle text-inkBody hover:bg-parchment transition-colors"
+              >
+                <Plus className="w-3.5 h-3.5" />
+              </button>
+            </div>
           </div>
         </div>
         <div className="grid grid-cols-2 gap-3">
@@ -1596,11 +1663,11 @@ export default function NewReservation() {
             />
           </div>
         </div>
-        <div className="text-sm text-textSecondary">
+        <div className="rounded-md bg-surfaceAlt border border-divider px-3 py-2 text-sm text-inkBody">
           {isShortStay ? (
             <>
               Same-day (hourly) stay ·{" "}
-              <span className="font-semibold text-navy">
+              <span className="font-mono font-semibold text-ink">
                 {shortStayDurationHours > 0
                   ? `${shortStayDurationHours} hour${shortStayDurationHours === 1 ? "" : "s"}`
                   : "set check-in & check-out times"}
@@ -1608,16 +1675,21 @@ export default function NewReservation() {
             </>
           ) : (
             <>
-              Nights: <span className="font-semibold text-navy">{nights}</span>
+              Nights: <span className="font-mono font-semibold text-ink">{nights}</span>
             </>
           )}
         </div>
       </div>
 
-      <div id="step-2" className="card space-y-3 scroll-mt-20">
-        <div className="flex items-center justify-between">
-          <h2 className="font-semibold text-navy">2. Guest</h2>
-          <ArrowKeyGroup className="flex gap-2 text-xs">
+      <div id="step-2" className="card space-y-4 scroll-mt-20">
+        <div className="flex items-center justify-between gap-3 flex-wrap">
+          <h2 className="text-base font-semibold text-ink flex items-center gap-2">
+            <span className="w-5 h-5 grid place-items-center rounded-full bg-brand-soft text-brand-deep text-[10px] font-bold">
+              2
+            </span>
+            Guest
+          </h2>
+          <ArrowKeyGroup className="inline-flex items-center gap-0.5 p-[3px] rounded-[10px] border border-borderControl bg-surfaceSubtle">
             <button
               onClick={() => {
                 setUseNewGuest(false);
@@ -1629,7 +1701,11 @@ export default function NewReservation() {
                 setKycBack(null);
                 setKycPhoto(null);
               }}
-              className={`px-3 py-1 rounded-sm ${!useNewGuest ? "bg-navy text-white" : "bg-gray-100"}`}
+              className={`px-3 py-1.5 rounded-[7px] text-xs font-semibold transition-colors ${
+                !useNewGuest
+                  ? "bg-brand text-white shadow-primary"
+                  : "text-textSecondary hover:text-ink hover:bg-surface"
+              }`}
             >
               Existing
             </button>
@@ -1644,7 +1720,11 @@ export default function NewReservation() {
                 setKycBack(null);
                 setKycPhoto(null);
               }}
-              className={`px-3 py-1 rounded-sm ${useNewGuest ? "bg-navy text-white" : "bg-gray-100"}`}
+              className={`px-3 py-1.5 rounded-[7px] text-xs font-semibold transition-colors ${
+                useNewGuest
+                  ? "bg-brand text-white shadow-primary"
+                  : "text-textSecondary hover:text-ink hover:bg-surface"
+              }`}
             >
               New Guest
             </button>
@@ -1653,21 +1733,30 @@ export default function NewReservation() {
 
         {!useNewGuest ? (
           <>
-            <input
-              className="input"
-              placeholder="Search by phone or name (min 2 chars)"
-              value={guestQuery}
-              onChange={(e) => setGuestQuery(e.target.value)}
-            />
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-inkFaint pointer-events-none" />
+              <input
+                className="input pl-9 !bg-surfaceSubtle"
+                placeholder="Search by phone or name (min 2 chars)"
+                value={guestQuery}
+                onChange={(e) => setGuestQuery(e.target.value)}
+              />
+            </div>
             {selectedGuest && (
-              <div className="bg-success/10 p-3 rounded-sm text-sm">
-                Selected: <strong>{selectedGuest.fullName}</strong> ({selectedGuest.phone})
-                <button
-                  className="ml-3 text-xs text-danger hover:underline"
-                  onClick={() => setSelectedGuest(null)}
-                >
-                  Clear
-                </button>
+              <div className="rounded-xl border border-successBorder bg-successBg px-3.5 py-3 text-sm text-inkBody">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <CheckCircle2 className="w-4 h-4 text-success shrink-0" />
+                  <span>
+                    Selected: <strong className="text-ink">{selectedGuest.fullName}</strong>{" "}
+                    <span className="font-mono">({selectedGuest.phone})</span>
+                  </span>
+                  <button
+                    className="ml-auto text-xs font-semibold text-dangerFg hover:underline"
+                    onClick={() => setSelectedGuest(null)}
+                  >
+                    Clear
+                  </button>
+                </div>
                 {selectedGuest.gstin && (
                   <div className="mt-1 text-xs text-textSecondary font-mono">
                     GSTIN: {selectedGuest.gstin}
@@ -1682,30 +1771,30 @@ export default function NewReservation() {
               />
             )}
             {guestsSearch.data && guestsSearch.data.length > 0 && !selectedGuest && (
-              <div className="max-h-64 overflow-auto border rounded-sm">
+              <div className="max-h-64 overflow-auto rounded-xl border border-borderc divide-y divide-divider">
                 {guestsSearch.data.map((g) => (
                   <button
                     key={g.id}
-                    className="w-full text-left px-3 py-2 hover:bg-gray-50 border-b last:border-b-0 text-sm flex items-center gap-3"
+                    className="w-full text-left px-3 py-2.5 hover:bg-surfaceAlt text-sm flex items-center gap-3 transition-colors"
                     onClick={() => setSelectedGuest(g)}
                   >
                     {g.photoUrl ? (
                       <img
                         src={g.photoUrl}
                         alt={g.fullName}
-                        className="w-10 h-10 rounded-sm object-cover border border-borderc shrink-0"
+                        className="w-10 h-10 rounded-[10px] object-cover border border-borderc shrink-0"
                         loading="lazy"
                       />
                     ) : (
                       <div
-                        className="w-10 h-10 rounded-sm bg-bg border border-borderc shrink-0 flex items-center justify-center text-xs font-semibold text-textSecondary uppercase"
+                        className="w-10 h-10 rounded-[10px] bg-brand-soft border border-borderc shrink-0 flex items-center justify-center text-xs font-bold text-brand-deep uppercase"
                         aria-hidden="true"
                       >
                         {g.fullName.trim().slice(0, 2)}
                       </div>
                     )}
                     <div className="min-w-0 flex-1">
-                      <div className="font-medium truncate">{g.fullName}</div>
+                      <div className="font-semibold text-ink truncate">{g.fullName}</div>
                       <div className="text-xs text-textSecondary font-mono">{g.phone}</div>
                     </div>
                   </button>
@@ -1717,7 +1806,7 @@ export default function NewReservation() {
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="label block mb-1">
-                Full Name <span className="text-danger">*</span>
+                Full Name <span className="text-dangerFg">*</span>
               </label>
               <input
                 className="input"
@@ -1727,7 +1816,7 @@ export default function NewReservation() {
             </div>
             <div>
               <label className="label block mb-1">
-                Phone <span className="text-danger">*</span>
+                Phone <span className="text-dangerFg">*</span>
               </label>
               <input
                 className="input"
@@ -1744,7 +1833,7 @@ export default function NewReservation() {
             <div>
               <label className="label block mb-1">
                 Email{" "}
-                <span className="text-xs text-textSecondary font-normal">(optional)</span>
+                <span className="text-xs text-inkMuted font-normal normal-case tracking-normal">(optional)</span>
               </label>
               <EmailInput
                 value={newGuest.email}
@@ -1753,7 +1842,7 @@ export default function NewReservation() {
             </div>
             <div>
               <label className="label block mb-1">
-                Nationality <span className="text-danger">*</span>
+                Nationality <span className="text-dangerFg">*</span>
               </label>
               <input
                 className="input"
@@ -1763,7 +1852,7 @@ export default function NewReservation() {
             </div>
             <div>
               <label className="label block mb-1">
-                Gender <span className="text-danger">*</span>
+                Gender <span className="text-dangerFg">*</span>
               </label>
               <select
                 className="input"
@@ -1784,7 +1873,7 @@ export default function NewReservation() {
             </div>
             <div>
               <label className="label block mb-1">
-                ID Type <span className="text-danger">*</span>
+                ID Type <span className="text-dangerFg">*</span>
               </label>
               <select
                 className="input"
@@ -1808,7 +1897,7 @@ export default function NewReservation() {
             </div>
             <div>
               <label className="label block mb-1">
-                ID Number <span className="text-danger">*</span>
+                ID Number <span className="text-dangerFg">*</span>
               </label>
               <input
                 className="input font-mono"
@@ -1826,7 +1915,7 @@ export default function NewReservation() {
             </div>
             <div>
               <label className="label block mb-1">
-                State <span className="text-danger">*</span>
+                State <span className="text-dangerFg">*</span>
               </label>
               <Combobox
                 value={newGuest.state}
@@ -1849,7 +1938,7 @@ export default function NewReservation() {
             </div>
             <div>
               <label className="label block mb-1">
-                City <span className="text-danger">*</span>
+                City <span className="text-dangerFg">*</span>
               </label>
               <Combobox
                 value={newGuest.city}
@@ -1864,7 +1953,7 @@ export default function NewReservation() {
             </div>
             <div className="col-span-2">
               <label className="label block mb-1">
-                Address <span className="text-danger">*</span>
+                Address <span className="text-dangerFg">*</span>
               </label>
               <input
                 className="input"
@@ -1875,7 +1964,7 @@ export default function NewReservation() {
             <div className="col-span-2">
               <label className="label block mb-1">
                 GSTIN{" "}
-                <span className="text-xs text-textSecondary font-normal">(optional)</span>
+                <span className="text-xs text-inkMuted font-normal normal-case tracking-normal">(optional)</span>
               </label>
               <input
                 className="input font-mono uppercase"
@@ -1900,7 +1989,7 @@ export default function NewReservation() {
             - No guest selected yet → render nothing; the section only
               makes sense once we know who the booking is for. */}
       {(useNewGuest || selectedGuest) && (
-        <div className="card space-y-3">
+        <div className="card space-y-3.5">
           {kycOnFile && selectedGuest && walletQ.data ? (
             <KycOnFileCard
               guestId={selectedGuest.id}
@@ -1918,14 +2007,16 @@ export default function NewReservation() {
             />
           ) : (
             <>
-              <div className="flex items-center gap-2">
-                <ShieldCheck className="w-4 h-4 text-accentBlue" />
-                <h2 className="font-semibold text-navy">
-                  KYC Documents · Primary Guest{" "}
-                  {mode === "walkin" ? "(required)" : "(optional now, required at check-in)"}
+              <div className="flex items-start gap-2">
+                <ShieldCheck className="w-4 h-4 text-brand-deep shrink-0 mt-0.5" />
+                <h2 className="text-base font-semibold text-ink leading-snug">
+                  ID &amp; KYC · Primary Guest{" "}
+                  <span className="text-[13px] font-medium text-inkMuted">
+                    {mode === "walkin" ? "(required)" : "(optional now, required at check-in)"}
+                  </span>
                 </h2>
               </div>
-              <div className="text-xs text-textSecondary -mt-1">
+              <div className="text-[13px] text-textSecondary -mt-1">
                 {mode === "walkin"
                   ? "Walk-in guests must upload a customer photo and a government ID photo now. Check-in cannot proceed without them."
                   : "Upload a clear customer photo and government ID. You can skip now and upload later, but check-in will be blocked until both are verified."}
@@ -1980,18 +2071,23 @@ export default function NewReservation() {
           <button
             type="button"
             onClick={addCoGuest}
-            className="w-full inline-flex items-center justify-center gap-1.5 h-11 rounded-sm border-2 border-dashed border-borderc text-sm font-medium text-textSecondary hover:border-brand hover:text-brand-dark hover:bg-brand-soft/20 transition"
+            className="w-full inline-flex items-center justify-center gap-1.5 h-11 rounded-xl border-2 border-dashed border-borderControl bg-surfaceAlt text-sm font-semibold text-textSecondary hover:border-brand hover:text-brand-deep hover:bg-brand-softer transition-colors"
           >
             <Plus className="w-4 h-4" /> Add another guest
           </button>
         </>
       )}
 
-      <div id="step-3" className="card space-y-3 scroll-mt-20">
+      <div id="step-3" className="card space-y-4 scroll-mt-20">
         <div className="flex items-center justify-between flex-wrap gap-3">
-          <h2 className="font-semibold text-navy">3. Rooms</h2>
+          <h2 className="text-base font-semibold text-ink flex items-center gap-2">
+            <span className="w-5 h-5 grid place-items-center rounded-full bg-brand-soft text-brand-deep text-[10px] font-bold">
+              3
+            </span>
+            Choose a room
+          </h2>
           {availRooms.data && availRooms.data.length > 0 && (
-            <ArrowKeyGroup className="inline-flex rounded-sm border border-borderc overflow-hidden text-xs">
+            <ArrowKeyGroup className="inline-flex items-center gap-0.5 p-[3px] rounded-[10px] border border-borderControl bg-surfaceSubtle text-xs">
               {(["all", "ac", "non_ac"] as const).map((opt) => {
                 const count =
                   opt === "all"
@@ -2005,13 +2101,13 @@ export default function NewReservation() {
                     key={opt}
                     type="button"
                     onClick={() => setAcFilter(opt)}
-                    className={`px-3 py-1.5 transition ${
+                    className={`px-3 py-1.5 rounded-[7px] font-semibold transition-colors ${
                       acFilter === opt
-                        ? "bg-navy text-white"
-                        : "bg-bg text-textSecondary hover:bg-borderc/40"
+                        ? "bg-brand text-white shadow-primary"
+                        : "text-textSecondary hover:text-ink hover:bg-surface"
                     }`}
                   >
-                    {label} <span className="opacity-70">({count})</span>
+                    {label} <span className="font-mono opacity-70">({count})</span>
                   </button>
                 );
               })}
@@ -2024,20 +2120,20 @@ export default function NewReservation() {
             extra bed or another room. */}
         {selectedRooms.length > 0 && (
           capacityShortfall > 0 ? (
-            <div className="rounded-sm border border-danger/40 bg-danger/5 p-3 flex items-start gap-2">
-              <AlertTriangle className="w-4 h-4 text-danger shrink-0 mt-0.5" />
+            <div className="rounded-xl border border-dangerBorder bg-dangerBg p-3 flex items-start gap-2">
+              <AlertTriangle className="w-4 h-4 text-dangerFg shrink-0 mt-0.5" />
               <div className="text-sm leading-snug">
-                <div className="font-semibold text-danger">
+                <div className="font-semibold text-dangerFg">
                   {adults} adult{adults === 1 ? "" : "s"}, but the selected room{selectedRooms.length === 1 ? "'s" : "s'"} guest limit is {effectiveCapacity}.
                 </div>
-                <div className="text-textSecondary mt-0.5">
+                <div className="text-inkBody mt-0.5">
                   Add an extra person to a room below, or select another room -{" "}
                   space for <strong>{capacityShortfall}</strong> more guest{capacityShortfall === 1 ? "" : "s"} needed.
                 </div>
               </div>
             </div>
           ) : (
-            <div className="text-xs text-success flex items-center gap-1.5">
+            <div className="inline-flex items-center gap-1.5 rounded-full border border-successBorder bg-successBg px-2.5 py-1 text-xs font-semibold text-success">
               <Users className="w-3.5 h-3.5" />
               Capacity OK - sleeps {effectiveCapacity} for {adults} adult{adults === 1 ? "" : "s"}
               {extraBedCapacity > 0 ? ` (incl. ${extraBedCapacity} extra person${extraBedCapacity === 1 ? "" : "s"})` : ""}.
@@ -2053,7 +2149,9 @@ export default function NewReservation() {
         ) : availRooms.isLoading ? (
           <Loader label="Loading availability…" size="sm" />
         ) : !availRooms.data?.length ? (
-          <div className="text-danger text-sm">No rooms available for these dates.</div>
+          <div className="rounded-xl border border-dangerBorder bg-dangerBg px-3 py-2.5 text-sm text-dangerFg">
+            No rooms available for these dates.
+          </div>
         ) : (
           // Group rooms by floor so the grid reads as Floor 1 → Floor 2
           // → Floor 3 sections instead of a flat 9-card wall. The API
@@ -2081,9 +2179,9 @@ export default function NewReservation() {
               <ArrowKeyGroup className="space-y-4">
                 {floors.map((floor) => (
                   <div key={floor}>
-                    <div className="text-base font-bold text-brand-dark tracking-wide mb-2 pb-1 border-b border-borderc/60">
+                    <div className="text-[11px] font-bold text-inkMuted uppercase tracking-[0.06em] mb-2 pb-1.5 border-b border-divider">
                       Floor {floor}
-                      <span className="ml-2 text-xs font-semibold text-textSecondary uppercase tracking-wider">
+                      <span className="ml-2 font-semibold text-inkFaint">
                         · {byFloor.get(floor)!.length} room
                         {byFloor.get(floor)!.length === 1 ? "" : "s"}
                       </span>
@@ -2098,17 +2196,24 @@ export default function NewReservation() {
               const needsClean = isDirty && checkInDate <= todayStr;
               const cleanInFlight =
                 markRoomClean.isPending && markRoomClean.variables === r.id;
+              // A selected tile is solid jade, so its pills/meta invert to
+              // translucent-white instead of their light-surface tones.
+              const sel = !!selected;
+              const pill = (tone: string) =>
+                `inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full border text-[10px] font-semibold ${
+                  sel ? "bg-white/15 text-white border-white/25" : tone
+                }`;
               return (
                 <div
                   key={r.id}
-                  className={`border rounded-sm p-3 transition ${
+                  className={`border-[1.5px] rounded-[13px] p-3.5 transition-all duration-150 ${
                     conflicted
-                      ? "border-borderc bg-bg/60 opacity-60 cursor-not-allowed"
+                      ? "border-neutralBorder bg-neutralBg opacity-60 cursor-not-allowed"
                       : needsClean && !selected
-                        ? "border-warning/50 bg-warning/5"
+                        ? "border-warnBorder bg-warnBg"
                         : selected
-                          ? "border-accentBlue bg-accentBlue/5 cursor-pointer"
-                          : "border-borderc hover:border-navy cursor-pointer"
+                          ? "border-brand bg-brand text-white shadow-primary cursor-pointer"
+                          : "border-borderControl bg-surface hover:border-brand hover:-translate-y-0.5 hover:shadow-lift cursor-pointer"
                   }`}
                   onClick={() => {
                     if (conflicted) return;
@@ -2121,57 +2226,72 @@ export default function NewReservation() {
                     toggleRoom(r);
                   }}
                 >
-                  <div className="flex justify-between items-start">
+                  <div className="flex justify-between items-start gap-2">
                     <div className="min-w-0">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <div className="font-mono font-bold">{r.roomNumber}</div>
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <div
+                          className={`font-mono text-lg font-semibold leading-none mr-0.5 ${
+                            sel ? "text-white" : "text-ink"
+                          }`}
+                        >
+                          {r.roomNumber}
+                        </div>
                         {conflicted && (
-                          <span className="inline-flex items-center px-1.5 py-0.5 rounded-sm text-[10px] font-semibold bg-danger/15 text-danger">
+                          <span className={pill("bg-dangerBg text-dangerFg border-dangerBorder")}>
                             BOOKED
                           </span>
                         )}
                         {needsClean && (
                           <span
-                            className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-sm text-[10px] font-semibold bg-warning/15 text-warning"
+                            className={pill("bg-warnBg text-warnFg border-warnBorder")}
                             title="Room hasn't been cleaned since the last checkout. Mark clean before assigning to a guest."
                           >
                             <SprayCan className="w-3 h-3" /> DIRTY
                           </span>
                         )}
                         {r.hasAc ? (
-                          <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-sm text-[10px] font-semibold bg-accentBlue/15 text-accentBlue">
+                          <span className={pill("bg-infoBg text-info border-infoBorder")}>
                             <Snowflake className="w-3 h-3" /> AC
                           </span>
                         ) : (
-                          <span className="inline-flex items-center px-1.5 py-0.5 rounded-sm text-[10px] font-semibold bg-gray-200 text-textSecondary">
+                          <span className={pill("bg-neutralBg text-inkMuted border-neutralBorder")}>
                             Non-AC
                           </span>
                         )}
                         {r.hasTv && (
-                          <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-sm text-[10px] font-semibold bg-brand-soft text-brand-dark">
+                          <span className={pill("bg-brand-soft text-brand-deep border-brand-tint")}>
                             <Tv className="w-3 h-3" /> TV
                           </span>
                         )}
                         {r.hasWifi && (
-                          <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-sm text-[10px] font-semibold bg-success/15 text-success">
+                          <span className={pill("bg-successBg text-success border-successBorder")}>
                             <Wifi className="w-3 h-3" /> Wi-Fi
                           </span>
                         )}
                         {r.maxOccupancy > 0 && (
                           <span
-                            className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-sm text-[10px] font-semibold bg-navy/10 text-navy"
+                            className={pill("bg-neutralBg text-inkMuted border-neutralBorder")}
                             title={`Sleeps up to ${r.maxOccupancy} guest${r.maxOccupancy === 1 ? "" : "s"}`}
                           >
                             <Users className="w-3 h-3" /> Sleeps {r.maxOccupancy}
                           </span>
                         )}
                       </div>
-                      <div className="text-xs text-textSecondary capitalize mt-0.5">
+                      <div
+                        className={`text-[12.5px] font-semibold capitalize mt-1.5 ${
+                          sel ? "text-white/80" : "text-textSecondary"
+                        }`}
+                      >
                         {r.roomType.replace(/_/g, " ")} · Floor {r.floor}
                       </div>
                     </div>
                     <div className="flex items-start gap-2 shrink-0">
-                      <div className="text-sm font-mono">
+                      {sel && <CheckCircle2 className="w-5 h-5 text-white/90 mt-0.5" />}
+                      <div
+                        className={`text-[13px] font-mono font-semibold ${
+                          sel ? "text-white" : "text-ink"
+                        }`}
+                      >
                         {/* Once a room is selected, show what the guest
                             will actually be billed (effective rate). Falls
                             back to the room's native base rate before the
@@ -2190,7 +2310,7 @@ export default function NewReservation() {
                             e.stopPropagation();
                             toggleRoomCollapsed(r.id);
                           }}
-                          className="inline-flex items-center justify-center rounded-sm border border-borderc w-6 h-6 text-navy hover:border-brand hover:bg-brand-soft/30"
+                          className="inline-flex items-center justify-center rounded-[8px] border border-white/30 w-6 h-6 text-white hover:bg-white/15 transition-colors"
                           title={collapsedRooms.has(r.id) ? "Expand" : "Collapse"}
                           aria-label={collapsedRooms.has(r.id) ? "Expand room options" : "Collapse room options"}
                           aria-expanded={!collapsedRooms.has(r.id)}
@@ -2207,10 +2327,12 @@ export default function NewReservation() {
                   {/* Date conflict: card stays visible but disabled so
                       staff see exactly which booking holds the room. */}
                   {r.conflict && (
-                    <div className="mt-2 rounded-sm border border-danger/30 bg-danger/5 p-2 text-[11px] text-textSecondary leading-snug">
+                    <div className="mt-2.5 rounded-[10px] border border-dangerBorder bg-dangerBg p-2 text-[11px] text-dangerFg leading-snug">
                       Booked for <strong>{r.conflict.guestName}</strong> till{" "}
-                      <strong>{format(new Date(r.conflict.bookedTill), "dd MMM yyyy")}</strong>{" "}
-                      · {r.conflict.reservationNumber}
+                      <strong className="font-mono">
+                        {format(new Date(r.conflict.bookedTill), "dd MMM yyyy")}
+                      </strong>{" "}
+                      · <span className="font-mono">{r.conflict.reservationNumber}</span>
                     </div>
                   )}
                   {/* Same-day re-let warning. Shown for reserved rooms
@@ -2218,35 +2340,41 @@ export default function NewReservation() {
                       check-out. Staff must confirm via the checkbox
                       below the room body before submitting. */}
                   {r.nextReservation && (
-                    <div className="mt-2 rounded-sm border border-warning/40 bg-warning/10 p-2 text-[11px] text-warning">
+                    <div
+                      className={`mt-2.5 rounded-[10px] border p-2 text-[11px] ${
+                        sel
+                          ? "border-white/25 bg-white/10 text-white"
+                          : "border-warnBorder bg-warnBg text-warnFg"
+                      }`}
+                    >
                       <div className="flex items-start gap-1.5">
                         <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
                         <div className="leading-snug">
                           Reserved for{" "}
                           <strong>{r.nextReservation.guestName}</strong>{" "}
                           from{" "}
-                          <strong>
+                          <strong className="font-mono">
                             {format(
                               new Date(r.nextReservation.checkInDate),
                               "dd MMM yyyy",
                             )}
                           </strong>{" "}
                           to{" "}
-                          <strong>
+                          <strong className="font-mono">
                             {format(
                               new Date(r.nextReservation.checkOutDate),
                               "dd MMM yyyy",
                             )}
                           </strong>{" "}
-                          · {r.nextReservation.reservationNumber}. Vacate
-                          before then.
+                          · <span className="font-mono">{r.nextReservation.reservationNumber}</span>.
+                          Vacate before then.
                         </div>
                       </div>
                     </div>
                   )}
 
                   {needsClean && !selected && (
-                    <div className="mt-2" onClick={(e) => e.stopPropagation()}>
+                    <div className="mt-2.5" onClick={(e) => e.stopPropagation()}>
                       <button
                         type="button"
                         disabled={cleanInFlight}
@@ -2255,12 +2383,12 @@ export default function NewReservation() {
                             onSuccess: () => toggleRoom({ ...r, status: "available" }),
                           });
                         }}
-                        className="w-full inline-flex items-center justify-center gap-1.5 px-2 h-8 rounded-sm border border-warning/50 text-warning hover:bg-warning/10 text-xs font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
+                        className="w-full inline-flex items-center justify-center gap-1.5 px-2 h-8 rounded-[10px] border border-warnBorder bg-surface text-warnFg hover:bg-warnBg text-xs font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                       >
                         <SprayCan className="w-3.5 h-3.5" />
                         {cleanInFlight ? "Marking clean…" : "Mark clean & select"}
                       </button>
-                      <div className="text-[10px] text-textSecondary mt-1 leading-tight">
+                      <div className="text-[10px] text-inkMuted mt-1 leading-tight">
                         Confirms the room has been cleaned. Required before assigning a guest.
                       </div>
                     </div>
@@ -2269,8 +2397,8 @@ export default function NewReservation() {
                       but its panel is closed. Compact recap of the key
                       choices so staff don't have to expand to check. */}
                   {selected && collapsedRooms.has(r.id) && (
-                    <div className="mt-2 text-xs text-textSecondary flex flex-wrap items-center gap-x-2 gap-y-0.5">
-                      <span className="font-mono font-semibold text-brand-dark">
+                    <div className="mt-2.5 text-xs text-white/80 flex flex-wrap items-center gap-x-2 gap-y-0.5">
+                      <span className="font-mono font-semibold text-white">
                         {inr(selected.ratePerNight)}
                         {isShortStay ? `/${shortStayDurationHours}h` : "/night"}
                       </span>
@@ -2295,11 +2423,11 @@ export default function NewReservation() {
                     // controls (select / inputs / stepper buttons) swallow
                     // the click, so tapping blank space in this panel still
                     // bubbles to the card and deselects the room.
-                    <div className="mt-2 space-y-2">
+                    <div className="mt-3 pt-3 border-t border-white/20 space-y-2.5">
                       <div>
-                        <label className="label block mb-1">Sell as</label>
+                        <label className="label block mb-1 !text-white/70">Sell as</label>
                         <select
-                          className="input !h-8 text-sm"
+                          className="input !min-h-[34px] !h-[34px] !py-0 text-sm"
                           value={selected.soldAsType ?? ""}
                           onClick={(e) => e.stopPropagation()}
                           onChange={(e) => {
@@ -2328,11 +2456,11 @@ export default function NewReservation() {
                         </select>
                       </div>
                       <div>
-                        <label className="label block mb-1">
+                        <label className="label block mb-1 !text-white/70">
                           {isShortStay ? `Rate for ${shortStayDurationHours} hrs` : "Rate/night"}
                         </label>
                         <input
-                          className="input !h-8 text-sm"
+                          className="input !min-h-[34px] !h-[34px] !py-0 text-sm font-mono"
                           type="number"
                           value={selected.ratePerNight || ""}
                           placeholder="0"
@@ -2347,11 +2475,11 @@ export default function NewReservation() {
                           base; each bed raises effective capacity. */}
                       {extraBedRateForType(selected.soldAsType ?? selected.nativeType) > 0 && (
                         <div>
-                          <label className="label block mb-1">Extra persons</label>
+                          <label className="label block mb-1 !text-white/70">Extra persons</label>
                           <div className="flex items-center gap-2 flex-wrap">
                             <button
                               type="button"
-                              className="h-8 w-8 grid place-items-center rounded-sm border border-borderc text-navy disabled:opacity-40 hover:border-brand"
+                              className="h-8 w-8 grid place-items-center rounded-[8px] border border-white/30 text-white hover:bg-white/15 disabled:opacity-40 transition-colors"
                               disabled={selected.extraBeds <= 0}
                               onClick={(e) => {
                                 e.stopPropagation();
@@ -2361,12 +2489,12 @@ export default function NewReservation() {
                             >
                               <Minus className="w-3.5 h-3.5" />
                             </button>
-                            <span className="min-w-8 text-center font-mono font-semibold">
+                            <span className="min-w-8 text-center font-mono font-semibold text-white">
                               {selected.extraBeds}
                             </span>
                             <button
                               type="button"
-                              className="h-8 w-8 grid place-items-center rounded-sm border border-borderc text-navy disabled:opacity-40 hover:border-brand"
+                              className="h-8 w-8 grid place-items-center rounded-[8px] border border-white/30 text-white hover:bg-white/15 disabled:opacity-40 transition-colors"
                               // Only allow adding a bed while guests are
                               // still uncovered. Once the selected rooms'
                               // total capacity meets the adult headcount,
@@ -2380,7 +2508,7 @@ export default function NewReservation() {
                             >
                               <Plus className="w-3.5 h-3.5" />
                             </button>
-                            <span className="text-[11px] text-textSecondary">
+                            <span className="text-[11px] text-white/70">
                               sleeps {selected.maxOccupancy + selected.extraBeds}
                             </span>
                           </div>
@@ -2388,11 +2516,11 @@ export default function NewReservation() {
                               room type's rate; staff can change it for this
                               booking. */}
                           <div className="flex items-center gap-1.5 mt-1.5">
-                            <span className="text-[11px] text-textSecondary whitespace-nowrap">
+                            <span className="text-[11px] text-white/70 whitespace-nowrap">
                               ₹/person/night
                             </span>
                             <input
-                              className="input !h-8 text-sm !w-28"
+                              className="input !min-h-[34px] !h-[34px] !py-0 text-sm font-mono !w-28"
                               type="number"
                               min={0}
                               value={selected.extraBedRate || ""}
@@ -2407,9 +2535,9 @@ export default function NewReservation() {
                               see the total (rate × beds × units) without
                               scrolling to the summary. 0 beds → no charge. */}
                           {selected.extraBeds > 0 && selected.extraBedRate > 0 && (
-                            <div className="text-[11px] text-textSecondary mt-1.5">
+                            <div className="text-[11px] text-white/70 mt-1.5">
                               Extra-person charge:{" "}
-                              <span className="font-mono font-semibold text-brand-dark">
+                              <span className="font-mono font-semibold text-white">
                                 {inr(
                                   selected.extraBeds *
                                     selected.extraBedRate *
@@ -2438,8 +2566,13 @@ export default function NewReservation() {
         )}
       </div>
 
-      <div id="step-4" className="card space-y-3 scroll-mt-20">
-        <h2 className="font-semibold text-brand-dark">4. Booking Source</h2>
+      <div id="step-4" className="card space-y-4 scroll-mt-20">
+        <h2 className="text-base font-semibold text-ink flex items-center gap-2">
+          <span className="w-5 h-5 grid place-items-center rounded-full bg-brand-soft text-brand-deep text-[10px] font-bold">
+            4
+          </span>
+          Booking source
+        </h2>
         <ArrowKeyGroup className={`grid gap-2 ${compFeatureOn ? "grid-cols-3" : "grid-cols-2"}`}>
           {(
             [
@@ -2454,10 +2587,10 @@ export default function NewReservation() {
               key={opt.v}
               type="button"
               onClick={() => setBookingSource(opt.v)}
-              className={`px-3 py-2 rounded-sm border-2 text-sm font-medium transition ${
+              className={`px-3 h-[42px] rounded-md border-[1.5px] text-sm font-semibold transition-colors ${
                 bookingSource === opt.v
-                  ? "bg-brand text-textPrimary border-brand"
-                  : "bg-bg text-textSecondary border-borderc hover:border-brand/60"
+                  ? "bg-brand text-white border-brand shadow-primary"
+                  : "bg-surface text-textSecondary border-borderControl hover:border-brand hover:text-ink"
               }`}
             >
               {opt.label}
@@ -2466,7 +2599,7 @@ export default function NewReservation() {
         </ArrowKeyGroup>
         {isCreditBooking && (
           <>
-            <div className="text-xs text-warning bg-warning/5 border border-warning/30 rounded-sm px-3 py-2">
+            <div className="text-xs text-warnFg bg-warnBg border border-warnBorder rounded-[10px] px-3 py-2">
               This stay is marked <strong>complimentary</strong>. It will be excluded from
               revenue reports and logged separately.
             </div>
@@ -2484,21 +2617,21 @@ export default function NewReservation() {
           </>
         )}
 
-        <div className="flex items-start gap-3 px-3 py-2.5 border border-borderc rounded-sm bg-bg select-none">
-          <div
-            className={`w-4 h-4 mt-0.5 rounded-sm grid place-items-center ${
-              otpEnabled ? "bg-brand" : "bg-borderc"
-            }`}
-          >
-            <span className="text-white text-[10px] leading-none">
-              {otpEnabled ? "✓" : "-"}
-            </span>
-          </div>
+        <div
+          className={`flex items-start gap-3 px-3.5 py-3 rounded-xl border select-none ${
+            otpEnabled
+              ? "border-successBorder bg-successBg"
+              : "border-neutralBorder bg-neutralBg"
+          }`}
+        >
+          <ShieldCheck
+            className={`w-4 h-4 mt-0.5 shrink-0 ${otpEnabled ? "text-success" : "text-inkMuted"}`}
+          />
           <div className="text-sm">
-            <div className="font-medium text-textPrimary">
+            <div className="font-semibold text-ink">
               OTP verification {otpEnabled ? "(required)" : "(disabled)"}
             </div>
-            <div className="text-xs text-textSecondary mt-0.5">
+            <div className="text-xs text-inkBody mt-0.5">
               {otpEnabled
                 ? "A code will be sent to the guest's phone or email and must be entered before check-in is completed."
                 : "OTP is turned off for this property (Settings → Guest Check-in). No code will be sent."}
@@ -2507,16 +2640,203 @@ export default function NewReservation() {
         </div>
       </div>
 
-      {!isCreditBooking && (
-        <div id="step-5" className="card space-y-3 scroll-mt-20">
-          <h2 className="font-semibold text-navy">5. Advance Payment (optional)</h2>
-          <div className="grid grid-cols-2 gap-3">
+      </div>{/* /left column */}
+
+      {/* Right rail — the booking summary follows the form down the page
+          so the running total and the commit button are always in reach. */}
+      <div className="w-full lg:flex-[1_1_300px] lg:w-auto min-w-0 space-y-4 lg:sticky lg:top-[80px]">
+
+      {/* Wallet credit — only shown when an existing guest is selected and
+          they actually have a positive balance. Discounts the booking. */}
+      {!isCreditBooking && selectedGuest && walletBalance > 0.009 && grandTotal > 0 && (
+        <div className="card space-y-3 !border-brand-tint">
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <div>
+              <h2 className="text-base font-semibold text-ink">Wallet credit</h2>
+              <p className="text-xs text-textSecondary mt-0.5">
+                Available balance:{" "}
+                <span className="font-mono font-semibold text-brand-deep">
+                  {inr(walletBalance)}
+                </span>
+              </p>
+            </div>
+            <ArrowKeyGroup className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setWalletApply(0)}
+                className={`text-xs font-semibold px-2.5 py-1.5 rounded-full border transition-colors ${
+                  walletApply === 0
+                    ? "bg-brand text-white border-brand shadow-sm"
+                    : "bg-surface border-borderControl text-textSecondary hover:border-brand hover:text-ink"
+                }`}
+              >
+                Don't apply
+              </button>
+              <button
+                type="button"
+                onClick={() => setWalletApply(maxWalletApply)}
+                className={`text-xs font-semibold px-2.5 py-1.5 rounded-full border transition-colors ${
+                  walletApply >= maxWalletApply - 0.009 && walletApply > 0
+                    ? "bg-brand text-white border-brand shadow-sm"
+                    : "bg-surface border-borderControl text-textSecondary hover:border-brand hover:text-ink"
+                }`}
+              >
+                Apply max ({inr(maxWalletApply)})
+              </button>
+            </ArrowKeyGroup>
+          </div>
+          <div>
+            <label className="label block mb-1">Amount to apply (₹)</label>
+            <input
+              className="input font-mono"
+              type="number"
+              min={0}
+              max={maxWalletApply}
+              step="0.01"
+              value={walletApply || ""}
+              placeholder="0"
+              onChange={(e) => {
+                const n = Math.max(0, Math.min(maxWalletApply, Number(e.target.value)));
+                setWalletApply(n);
+              }}
+            />
+            {walletApply > 0 && (
+              <div className="text-[11px] text-inkMuted mt-1">
+                Reduces the bill directly. Remaining wallet after this booking:{" "}
+                <span className="font-mono">
+                  {inr(Math.max(0, walletBalance - effectiveWalletApply))}
+                </span>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      <div className="card">
+        <h2 className="text-base font-semibold text-ink mb-3">Booking summary</h2>
+        {/* Who + what, mirroring the check-in slip the guest gets. */}
+        <div className="flex justify-between gap-3 text-[13.5px] py-1.5 text-inkBody">
+          <span>Guest</span>
+          <span className="font-semibold text-ink text-right truncate">
+            {selectedGuest?.fullName || newGuest.fullName.trim() || "—"}
+          </span>
+        </div>
+        <div className="flex justify-between gap-3 text-[13.5px] py-1.5 text-inkBody">
+          <span>
+            {selectedRooms.length === 0
+              ? "Room"
+              : selectedRooms.length === 1
+                ? `Room ${selectedRooms[0]!.roomNumber}`
+                : `${selectedRooms.length} rooms`}
+            {selectedRooms.length > 1 && (
+              <span className="font-mono text-inkMuted">
+                {" "}
+                {selectedRooms.map((r) => r.roomNumber).join(", ")}
+              </span>
+            )}
+          </span>
+          <span className="font-mono text-right whitespace-nowrap">
+            {isShortStay
+              ? shortStayDurationHours > 0
+                ? `${shortStayDurationHours} hr${shortStayDurationHours === 1 ? "" : "s"}`
+                : "—"
+              : `${nights} night${nights === 1 ? "" : "s"}`}
+          </span>
+        </div>
+        <div className="h-px bg-divider my-2" />
+        {gstMode === "inclusive" && roomAmount > 0 && (
+          <div className="flex justify-between text-sm">
+            <span className="text-textSecondary">
+              Quoted rate (
+              {isShortStay
+                ? `${shortStayDurationHours} hrs × ${selectedRooms.length}`
+                : `${nights} × ${selectedRooms.length}`}{" "}
+              room{selectedRooms.length === 1 ? "" : "s"}) - GST included
+            </span>
+            <span className="font-mono">{inr(roomAmount)}</span>
+          </div>
+        )}
+        {/* Extra-bed charge breakdown. roomAmount already includes this;
+            we surface it as its own line so the bill is transparent. */}
+        {extraBedAmount > 0 && (
+          <div className="flex justify-between gap-3 text-[13.5px] py-1.5 text-textSecondary">
+            <span>
+              Extra persons (
+              {selectedRooms.reduce((a, r) => a + r.extraBeds, 0)} ×{" "}
+              {isShortStay ? `${shortStayDurationHours} hrs` : `${nights} night${nights === 1 ? "" : "s"}`})
+            </span>
+            <span className="font-mono">{inr(extraBedAmount)}</span>
+          </div>
+        )}
+        <div className="flex justify-between gap-3 text-[13.5px] py-1.5 text-inkBody">
+          <span>
+            {isShortStay
+              ? `Subtotal (${shortStayDurationHours} hrs × ${selectedRooms.length} room${selectedRooms.length === 1 ? "" : "s"})`
+              : `Subtotal (${nights} × ${selectedRooms.length} room${selectedRooms.length === 1 ? "" : "s"})`}
+            {gstMode === "inclusive" && (
+              <span className="text-[10px] text-inkMuted"> · net, after GST extracted</span>
+            )}
+          </span>
+          <span className="font-mono">{inr(subtotal)}</span>
+        </div>
+        {subtotal > 0 && (
+          <>
+            <div className="flex justify-between gap-3 text-[13.5px] py-1.5 text-inkBody">
+              <span>CGST @ {(gstRate / 2).toFixed(gstRate % 2 === 0 ? 0 : 1)}%</span>
+              <span className="font-mono">{inr(cgst)}</span>
+            </div>
+            <div className="flex justify-between gap-3 text-[13.5px] py-1.5 text-inkBody">
+              <span>SGST @ {(gstRate / 2).toFixed(gstRate % 2 === 0 ? 0 : 1)}%</span>
+              <span className="font-mono">{inr(sgst)}</span>
+            </div>
+            <div className="flex justify-between gap-3 text-[15px] font-bold text-ink mt-1.5 pt-2.5 border-t border-divider">
+              <span>Grand Total</span>
+              <span className="font-mono">{inr(grandTotal)}</span>
+            </div>
+            {!isCreditBooking && effectiveWalletApply > 0 && (
+              <div className="flex justify-between gap-3 text-[13.5px] py-1.5 text-brand-deep">
+                <span>Wallet credit applied</span>
+                <span className="font-mono">−{inr(effectiveWalletApply)}</span>
+              </div>
+            )}
+            {!isCreditBooking && advance > 0 && (
+              <div className="flex justify-between gap-3 text-[13.5px] py-1.5 text-textSecondary">
+                <span>Advance</span>
+                <span className="font-mono">−{inr(advance)}</span>
+              </div>
+            )}
+            {!isCreditBooking && (advance > 0 || effectiveWalletApply > 0) && (
+              <div className="flex justify-between gap-3 text-[13.5px] py-1.5 font-semibold text-ink">
+                <span>Balance Due</span>
+                <span className={`font-mono ${balanceDue > 0 ? "text-dangerFg" : "text-success"}`}>
+                  {inr(balanceDue)}
+                </span>
+              </div>
+            )}
+            <div className="text-[11px] text-inkMuted mt-2 leading-snug">
+              GST {gstRate}% applied via slab (avg rate ₹{avgRatePerNight.toFixed(2)}
+              {isShortStay ? `/${shortStayDurationHours} hrs` : "/night"}
+              {gstMode === "inclusive" ? ", GST-inclusive" : ", GST extra"}). Final tax
+              recomputed at check-out if charges change.
+            </div>
+          </>
+        )}
+
+        {/* Advance payment (step 5). Lives in the summary card so the
+            money the guest hands over is captured next to the total it
+            settles. */}
+        {!isCreditBooking && (
+          <div id="step-5" className="mt-4 pt-4 border-t border-divider space-y-3 scroll-mt-20">
+            <h3 className="text-sm font-semibold text-ink">
+              Advance payment{" "}
+              <span className="text-xs font-medium text-inkMuted">(optional)</span>
+            </h3>
             <div>
               <label className="label block mb-1">Amount (₹)</label>
               <input
-                className={`input ${
+                className={`input font-mono ${
                   advanceTooHigh
-                    ? "border-danger focus:border-danger focus:ring-danger/30"
+                    ? "!border-dangerBorder focus:!border-danger focus:!ring-dangerBg"
                     : ""
                 }`}
                 type="number"
@@ -2528,7 +2848,7 @@ export default function NewReservation() {
                 aria-invalid={advanceTooHigh}
               />
               {advanceTooHigh && (
-                <div className="text-[11px] text-danger mt-1">
+                <div className="text-[11px] text-dangerFg mt-1 leading-snug">
                   Advance can't exceed grand total{" "}
                   <span className="font-mono">{inr(grandTotal)}</span>. If the
                   guest is pre-paying for another visit, record it as wallet
@@ -2551,163 +2871,17 @@ export default function NewReservation() {
               </select>
             </div>
           </div>
-        </div>
-      )}
-
-      {/* Wallet credit — only shown when an existing guest is selected and
-          they actually have a positive balance. Discounts the booking. */}
-      {!isCreditBooking && selectedGuest && walletBalance > 0.009 && grandTotal > 0 && (
-        <div className="card space-y-3 border-2 border-brand/30">
-          <div className="flex items-center justify-between flex-wrap gap-2">
-            <div>
-              <h2 className="font-semibold text-navy">6. Wallet Credit</h2>
-              <p className="text-xs text-textSecondary mt-0.5">
-                Available balance:{" "}
-                <span className="font-mono font-semibold text-brand-dark">
-                  {inr(walletBalance)}
-                </span>
-              </p>
-            </div>
-            <ArrowKeyGroup className="flex items-center gap-2">
-              <button
-                type="button"
-                onClick={() => setWalletApply(0)}
-                className={`text-xs px-2 py-1 rounded-sm border ${
-                  walletApply === 0
-                    ? "bg-brand-dark text-cream border-brand-dark"
-                    : "border-borderc text-textSecondary hover:border-brand"
-                }`}
-              >
-                Don't apply
-              </button>
-              <button
-                type="button"
-                onClick={() => setWalletApply(maxWalletApply)}
-                className={`text-xs px-2 py-1 rounded-sm border ${
-                  walletApply >= maxWalletApply - 0.009 && walletApply > 0
-                    ? "bg-brand text-textPrimary border-brand"
-                    : "border-borderc text-textSecondary hover:border-brand"
-                }`}
-              >
-                Apply max ({inr(maxWalletApply)})
-              </button>
-            </ArrowKeyGroup>
-          </div>
-          <div>
-            <label className="label block mb-1">Amount to apply (₹)</label>
-            <input
-              className="input"
-              type="number"
-              min={0}
-              max={maxWalletApply}
-              step="0.01"
-              value={walletApply || ""}
-              placeholder="0"
-              onChange={(e) => {
-                const n = Math.max(0, Math.min(maxWalletApply, Number(e.target.value)));
-                setWalletApply(n);
-              }}
-            />
-            {walletApply > 0 && (
-              <div className="text-[11px] text-textSecondary mt-1">
-                Reduces the bill directly. Remaining wallet after this booking:{" "}
-                <span className="font-mono">
-                  {inr(Math.max(0, walletBalance - effectiveWalletApply))}
-                </span>
-              </div>
-            )}
-          </div>
-        </div>
-      )}
-
-      <div className="card">
-        {gstMode === "inclusive" && roomAmount > 0 && (
-          <div className="flex justify-between text-sm">
-            <span className="text-textSecondary">
-              Quoted rate (
-              {isShortStay
-                ? `${shortStayDurationHours} hrs × ${selectedRooms.length}`
-                : `${nights} × ${selectedRooms.length}`}{" "}
-              room{selectedRooms.length === 1 ? "" : "s"}) - GST included
-            </span>
-            <span className="font-mono">{inr(roomAmount)}</span>
-          </div>
-        )}
-        {/* Extra-bed charge breakdown. roomAmount already includes this;
-            we surface it as its own line so the bill is transparent. */}
-        {extraBedAmount > 0 && (
-          <div className="flex justify-between text-sm text-textSecondary">
-            <span>
-              Extra persons (
-              {selectedRooms.reduce((a, r) => a + r.extraBeds, 0)} ×{" "}
-              {isShortStay ? `${shortStayDurationHours} hrs` : `${nights} night${nights === 1 ? "" : "s"}`})
-            </span>
-            <span className="font-mono">{inr(extraBedAmount)}</span>
-          </div>
-        )}
-        <div className="flex justify-between text-sm">
-          <span>
-            {isShortStay
-              ? `Subtotal (${shortStayDurationHours} hrs × ${selectedRooms.length} room${selectedRooms.length === 1 ? "" : "s"})`
-              : `Subtotal (${nights} × ${selectedRooms.length} room${selectedRooms.length === 1 ? "" : "s"})`}
-            {gstMode === "inclusive" && (
-              <span className="text-[10px] text-textSecondary"> · net, after GST extracted</span>
-            )}
-          </span>
-          <span className="font-mono">{inr(subtotal)}</span>
-        </div>
-        {subtotal > 0 && (
-          <>
-            <div className="flex justify-between text-sm mt-1">
-              <span>CGST @ {(gstRate / 2).toFixed(gstRate % 2 === 0 ? 0 : 1)}%</span>
-              <span className="font-mono">{inr(cgst)}</span>
-            </div>
-            <div className="flex justify-between text-sm mt-1">
-              <span>SGST @ {(gstRate / 2).toFixed(gstRate % 2 === 0 ? 0 : 1)}%</span>
-              <span className="font-mono">{inr(sgst)}</span>
-            </div>
-            <div className="flex justify-between text-base font-bold text-brand-dark mt-2 pt-2 border-t border-borderc">
-              <span>Grand Total</span>
-              <span className="font-mono">{inr(grandTotal)}</span>
-            </div>
-            {!isCreditBooking && effectiveWalletApply > 0 && (
-              <div className="flex justify-between text-sm text-brand mt-1">
-                <span>Wallet credit applied</span>
-                <span className="font-mono">−{inr(effectiveWalletApply)}</span>
-              </div>
-            )}
-            {!isCreditBooking && advance > 0 && (
-              <div className="flex justify-between text-sm text-textSecondary mt-1">
-                <span>Advance</span>
-                <span className="font-mono">−{inr(advance)}</span>
-              </div>
-            )}
-            {!isCreditBooking && (advance > 0 || effectiveWalletApply > 0) && (
-              <div className="flex justify-between text-sm font-semibold mt-1">
-                <span>Balance Due</span>
-                <span className={`font-mono ${balanceDue > 0 ? "text-danger" : "text-success"}`}>
-                  {inr(balanceDue)}
-                </span>
-              </div>
-            )}
-            <div className="text-[11px] text-textSecondary mt-2">
-              GST {gstRate}% applied via slab (avg rate ₹{avgRatePerNight.toFixed(2)}
-              {isShortStay ? `/${shortStayDurationHours} hrs` : "/night"}
-              {gstMode === "inclusive" ? ", GST-inclusive" : ", GST extra"}). Final tax
-              recomputed at check-out if charges change.
-            </div>
-          </>
         )}
         {/* Same-day re-let acknowledgement. Required when one or more
             picked rooms have a confirmed reservation that arrives AFTER
             the walk-in vacates. Staff must explicitly confirm they'll
             free the room in time. */}
         {reletRooms.length > 0 && (
-          <div className="mt-4 rounded-sm border border-warning/50 bg-warning/10 p-3">
+          <div className="mt-4 rounded-xl border border-warnBorder bg-warnBg p-3">
             <div className="flex items-start gap-2">
-              <AlertTriangle className="w-4 h-4 text-warning shrink-0 mt-0.5" />
-              <div className="flex-1 text-xs leading-snug">
-                <div className="font-semibold text-warning mb-1.5">
+              <AlertTriangle className="w-4 h-4 text-warnFg shrink-0 mt-0.5" />
+              <div className="flex-1 text-xs leading-snug text-inkBody">
+                <div className="font-semibold text-warnFg mb-1.5">
                   Same-day re-let - {reletRooms.length} room
                   {reletRooms.length === 1 ? "" : "s"} reserved for tomorrow
                 </div>
@@ -2716,15 +2890,15 @@ export default function NewReservation() {
                     <li key={r.roomId}>
                       Room <span className="font-mono font-bold">{r.roomNumber}</span> →{" "}
                       {r.nextReservation?.guestName} arrives on{" "}
-                      <strong>{r.nextReservation?.checkInDate}</strong>{" "}
-                      ({r.nextReservation?.reservationNumber})
+                      <strong className="font-mono">{r.nextReservation?.checkInDate}</strong>{" "}
+                      (<span className="font-mono">{r.nextReservation?.reservationNumber}</span>)
                     </li>
                   ))}
                 </ul>
-                <label className="flex items-start gap-2 cursor-pointer text-textPrimary">
+                <label className="flex items-start gap-2 cursor-pointer text-ink">
                   <input
                     type="checkbox"
-                    className="mt-0.5 accent-warning"
+                    className="mt-0.5 accent-warnDeep"
                     checked={reletConfirmed}
                     onChange={(e) => setReletConfirmed(e.target.checked)}
                   />
@@ -2737,13 +2911,14 @@ export default function NewReservation() {
             </div>
           </div>
         )}
-        {error && <div className="text-danger text-sm mt-3">{error}</div>}
-        <div className="flex justify-end gap-2 mt-4">
-          <button className="btn-secondary" onClick={() => navigate(-1)}>
-            Cancel
-          </button>
+        {error && (
+          <div className="mt-3 rounded-xl border border-dangerBorder bg-dangerBg px-3 py-2.5 text-sm text-dangerFg">
+            {error}
+          </div>
+        )}
+        <div className="flex flex-col gap-2 mt-4">
           <button
-            className="btn-primary"
+            className="btn-primary w-full !h-12 inline-flex items-center justify-center gap-2 text-[15px]"
             // `create` is VALIDATION ONLY — its mutationFn resolves in the
             // same tick, so create.isPending alone left the button live for
             // the entire real commit. That commit is `createAfterOtp`
@@ -2755,6 +2930,7 @@ export default function NewReservation() {
             disabled={!canSubmit || create.isPending || createAfterOtp.isPending}
             onClick={handlePrimarySubmit}
           >
+            <UserPlus className="w-5 h-5" />
             {create.isPending || createAfterOtp.isPending
               ? mode === "walkin"
                 ? "Checking in…"
@@ -2763,8 +2939,19 @@ export default function NewReservation() {
                 ? "Check In Now"
                 : "Create Reservation"}
           </button>
+          <button className="btn-secondary w-full" onClick={() => navigate(-1)}>
+            Cancel
+          </button>
         </div>
+        {mode === "walkin" && (
+          <p className="text-[11.5px] text-inkMuted text-center mt-2.5">
+            Prints a check-in slip &amp; sends a WhatsApp to the guest.
+          </p>
+        )}
       </div>
+
+      </div>{/* /right rail */}
+      </div>{/* /two-column layout */}
 
       {walkInReceipt && (
         <CheckInReceiptModal
@@ -2843,23 +3030,26 @@ function KycOnFileCard({
           <img
             src={photoUrl}
             alt={`KYC photo of ${guestName}`}
-            className="w-14 h-14 rounded-sm object-cover border border-borderc shrink-0"
+            className="w-14 h-14 rounded-xl object-cover border border-borderc shrink-0"
           />
         ) : (
-          <div className="w-14 h-14 rounded-sm bg-success/10 grid place-items-center shrink-0">
+          <div className="w-14 h-14 rounded-xl bg-successBg border border-successBorder grid place-items-center shrink-0">
             <ShieldCheck className="w-6 h-6 text-success" />
           </div>
         )}
         <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-2">
-            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-sm text-[10px] font-semibold bg-success/15 text-success">
-              <ShieldCheck className="w-3 h-3" /> KYC ON FILE
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full border text-[10px] font-bold uppercase tracking-[0.05em] bg-successBg text-success border-successBorder">
+              <ShieldCheck className="w-3 h-3" /> KYC on file
             </span>
             <span className="text-xs text-textSecondary">
-              Verified {verified.toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })}
+              Verified{" "}
+              <span className="font-mono">
+                {verified.toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })}
+              </span>
             </span>
           </div>
-          <div className="text-sm text-textPrimary mt-1">
+          <div className="text-sm text-ink mt-1.5">
             {idProofType ? (
               <>
                 <span className="capitalize">{idProofType.replace(/_/g, " ")}</span>
@@ -2877,14 +3067,14 @@ function KycOnFileCard({
           <div className="text-xs text-textSecondary mt-0.5">
             No need to re-upload. Existing documents will be used for this booking.
           </div>
-          <div className="flex gap-3 mt-2 text-xs">
-            <Link to={`/guests/${guestId}`} className="text-accentBlue hover:underline">
+          <div className="flex gap-3 mt-2 text-xs font-semibold">
+            <Link to={`/guests/${guestId}`} className="text-brand-deep hover:underline">
               View documents
             </Link>
             <button
               type="button"
               onClick={() => setShowReplace((v) => !v)}
-              className="text-textSecondary hover:text-brand-dark"
+              className="text-textSecondary hover:text-brand-deep transition-colors"
             >
               {showReplace ? "Hide replace options" : "Replace if guest brought new ID"}
             </button>
@@ -2892,7 +3082,7 @@ function KycOnFileCard({
         </div>
       </div>
       {showReplace && (
-        <div className="grid grid-cols-3 gap-3 border-t border-borderc pt-3">
+        <div className="grid grid-cols-3 gap-3 border-t border-divider pt-3">
           <KycFilePicker label="Customer Photo" file={kycPhoto} onChange={setKycPhoto} />
           <KycFilePicker label="ID Front" file={kycFront} onChange={setKycFront} />
           <KycFilePicker label="ID Back" file={kycBack} onChange={setKycBack} />
@@ -2927,15 +3117,15 @@ function OutstandingBanner({
       )
     : null;
   return (
-    <div className="border-2 border-danger/40 bg-danger/5 rounded-sm p-3 flex gap-3 items-start">
-      <AlertTriangle className="w-5 h-5 text-danger shrink-0 mt-0.5" />
+    <div className="border border-dangerBorder bg-dangerBg rounded-xl p-3.5 flex gap-3 items-start">
+      <AlertTriangle className="w-5 h-5 text-dangerFg shrink-0 mt-0.5" />
       <div className="min-w-0 flex-1 text-sm">
-        <div className="font-bold text-danger uppercase tracking-wider text-xs mb-1">
+        <div className="font-bold text-dangerFg uppercase tracking-[0.06em] text-[10.5px] mb-1">
           Outstanding balance
         </div>
-        <div className="text-textPrimary">
+        <div className="text-ink">
           <strong>{guestName}</strong> owes{" "}
-          <span className="font-mono font-bold text-danger">{inr(data.total)}</span> from{" "}
+          <span className="font-mono font-bold text-dangerFg">{inr(data.total)}</span> from{" "}
           {data.count === 1 ? "a previous booking" : `${data.count} previous bookings`}.
         </div>
         {data.mostRecent && (
@@ -2943,7 +3133,7 @@ function OutstandingBanner({
             Most recent:{" "}
             <Link
               to={`/reservations/${data.mostRecent.reservationNumber}`}
-              className="font-mono text-accentBlue hover:underline"
+              className="font-mono font-semibold text-brand-deep hover:underline"
             >
               {data.mostRecent.reservationNumber}
             </Link>
@@ -2962,12 +3152,12 @@ function OutstandingBanner({
           </div>
         )}
         {data.pendingPromiseCount > 0 && (
-          <div className="text-[11px] text-warning mt-1">
+          <div className="text-[11px] text-warnFg mt-1">
             {data.pendingPromiseCount} pending payment promise
             {data.pendingPromiseCount === 1 ? "" : "s"} on file.
           </div>
         )}
-        <div className="text-xs text-textSecondary mt-2 italic">
+        <div className="text-xs text-inkMuted mt-2 italic">
           Collect at check-in or remind the guest to settle the previous balance.
         </div>
       </div>
@@ -3010,10 +3200,10 @@ function KycFilePicker({
 
   return (
     <div>
-      <label htmlFor={inputId} className="label block mb-1">
+      <label htmlFor={inputId} className="label mb-1 flex items-center gap-1">
         {label}
-        {required && !file && <span className="text-danger ml-1">*</span>}
-        {file && <span className="text-success ml-1">✓</span>}
+        {required && !file && <span className="text-dangerFg">*</span>}
+        {file && <CheckCircle2 className="w-3 h-3 text-success" />}
       </label>
 
       <input
@@ -3027,20 +3217,22 @@ function KycFilePicker({
       {!file ? (
         <label
           htmlFor={inputId}
-          className="flex flex-col items-center justify-center gap-1.5 h-32 border-2 border-dashed border-borderc rounded-md cursor-pointer hover:border-brand hover:bg-brand-soft/30 transition-colors text-textSecondary"
+          className="flex flex-col items-center justify-center gap-1.5 h-32 border-2 border-dashed border-borderControl bg-surfaceAlt rounded-xl cursor-pointer hover:border-brand hover:bg-brand-softer transition-colors text-textSecondary"
         >
-          <Upload className="w-5 h-5" />
-          <div className="text-xs">Click to upload {label.toLowerCase()}</div>
-          <div className="text-[10px] text-textSecondary/70">JPG, PNG, WebP or PDF</div>
+          <Upload className="w-6 h-6 text-brand-deep" />
+          <div className="text-[13px] font-semibold text-ink">
+            Click to upload {label.toLowerCase()}
+          </div>
+          <div className="text-[11.5px] text-inkMuted">JPG, PNG, WebP or PDF</div>
         </label>
       ) : (
-        <div className="border border-borderc rounded-md overflow-hidden bg-surface">
-          <div className="relative h-32 bg-bg flex items-center justify-center">
+        <div className="border border-borderc rounded-xl overflow-hidden bg-surface">
+          <div className="relative h-32 bg-surfaceAlt flex items-center justify-center">
             {previewUrl ? (
               <img src={previewUrl} alt={label} className="max-h-full max-w-full object-contain" />
             ) : isPdf ? (
               <div className="flex flex-col items-center gap-1 text-textSecondary">
-                <FileText className="w-7 h-7 text-brand" />
+                <FileText className="w-7 h-7 text-brand-deep" />
                 <div className="text-xs font-mono">PDF document</div>
               </div>
             ) : (
@@ -3049,20 +3241,23 @@ function KycFilePicker({
             <button
               type="button"
               onClick={() => onChange(null)}
-              className="absolute top-1.5 right-1.5 grid place-items-center w-6 h-6 rounded-full bg-surface border border-borderc text-textSecondary hover:text-danger hover:border-danger"
+              className="absolute top-1.5 right-1.5 grid place-items-center w-6 h-6 rounded-full bg-surface border border-borderControl text-textSecondary hover:text-dangerFg hover:border-dangerBorder transition-colors"
               aria-label="Remove"
               title="Remove"
             >
               <X className="w-3.5 h-3.5" />
             </button>
           </div>
-          <div className="px-2.5 py-1.5 flex items-center justify-between gap-2 text-[11px] border-t border-borderc">
+          <div className="px-2.5 py-1.5 flex items-center justify-between gap-2 text-[11px] border-t border-divider">
             <div className="truncate text-textSecondary" title={file.name}>
               {file.name}
             </div>
             <div className="flex items-center gap-2 shrink-0">
-              <span className="text-textSecondary/70">{sizeKb} KB</span>
-              <label htmlFor={inputId} className="text-brand cursor-pointer hover:underline">
+              <span className="font-mono text-inkMuted">{sizeKb} KB</span>
+              <label
+                htmlFor={inputId}
+                className="font-semibold text-brand-deep cursor-pointer hover:underline"
+              >
                 Replace
               </label>
             </div>
@@ -3129,40 +3324,50 @@ function CoGuestCard(props: {
     props.mode === "existing" && !!props.selected && !!kycQ.data?.kycVerifiedAt;
 
   return (
-    <div className="card space-y-3">
+    <div className="card space-y-4">
       <div className="flex items-center justify-between flex-wrap gap-2">
-        <h2 className="font-semibold text-navy">
+        <h2 className="text-base font-semibold text-ink leading-snug">
           Guest {guestNumber}{" "}
-          <span className="text-xs text-textSecondary font-normal">
+          <span className="text-[13px] font-medium text-inkMuted">
             (optional - skip to book without this guest's KYC)
           </span>
         </h2>
-        <div className="flex items-center gap-2 text-xs">
-          <button
-            type="button"
-            className={`px-3 py-1 rounded-sm ${props.mode === "existing" ? "bg-navy text-white" : "bg-gray-100"}`}
-            onClick={() => {
-              props.onModeChange("existing");
-              props.onSelected(null);
-            }}
-          >
-            Existing
-          </button>
-          <button
-            type="button"
-            className={`px-3 py-1 rounded-sm ${props.mode === "new" ? "bg-navy text-white" : "bg-gray-100"}`}
-            onClick={() => {
-              props.onModeChange("new");
-              props.onSelected(null);
-            }}
-          >
-            New
-          </button>
+        <div className="flex items-center gap-2">
+          <div className="inline-flex items-center gap-0.5 p-[3px] rounded-[10px] border border-borderControl bg-surfaceSubtle">
+            <button
+              type="button"
+              className={`px-3 py-1.5 rounded-[7px] text-xs font-semibold transition-colors ${
+                props.mode === "existing"
+                  ? "bg-brand text-white shadow-primary"
+                  : "text-textSecondary hover:text-ink hover:bg-surface"
+              }`}
+              onClick={() => {
+                props.onModeChange("existing");
+                props.onSelected(null);
+              }}
+            >
+              Existing
+            </button>
+            <button
+              type="button"
+              className={`px-3 py-1.5 rounded-[7px] text-xs font-semibold transition-colors ${
+                props.mode === "new"
+                  ? "bg-brand text-white shadow-primary"
+                  : "text-textSecondary hover:text-ink hover:bg-surface"
+              }`}
+              onClick={() => {
+                props.onModeChange("new");
+                props.onSelected(null);
+              }}
+            >
+              New
+            </button>
+          </div>
           {props.canRemove && (
             <button
               type="button"
               onClick={props.onRemove}
-              className="ml-1 inline-flex items-center gap-1 px-2 py-1 rounded-sm text-danger hover:bg-danger/10"
+              className="inline-flex items-center gap-1 px-2.5 h-8 rounded-[10px] border border-dangerBorder bg-surface text-xs font-semibold text-dangerFg hover:bg-dangerBg transition-colors"
               title="Remove this guest"
             >
               <Trash2 className="w-3.5 h-3.5" /> Remove
@@ -3170,37 +3375,46 @@ function CoGuestCard(props: {
           )}
         </div>
       </div>
-      <div className="text-xs text-textSecondary -mt-1">
+      <div className="text-[13px] text-textSecondary -mt-2">
         With 2 or more adults, each additional guest's KYC is required by law.
       </div>
 
       {props.mode === "existing" ? (
-        <div className="space-y-2">
-          <input
-            className="input"
-            placeholder="Search by phone or name (min 2 chars)"
-            value={props.query}
-            onChange={(e) => props.setQuery(e.target.value)}
-          />
+        <div className="space-y-2.5">
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-inkFaint pointer-events-none" />
+            <input
+              className="input pl-9 !bg-surfaceSubtle"
+              placeholder="Search by phone or name (min 2 chars)"
+              value={props.query}
+              onChange={(e) => props.setQuery(e.target.value)}
+            />
+          </div>
           {props.selected && (
-            <div className="text-sm text-success">
-              Selected: <strong>{props.selected.fullName}</strong> ({props.selected.phone})
-              <button
-                type="button"
-                className="ml-3 text-xs text-danger hover:underline"
-                onClick={() => props.onSelected(null)}
-              >
-                Clear
-              </button>
+            <div className="rounded-xl border border-successBorder bg-successBg px-3.5 py-3 text-sm text-inkBody">
+              <div className="flex items-center gap-2 flex-wrap">
+                <CheckCircle2 className="w-4 h-4 text-success shrink-0" />
+                <span>
+                  Selected: <strong className="text-ink">{props.selected.fullName}</strong>{" "}
+                  <span className="font-mono">({props.selected.phone})</span>
+                </span>
+                <button
+                  type="button"
+                  className="ml-auto text-xs font-semibold text-dangerFg hover:underline"
+                  onClick={() => props.onSelected(null)}
+                >
+                  Clear
+                </button>
+              </div>
               {props.selected.gstin && (
-                <div className="text-xs text-textSecondary font-mono">
+                <div className="mt-1 text-xs text-textSecondary font-mono">
                   GSTIN: {props.selected.gstin}
                 </div>
               )}
             </div>
           )}
           {coKycOnFile && props.selected && kycQ.data && (
-            <div className="card">
+            <div className="rounded-xl border border-divider bg-surfaceAlt p-4">
               <KycOnFileCard
                 guestId={props.selected.id}
                 guestName={props.selected.fullName}
@@ -3218,15 +3432,15 @@ function CoGuestCard(props: {
             </div>
           )}
           {!props.selected && results.length > 0 && (
-            <ul className="border border-borderc rounded divide-y divide-borderc">
+            <ul className="rounded-xl border border-borderc divide-y divide-divider overflow-hidden">
               {results.map((g) => (
                 <li
                   key={g.id}
-                  className="px-3 py-2 hover:bg-bg cursor-pointer text-sm"
+                  className="px-3 py-2.5 hover:bg-surfaceAlt cursor-pointer text-sm transition-colors"
                   onClick={() => props.onSelected(g)}
                 >
-                  <span className="font-medium">{g.fullName}</span>{" "}
-                  <span className="text-textSecondary">· {g.phone}</span>
+                  <span className="font-semibold text-ink">{g.fullName}</span>{" "}
+                  <span className="text-textSecondary font-mono">· {g.phone}</span>
                 </li>
               ))}
             </ul>
@@ -3237,7 +3451,7 @@ function CoGuestCard(props: {
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label className="label block mb-1">
-                Full name <span className="text-danger">*</span>
+                Full name <span className="text-dangerFg">*</span>
               </label>
               <input
                 className="input"
@@ -3247,7 +3461,7 @@ function CoGuestCard(props: {
             </div>
             <div>
               <label className="label block mb-1">
-                Phone <span className="text-danger">*</span>
+                Phone <span className="text-dangerFg">*</span>
               </label>
               <input
                 className="input"
@@ -3264,13 +3478,13 @@ function CoGuestCard(props: {
             <div>
               <label className="label block mb-1">
                 Email{" "}
-                <span className="text-xs text-textSecondary font-normal">(optional)</span>
+                <span className="text-xs text-inkMuted font-normal normal-case tracking-normal">(optional)</span>
               </label>
               <EmailInput value={f.email} onChange={(v) => setF({ email: v })} />
             </div>
             <div>
               <label className="label block mb-1">
-                Gender <span className="text-danger">*</span>
+                Gender <span className="text-dangerFg">*</span>
               </label>
               <select
                 className="input"
@@ -3288,7 +3502,7 @@ function CoGuestCard(props: {
             </div>
             <div>
               <label className="label block mb-1">
-                ID Type <span className="text-danger">*</span>
+                ID Type <span className="text-dangerFg">*</span>
               </label>
               <select
                 className="input"
@@ -3311,7 +3525,7 @@ function CoGuestCard(props: {
             </div>
             <div>
               <label className="label block mb-1">
-                ID Number <span className="text-danger">*</span>
+                ID Number <span className="text-dangerFg">*</span>
               </label>
               <input
                 className="input font-mono"
@@ -3326,7 +3540,7 @@ function CoGuestCard(props: {
             </div>
             <div>
               <label className="label block mb-1">
-                Nationality <span className="text-danger">*</span>
+                Nationality <span className="text-dangerFg">*</span>
               </label>
               <input
                 className="input"
@@ -3336,7 +3550,7 @@ function CoGuestCard(props: {
             </div>
             <div>
               <label className="label block mb-1">
-                State <span className="text-danger">*</span>
+                State <span className="text-dangerFg">*</span>
               </label>
               <Combobox
                 value={f.state}
@@ -3354,7 +3568,7 @@ function CoGuestCard(props: {
             </div>
             <div>
               <label className="label block mb-1">
-                City <span className="text-danger">*</span>
+                City <span className="text-dangerFg">*</span>
               </label>
               <Combobox
                 value={f.city}
@@ -3369,7 +3583,7 @@ function CoGuestCard(props: {
             </div>
             <div className="sm:col-span-2">
               <label className="label block mb-1">
-                Address <span className="text-danger">*</span>
+                Address <span className="text-dangerFg">*</span>
               </label>
               <input
                 className="input"
@@ -3380,7 +3594,7 @@ function CoGuestCard(props: {
             <div className="sm:col-span-2">
               <label className="label block mb-1">
                 GSTIN{" "}
-                <span className="text-xs text-textSecondary font-normal">(optional)</span>
+                <span className="text-xs text-inkMuted font-normal normal-case tracking-normal">(optional)</span>
               </label>
               <input
                 className="input font-mono uppercase"
@@ -3391,9 +3605,9 @@ function CoGuestCard(props: {
             </div>
           </div>
 
-          <div className="pt-2 border-t border-borderc">
-            <div className="text-[11px] uppercase tracking-wider text-textSecondary font-semibold mb-2">
-              KYC Documents · Guest {guestNumber} (optional)
+          <div className="pt-3 border-t border-divider">
+            <div className="label mb-2">
+              ID &amp; KYC · Guest {guestNumber} (optional)
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <KycFilePicker

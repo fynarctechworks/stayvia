@@ -40,7 +40,7 @@ interface CalendarBooking {
 // Status → chip colour. Warm Concierge semantic triads; checked-in is the
 // one legitimate dark chip (matches the prototype's calendar).
 const STATUS_STYLES: Record<CalendarBooking["status"], string> = {
-  confirmed: "bg-brass/20 text-warnFg border-brass/40",
+  confirmed: "bg-gold/20 text-warnFg border-gold/40",
   checked_in: "bg-inkDark text-cream border-inkDark",
   checked_out: "bg-neutralBg text-inkMuted border-neutralBorder",
   cancelled: "bg-dangerBg text-dangerFg border-dangerBorder",
@@ -272,7 +272,7 @@ export default function CalendarPage() {
           scroll to. Backdrop / X closes. */}
       {selectedDay && (
         <div
-          className="fixed inset-0 bg-black/50 backdrop-blur-[2px] flex items-center justify-center z-50 p-4"
+          className="fixed inset-0 bg-inkDark/50 backdrop-blur-[3px] flex items-center justify-center z-50 p-4"
           onClick={() => setSelectedDay(null)}
         >
           <div
@@ -310,7 +310,7 @@ export default function CalendarPage() {
                   <div className="text-sm">No bookings on this day.</div>
                 </div>
               ) : (
-                <ul className="divide-y divide-borderc">
+                <ul className="divide-y divide-divider">
                   {selectedBookings.map((b) => {
                     const sameDay = b.checkInDate === b.checkOutDate;
                     const isDayUse = b.stayType === "short_stay";
@@ -326,18 +326,18 @@ export default function CalendarPage() {
                       <li
                         key={b.id}
                         onClick={() => navigate(`/reservations/${b.reservationNumber}`)}
-                        className="group py-3.5 flex items-center gap-4 cursor-pointer hover:bg-bg -mx-3 px-3 rounded-sm transition-colors"
+                        className="group py-3.5 flex items-center gap-4 cursor-pointer hover:bg-surfaceAlt -mx-3 px-3 rounded-sm transition-colors"
                       >
                         <span
-                          className={`w-24 text-center text-[10px] font-semibold px-2 py-1 rounded border shrink-0 ${STATUS_STYLES[b.status]}`}
+                          className={`w-24 text-center text-[10px] font-semibold px-2 py-1 rounded-full border shrink-0 ${STATUS_STYLES[b.status]}`}
                         >
                           {STATUS_LABELS[b.status]}
                         </span>
                         <div className="flex-1 min-w-0">
-                          <div className="text-sm font-semibold text-navy flex items-center gap-1.5 truncate">
+                          <div className="text-sm font-semibold text-ink flex items-center gap-1.5 truncate">
                             {b.guestName}
                             {b.bookingSource === "complimentary" && (
-                              <span className="inline-flex items-center gap-0.5 text-[10px] font-medium text-[#157f5f] shrink-0">
+                              <span className="inline-flex items-center gap-0.5 text-[10px] font-medium text-success shrink-0">
                                 <Gift className="w-3 h-3" /> Comp
                               </span>
                             )}
@@ -349,7 +349,7 @@ export default function CalendarPage() {
                             {roomChips.map((r) => (
                               <span
                                 key={r}
-                                className="text-[10px] font-mono font-semibold px-1.5 py-0.5 rounded-sm bg-brand-soft text-brand-dark"
+                                className="text-[10px] font-mono font-semibold px-1.5 py-0.5 rounded-full bg-brand-soft text-brand-deep"
                               >
                                 {r}
                               </span>
@@ -359,7 +359,7 @@ export default function CalendarPage() {
                         <div className="text-xs text-textSecondary font-medium text-right shrink-0">
                           {stayLabel}
                         </div>
-                        <ChevronRight className="w-4 h-4 text-textSecondary/40 group-hover:text-brand-dark transition-colors shrink-0" />
+                        <ChevronRight className="w-4 h-4 text-inkFaint group-hover:text-brand-deep transition-colors shrink-0" />
                       </li>
                     );
                   })}

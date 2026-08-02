@@ -315,7 +315,7 @@ export function Combobox({
               inputRef.current?.focus();
               setOpen(true);
             }}
-            className="absolute right-7 top-1/2 -translate-y-1/2 text-textSecondary hover:text-textPrimary"
+            className="absolute right-7 top-1/2 -translate-y-1/2 text-inkFaint hover:text-ink transition-colors"
             title="Clear"
             tabIndex={-1}
           >
@@ -323,7 +323,7 @@ export function Combobox({
           </button>
         )}
         <ChevronDown
-          className={`absolute right-2 top-1/2 -translate-y-1/2 w-4 h-4 text-textSecondary pointer-events-none transition-transform ${
+          className={`absolute right-2 top-1/2 -translate-y-1/2 w-4 h-4 text-inkFaint pointer-events-none transition-transform ${
             open ? "rotate-180" : ""
           }`}
         />
@@ -335,8 +335,8 @@ export function Combobox({
           id={`${id}-listbox`}
           role="listbox"
           style={{ maxHeight: `${maxListPx}px` }}
-          className={`absolute z-50 left-0 right-0 overflow-y-auto rounded-sm border border-borderc bg-surface shadow-lg ${
-            placement === "below" ? "top-full mt-1" : "bottom-full mb-1"
+          className={`absolute z-50 left-0 right-0 overflow-y-auto overflow-hidden rounded-xl border border-borderc bg-surface shadow-lift ${
+            placement === "below" ? "top-full mt-1.5" : "bottom-full mb-1.5"
           }`}
         >
           {filteredRows.map((row, i) => {
@@ -344,7 +344,7 @@ export function Combobox({
               return (
                 <li
                   key={`h-${row.label}-${i}`}
-                  className="px-3 pt-2 pb-1 text-[10px] uppercase tracking-wider font-semibold text-textSecondary bg-surface border-b border-borderc sticky top-0 z-10"
+                  className="px-3 pt-2 pb-1 text-[10px] uppercase tracking-[0.06em] font-bold text-inkMuted bg-surfaceAlt border-b border-divider sticky top-0 z-10"
                   aria-hidden="true"
                 >
                   {row.label}
@@ -368,19 +368,19 @@ export function Combobox({
                   e.preventDefault();
                   pick(row.value);
                 }}
-                className={`px-3 py-2 text-sm cursor-pointer flex items-center gap-2 ${
+                className={`px-3 py-2 text-sm cursor-pointer flex items-center gap-2 transition-colors ${
                   active
-                    ? "bg-brand-soft text-brand-dark"
-                    : "text-textPrimary hover:bg-bg"
+                    ? "bg-brand-soft text-brand-deep"
+                    : "text-ink hover:bg-surfaceAlt"
                 }`}
               >
                 {isCustom ? (
                   <>
-                    <span className="text-[10px] uppercase tracking-wider font-semibold text-[#157f5f] shrink-0">
+                    <span className="text-[10px] uppercase tracking-[0.06em] font-bold text-brand-deep shrink-0">
                       Use
                     </span>
                     <span className="font-medium truncate">"{row.value}"</span>
-                    <span className="text-[11px] text-textSecondary ml-auto shrink-0">
+                    <span className="text-[11px] text-inkMuted ml-auto shrink-0">
                       custom value
                     </span>
                   </>
@@ -388,7 +388,7 @@ export function Combobox({
                   <>
                     <span className="truncate flex-1">{row.value}</span>
                     {selected && (
-                      <Check className="w-3.5 h-3.5 text-brand-dark shrink-0" />
+                      <Check className="w-3.5 h-3.5 text-brand-deep shrink-0" />
                     )}
                   </>
                 )}
@@ -399,8 +399,8 @@ export function Combobox({
       )}
       {open && filteredRows.length === 0 && (
         <div
-          className={`absolute z-50 left-0 right-0 rounded-sm border border-borderc bg-surface shadow-lg px-3 py-3 text-xs text-textSecondary ${
-            placement === "below" ? "top-full mt-1" : "bottom-full mb-1"
+          className={`absolute z-50 left-0 right-0 rounded-xl border border-borderc bg-surface shadow-lift px-3 py-3 text-xs text-inkMuted ${
+            placement === "below" ? "top-full mt-1.5" : "bottom-full mb-1.5"
           }`}
         >
           No matches.{" "}

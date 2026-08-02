@@ -146,7 +146,7 @@ const ROOM_MAINT_STATUS_STYLES: Record<MaintenanceStatus, string> = {
 const ROOM_MAINT_SEVERITY_STYLES: Record<MaintenanceSeverity, string> = {
   urgent: "bg-dangerBg text-dangerFg border-dangerBorder",
   normal: "bg-warnBg text-warning border-warnBorder",
-  low: "bg-bg text-textSecondary border-borderControl",
+  low: "bg-neutralBg text-inkMuted border-neutralBorder",
 };
 
 function RoomMaintenanceSection({
