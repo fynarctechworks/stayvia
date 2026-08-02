@@ -245,6 +245,24 @@ export function AppShell({ children }: { children: ReactNode }) {
               <span className="absolute top-[9px] right-[10px] w-2 h-2 rounded-full bg-danger ring-2 ring-surface" />
             )}
           </button>
+          {/* Focus mode: hides the sidebar so content goes edge-to-edge.
+              Lives in the topbar because the topbar stays visible in focus
+              mode (the sidebar does not). Shift+click also requests the
+              browser's real fullscreen. Keyboard: F / Shift+F. Desktop only —
+              the bottom tab bar owns the phone layout. */}
+          <button
+            type="button"
+            onClick={(e) => toggleFocusMode({ requestBrowserFullscreen: e.shiftKey })}
+            className="hidden md:grid w-10 h-10 place-items-center rounded-[11px] border border-borderControl bg-surface text-inkBody hover:bg-surfaceAlt hover:text-brand-deep transition-colors shrink-0"
+            aria-label={focusMode ? "Exit focus mode" : "Enter focus mode"}
+            title={
+              focusMode
+                ? "Exit focus mode (F) - Shift+click also exits browser fullscreen"
+                : "Focus mode (F) - hides sidebar. Shift+click also goes browser fullscreen."
+            }
+          >
+            {focusMode ? <Minimize2 className="w-5 h-5" /> : <Maximize2 className="w-5 h-5" />}
+          </button>
           {profile && (
             <span className="hidden sm:grid w-9 h-9 rounded-full bg-brand-soft text-brand-deep place-items-center font-bold text-[13px] shrink-0">
               {initials(profile.fullName)}
@@ -278,42 +296,6 @@ export function AppShell({ children }: { children: ReactNode }) {
           same drawer the top hamburger uses. */}
       {!focusMode && <BottomNav onMore={() => setMobileOpen(true)} />}
 
-      {/* Focus-mode toggle. Floats over the bottom-right corner so it's
-          always reachable on any page. Click toggles in-app focus mode
-          (sidebar hidden, content edge-to-edge). Shift+click also
-          requests the browser's true fullscreen API on top.
-          Keyboard: F (Shift+F for browser fullscreen). */}
-      <button
-        type="button"
-        onClick={(e) =>
-          toggleFocusMode({ requestBrowserFullscreen: e.shiftKey })
-        }
-        // Position depends on layout state so we never sit underneath
-        // the sidebar (left rail) or the toast stack (bottom-right).
-        style={
-          focusMode
-            ? { left: "1rem", bottom: "1rem" }
-            : {
-                left: `calc(${collapsed ? "74px" : "15rem"} + 1rem)`,
-                bottom: "1rem",
-              }
-        }
-        // Hidden on phone (<md): focus mode is a desktop/projection
-        // feature, and the bottom tab bar owns that corner on mobile.
-        className="hidden md:grid fixed z-[60] place-items-center w-11 h-11 rounded-full bg-surface text-inkBody shadow-card border border-borderControl hover:bg-surfaceAlt hover:text-brand-deep transition-[left] duration-200 ease-out"
-        aria-label={focusMode ? "Exit focus mode" : "Enter focus mode"}
-        title={
-          focusMode
-            ? "Exit focus mode (F) - Shift+click also exits browser fullscreen"
-            : "Focus mode (F) - hides sidebar. Shift+click also goes browser fullscreen."
-        }
-      >
-        {focusMode ? (
-          <Minimize2 className="w-5 h-5" />
-        ) : (
-          <Maximize2 className="w-5 h-5" />
-        )}
-      </button>
     </div>
   );
 }
