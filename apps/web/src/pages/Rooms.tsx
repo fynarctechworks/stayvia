@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
+  ChevronLeft,
   ChevronRight,
   Loader2,
   Pencil,
@@ -109,26 +110,34 @@ export default function Rooms() {
       <div className="flex items-end justify-between flex-wrap gap-4">
         <div>
           <h1 className="text-[clamp(22px,3vw,28px)] font-semibold tracking-[-0.5px] text-ink">
-            Rooms
+            {view === "types" ? "Room Types" : "Rooms"}
           </h1>
-          <div className="text-sm text-textSecondary mt-1.5">
-            {totalRooms} room{totalRooms === 1 ? "" : "s"} across{" "}
-            {byFloor.size === 0
-              ? "-"
-              : `${byFloor.size} floor${byFloor.size === 1 ? "" : "s"}`}
-            .
-          </div>
+          {view === "rooms" && (
+            <div className="text-sm text-textSecondary mt-1.5">
+              {totalRooms === 0
+                ? "No rooms yet - add your first one to get started."
+                : `${totalRooms} room${totalRooms === 1 ? "" : "s"} across ${byFloor.size} floor${
+                    byFloor.size === 1 ? "" : "s"
+                  }.`}
+            </div>
+          )}
         </div>
         <div className="flex gap-2.5 flex-wrap">
           {profile?.role === "admin" && (
             <button
               onClick={() => setView(view === "types" ? "rooms" : "types")}
               aria-pressed={view === "types"}
-              className={`btn-secondary inline-flex items-center gap-2 ${
-                view === "types" ? "!border-brand !text-brand-deep !bg-brand-soft" : ""
-              }`}
+              className="btn-secondary inline-flex items-center gap-2"
             >
-              <Tag className="w-[18px] h-[18px]" /> Room Types
+              {view === "types" ? (
+                <>
+                  <ChevronLeft className="w-[18px] h-[18px]" /> Back to Rooms
+                </>
+              ) : (
+                <>
+                  <Tag className="w-[18px] h-[18px]" /> Room Types
+                </>
+              )}
             </button>
           )}
           {profile?.role === "admin" && view === "rooms" && (
