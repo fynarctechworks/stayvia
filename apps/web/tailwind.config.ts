@@ -71,7 +71,7 @@ export default {
       },
       fontFamily: {
         sans: ["DM Sans", "system-ui", "sans-serif"],
-        mono: ["JetBrains Mono", "ui-monospace", "monospace"],
+        mono: ["Roboto Mono", "ui-monospace", "monospace"],
       },
       borderRadius: {
         // Warm Concierge: buttons/inputs 10-12px, cards use rounded-2xl (16px).

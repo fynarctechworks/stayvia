@@ -25,7 +25,7 @@ export default {
       },
       fontFamily: {
         sans: ["DM Sans", "system-ui", "sans-serif"],
-        mono: ["JetBrains Mono", "ui-monospace", "monospace"],
+        mono: ["Roboto Mono", "ui-monospace", "monospace"],
       },
       borderRadius: {
         sm: "6px",
