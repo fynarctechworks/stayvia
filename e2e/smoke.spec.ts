@@ -37,8 +37,14 @@ test.describe("cloud smoke", () => {
       page.getByText(fx.hotelA.hotelName).filter({ visible: true }).first(),
     ).toBeVisible({ timeout: 20_000 });
     // Dashboard KPI proves a business endpoint round-trip: the occupancy
-    // tile totals exactly hotel A's 3 seeded rooms.
+    // tile totals exactly hotel A's 3 seeded rooms. Warm Concierge splits
+    // the tile into a "N / 3" value and a "…% occupied tonight" sub line.
     await expect(page.getByText("Occupancy").filter({ visible: true }).first()).toBeVisible();
-    await expect(page.getByText(/\/ 3 rooms/).filter({ visible: true }).first()).toBeVisible();
+    await expect(
+      page.getByText(/^\d+ \/ 3$/).filter({ visible: true }).first(),
+    ).toBeVisible();
+    await expect(
+      page.getByText(/% occupied tonight/).filter({ visible: true }).first(),
+    ).toBeVisible();
   });
 });
