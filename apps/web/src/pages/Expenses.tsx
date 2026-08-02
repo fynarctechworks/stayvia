@@ -154,8 +154,8 @@ export default function Expenses() {
     <div className="space-y-4">
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
-          <h1 className="text-2xl font-bold text-brand-dark">Expenses</h1>
-          <p className="text-xs text-textSecondary mt-0.5">
+          <h1 className="text-2xl font-semibold tracking-tight text-ink">Expenses</h1>
+          <p className="text-sm text-textSecondary mt-1">
             Property overheads - utilities, repairs, supplies, salaries
           </p>
         </div>
@@ -175,44 +175,44 @@ export default function Expenses() {
       {/* KPI strip — sums across the FULL filtered set (server-side),
           not just the current page. */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        <div className="card">
+        <div className="card !rounded-[14px]">
           <div className="label">Total</div>
           <Money
             value={summaryQ.data?.total ?? 0}
-            className="block text-2xl font-bold text-brand-dark font-mono mt-1"
+            className="block text-2xl font-bold text-ink font-mono mt-1.5"
           />
-          <div className="text-xs text-textSecondary mt-0.5">
+          <div className="text-[11px] text-inkMuted mt-1">
             {summaryQ.data?.count ?? 0} entr
             {(summaryQ.data?.count ?? 0) === 1 ? "y" : "ies"}
           </div>
         </div>
-        <div className="card">
+        <div className="card !rounded-[14px]">
           <div className="label">Paid</div>
           <Money
             value={summaryQ.data?.paid ?? 0}
-            className="block text-2xl font-bold text-success font-mono mt-1"
+            className="block text-2xl font-bold text-success font-mono mt-1.5"
           />
-          <div className="text-xs text-textSecondary mt-0.5">
+          <div className="text-[11px] text-inkMuted mt-1">
             settled (any method)
           </div>
         </div>
-        <div className="card">
+        <div className="card !rounded-[14px]">
           <div className="label">Pending</div>
           <Money
             value={summaryQ.data?.pending ?? 0}
-            className="block text-2xl font-bold text-warning font-mono mt-1"
+            className="block text-2xl font-bold text-warnFg font-mono mt-1.5"
           />
-          <div className="text-xs text-textSecondary mt-0.5">
+          <div className="text-[11px] text-inkMuted mt-1">
             recorded, not yet paid
           </div>
         </div>
-        <div className="card">
+        <div className="card !rounded-[14px]">
           <div className="label">Input GST</div>
           <Money
             value={summaryQ.data?.gst ?? 0}
-            className="block text-2xl font-bold text-brand-dark font-mono mt-1"
+            className="block text-2xl font-bold text-ink font-mono mt-1.5"
           />
-          <div className="text-xs text-textSecondary mt-0.5">
+          <div className="text-[11px] text-inkMuted mt-1">
             claimable at filing
           </div>
         </div>
@@ -220,25 +220,25 @@ export default function Expenses() {
 
       {/* Per-category breakdown — only rendered when there's data. */}
       {(summaryQ.data?.byCategory.length ?? 0) > 0 && (
-        <div className="card">
-          <div className="text-xs uppercase tracking-wider text-textSecondary font-semibold mb-2">
+        <div className="card !rounded-[14px]">
+          <div className="label mb-2.5">
             By category
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2">
             {summaryQ.data?.byCategory.map((c) => (
               <div
                 key={c.category}
-                className="flex items-center justify-between px-3 py-2 rounded-sm bg-bg/60 border border-borderc"
+                className="flex items-center justify-between gap-2.5 px-3 py-2.5 rounded-sm bg-surfaceAlt border border-divider"
               >
                 <div className="min-w-0">
-                  <div className="text-[11px] uppercase tracking-wider text-textSecondary truncate">
+                  <div className="text-[11px] font-semibold uppercase tracking-wide text-textSecondary truncate">
                     {CATEGORY_LABELS[c.category]}
                   </div>
-                  <div className="text-[10px] text-textSecondary mt-0.5">
+                  <div className="text-[10px] text-inkFaint mt-0.5">
                     {c.count} entr{c.count === 1 ? "y" : "ies"}
                   </div>
                 </div>
-                <div className="text-sm font-mono font-semibold text-brand-dark">
+                <div className="text-sm font-mono font-semibold text-ink">
                   {inr(c.total)}
                 </div>
               </div>
@@ -342,7 +342,7 @@ export default function Expenses() {
         </div>
       ) : (
         <div className="card !p-0 overflow-hidden">
-          <div className="hidden md:grid grid-cols-[110px_140px_minmax(180px,1fr)_140px_120px_120px] gap-3 px-3 py-2 text-[10px] font-semibold uppercase tracking-wider text-textSecondary bg-bg/60 border-b border-borderc">
+          <div className="hidden md:grid grid-cols-[110px_140px_minmax(180px,1fr)_140px_120px_120px] gap-3 px-3 py-2.5 text-[10px] font-bold uppercase tracking-[0.06em] text-inkMuted bg-surfaceAlt border-b border-divider">
             <div>Date</div>
             <div>Category</div>
             <div>Description</div>
@@ -352,7 +352,7 @@ export default function Expenses() {
           </div>
           {/* Edit / delete / bill preview live on the detail page the
               row opens — no inline action buttons. */}
-          <ul className="divide-y divide-borderc">
+          <ul className="divide-y divide-divider">
             {rows.map((r) => (
               <ExpenseRowItem key={r.id} r={r} />
             ))}
@@ -369,14 +369,14 @@ export default function Expenses() {
             <button
               onClick={() => setPage((p) => Math.max(1, p - 1))}
               disabled={page <= 1}
-              className="h-8 px-2 rounded-sm border-2 border-borderc text-textSecondary hover:border-brand-dark hover:text-brand-dark disabled:opacity-40 inline-flex items-center gap-1"
+              className="h-8 px-2.5 rounded-sm border border-borderControl bg-surface text-textSecondary hover:bg-surfaceAlt hover:text-ink disabled:opacity-40 disabled:hover:bg-surface disabled:hover:text-textSecondary inline-flex items-center gap-1"
             >
               <ChevronLeft className="w-3.5 h-3.5" /> Prev
             </button>
             <button
               onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
               disabled={page >= totalPages}
-              className="h-8 px-2 rounded-sm border-2 border-borderc text-textSecondary hover:border-brand-dark hover:text-brand-dark disabled:opacity-40 inline-flex items-center gap-1"
+              className="h-8 px-2.5 rounded-sm border border-borderControl bg-surface text-textSecondary hover:bg-surfaceAlt hover:text-ink disabled:opacity-40 disabled:hover:bg-surface disabled:hover:text-textSecondary inline-flex items-center gap-1"
             >
               Next <ChevronRight className="w-3.5 h-3.5" />
             </button>
@@ -413,7 +413,7 @@ function EditedChip({ updatedAt }: { updatedAt: string }) {
   return (
     <span
       title={`Last edited ${format(new Date(updatedAt), "dd MMM yyyy, h:mm a")}`}
-      className="inline-block px-1 py-px rounded-sm text-[9px] font-bold uppercase tracking-wider bg-warning/15 text-warning border border-warning/30"
+      className="inline-block px-1.5 py-px rounded-full text-[9px] font-bold uppercase tracking-wider bg-warnBg text-warnFg border border-warnBorder"
     >
       edited
     </span>
@@ -441,36 +441,36 @@ function ExpenseRowItem({ r }: { r: ExpenseRow }) {
           openDetail();
         }
       }}
-      className="group hover:bg-brand-soft/30 focus:bg-brand-soft/40 focus:outline-none cursor-pointer transition-colors"
+      className="group hover:bg-surfaceAlt focus:bg-surfaceAlt focus:outline-none cursor-pointer transition-colors"
     >
       {/* DESKTOP */}
       <div className="hidden md:grid grid-cols-[110px_140px_minmax(180px,1fr)_140px_120px_120px] gap-3 items-center px-3 py-2.5">
         <div className="text-xs">
-          <div className="text-brand-dark font-medium">
+          <div className="text-ink font-medium">
             {format(new Date(r.expenseDate), "dd MMM yyyy")}
           </div>
           {r.paidAt && !isPending && (
-            <div className="text-[10px] text-textSecondary font-mono">
+            <div className="text-[10px] text-inkMuted font-mono">
               paid {format(new Date(r.paidAt), "dd MMM")}
             </div>
           )}
         </div>
         <div className="text-xs">
-          <div className="font-semibold text-brand-dark">
+          <div className="font-semibold text-ink">
             {CATEGORY_LABELS[r.category]}
           </div>
           {r.subcategory && (
-            <div className="text-[10px] text-textSecondary truncate">
+            <div className="text-[10px] text-inkMuted truncate">
               {r.subcategory}
             </div>
           )}
         </div>
         <div className="min-w-0">
-          <div className="text-sm text-brand-dark truncate">{r.description}</div>
+          <div className="text-sm text-ink truncate">{r.description}</div>
           {(r.billNumber || wasEdited(r)) && (
             <div className="flex items-center gap-1.5 min-w-0">
               {r.billNumber && (
-                <span className="text-[10px] text-textSecondary font-mono truncate">
+                <span className="text-[10px] text-inkMuted font-mono truncate">
                   Bill #{r.billNumber}
                 </span>
               )}
@@ -479,29 +479,29 @@ function ExpenseRowItem({ r }: { r: ExpenseRow }) {
           )}
         </div>
         <div className="min-w-0 text-xs">
-          <div className="text-brand-dark truncate">{r.vendorName ?? "-"}</div>
+          <div className="text-ink truncate">{r.vendorName ?? "-"}</div>
           {r.vendorPhone && (
-            <div className="text-[10px] text-textSecondary font-mono">
+            <div className="text-[10px] text-inkMuted font-mono">
               {r.vendorPhone}
             </div>
           )}
         </div>
         <div className="text-right">
-          <div className="text-sm font-mono font-semibold text-brand-dark">
+          <div className="text-sm font-mono font-semibold text-ink">
             {inr(r.amount)}
           </div>
           {Number(r.gstAmount) > 0.009 && (
-            <div className="text-[10px] text-textSecondary font-mono">
+            <div className="text-[10px] text-inkMuted font-mono">
               + GST {inr(r.gstAmount)}
             </div>
           )}
         </div>
         <div>
           <span
-            className={`inline-block px-1.5 py-0.5 rounded-sm text-[10px] font-bold uppercase tracking-wider border ${
+            className={`inline-block px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider border ${
               isPending
-                ? "bg-warning/15 text-warning border-warning/30"
-                : "bg-success/15 text-success border-success/30"
+                ? "bg-warnBg text-warnFg border-warnBorder"
+                : "bg-successBg text-success border-successBorder"
             }`}
           >
             {PAYMENT_METHOD_LABELS[r.paymentMethod]}
@@ -513,29 +513,29 @@ function ExpenseRowItem({ r }: { r: ExpenseRow }) {
       <div className="md:hidden px-3 py-3">
         <div className="flex items-start justify-between gap-2">
           <div className="min-w-0 flex-1">
-            <div className="text-[11px] text-textSecondary flex items-center gap-1.5">
+            <div className="text-[11px] text-inkMuted flex items-center gap-1.5">
               {format(new Date(r.expenseDate), "dd MMM yyyy")} ·{" "}
               {CATEGORY_LABELS[r.category]}
               {wasEdited(r) && <EditedChip updatedAt={r.updatedAt} />}
             </div>
-            <div className="text-sm text-brand-dark mt-0.5 truncate">
+            <div className="text-sm text-ink mt-0.5 truncate">
               {r.description}
             </div>
             {r.vendorName && (
-              <div className="text-[11px] text-textSecondary mt-0.5">
+              <div className="text-[11px] text-inkMuted mt-0.5">
                 {r.vendorName}
               </div>
             )}
           </div>
           <div className="text-right shrink-0">
-            <div className="text-sm font-mono font-semibold text-brand-dark">
+            <div className="text-sm font-mono font-semibold text-ink">
               {inr(r.amount)}
             </div>
             <span
-              className={`inline-block mt-1 px-1.5 py-0.5 rounded-sm text-[9px] font-bold uppercase tracking-wider border ${
+              className={`inline-block mt-1 px-2 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-wider border ${
                 isPending
-                  ? "bg-warning/15 text-warning border-warning/30"
-                  : "bg-success/15 text-success border-success/30"
+                  ? "bg-warnBg text-warnFg border-warnBorder"
+                  : "bg-successBg text-success border-successBorder"
               }`}
             >
               {PAYMENT_METHOD_LABELS[r.paymentMethod]}
@@ -645,14 +645,14 @@ export function ExpenseModal({
 
   return (
     <div
-      className="fixed inset-0 z-[100] grid place-items-center bg-brand-dark/50 p-4"
+      className="fixed inset-0 z-[100] grid place-items-center bg-ink/55 backdrop-blur-[3px] p-4"
       onMouseDown={(e) => {
         if (e.target === e.currentTarget) onClose();
       }}
     >
-      <div className="w-full max-w-2xl bg-surface rounded-md shadow-2xl border border-borderc overflow-hidden flex flex-col max-h-[90vh]">
-        <div className="px-5 py-3 border-b border-borderc bg-bg/50 flex items-center justify-between gap-3">
-          <div className="font-semibold text-brand-dark">
+      <div className="w-full max-w-2xl bg-surface rounded-2xl shadow-modal border border-borderc overflow-hidden flex flex-col max-h-[90vh]">
+        <div className="px-5 py-3 border-b border-divider bg-surfaceAlt flex items-center justify-between gap-3">
+          <div className="font-semibold text-ink">
             {isEdit ? "Edit expense" : "Record expense"}
           </div>
           <button onClick={onClose} className="text-textSecondary hover:text-textPrimary">
@@ -818,9 +818,9 @@ export function ExpenseModal({
               )}
             </div>
           </div>
-          {err && <div className="text-xs text-danger">{err}</div>}
+          {err && <div className="text-xs text-dangerFg">{err}</div>}
         </div>
-        <div className="border-t border-borderc bg-bg/50 px-5 py-3 flex justify-end gap-2">
+        <div className="border-t border-divider bg-surfaceAlt px-5 py-3 flex justify-end gap-2">
           <button onClick={onClose} className="btn-secondary">
             Cancel
           </button>

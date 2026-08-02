@@ -107,19 +107,20 @@ export function PdfPreviewModal({ open, url, title, filename, onClose }: Props) 
 
   return (
     <div
-      className="fixed inset-0 z-[150] grid place-items-center bg-brand-dark/50 p-4"
+      className="fixed inset-0 z-[150] grid place-items-center bg-ink/55 backdrop-blur-[3px] p-4"
       onMouseDown={(e) => {
         if (e.target === e.currentTarget) onClose();
       }}
     >
-      <div className="w-full max-w-4xl h-[90vh] bg-surface rounded-md shadow-2xl border border-borderc flex flex-col overflow-hidden">
-        <div className="flex items-center justify-between gap-3 px-5 py-3 border-b border-borderc bg-bg/50">
-          <div className="font-semibold text-brand-dark truncate">{title}</div>
-          <div className="flex items-center gap-1">
+      <div className="w-full max-w-4xl h-[90vh] bg-cream rounded-2xl shadow-modal flex flex-col overflow-hidden">
+        {/* Dark chrome bar — inkDark surface, cream text, per the spec. */}
+        <div className="flex items-center justify-between gap-3 px-4 sm:px-5 py-3 bg-inkDark text-cream shrink-0">
+          <div className="font-semibold text-sm truncate">{title}</div>
+          <div className="flex items-center gap-2">
             <button
               onClick={openNewTab}
               disabled={!blobUrl}
-              className="text-xs font-semibold inline-flex items-center gap-1.5 px-2.5 h-8 rounded-sm border-2 border-borderc text-textSecondary hover:border-brand-dark hover:text-brand-dark transition-colors disabled:opacity-40"
+              className="text-xs font-semibold inline-flex items-center gap-1.5 px-2.5 h-8 rounded-[9px] border border-cream/20 bg-cream/10 text-cream hover:bg-cream/20 transition-colors disabled:opacity-40"
               title="Open in new tab"
             >
               <ExternalLink className="w-3.5 h-3.5" /> New tab
@@ -127,7 +128,7 @@ export function PdfPreviewModal({ open, url, title, filename, onClose }: Props) 
             <button
               onClick={print}
               disabled={!blobUrl}
-              className="text-xs font-semibold inline-flex items-center gap-1.5 px-2.5 h-8 rounded-sm border-2 border-borderc text-textSecondary hover:border-brand-dark hover:text-brand-dark transition-colors disabled:opacity-40"
+              className="text-xs font-semibold inline-flex items-center gap-1.5 px-2.5 h-8 rounded-[9px] border border-cream/20 bg-cream/10 text-cream hover:bg-cream/20 transition-colors disabled:opacity-40"
               title="Print"
             >
               <Printer className="w-3.5 h-3.5" /> Print
@@ -135,13 +136,13 @@ export function PdfPreviewModal({ open, url, title, filename, onClose }: Props) 
             <button
               onClick={download}
               disabled={!blobUrl}
-              className="text-xs font-semibold inline-flex items-center gap-1.5 px-2.5 h-8 rounded-sm bg-brand-dark text-cream hover:opacity-90 transition-opacity disabled:opacity-40"
+              className="text-xs font-semibold inline-flex items-center gap-1.5 px-2.5 h-8 rounded-[9px] border border-cream/20 bg-cream/10 text-cream hover:bg-cream/20 transition-colors disabled:opacity-40"
             >
               <Download className="w-3.5 h-3.5" /> Download
             </button>
             <button
               onClick={onClose}
-              className="ml-1 text-textSecondary hover:text-textPrimary"
+              className="w-8 h-8 grid place-items-center rounded-[9px] border border-cream/20 text-cream hover:bg-cream/10 transition-colors"
               title="Close"
             >
               <X className="w-5 h-5" />
@@ -149,7 +150,7 @@ export function PdfPreviewModal({ open, url, title, filename, onClose }: Props) 
           </div>
         </div>
 
-        <div className="flex-1 bg-bg relative">
+        <div className="flex-1 bg-cream relative">
           {loading && (
             <div className="absolute inset-0 grid place-items-center text-textSecondary">
               <div className="flex items-center gap-2 text-sm">
@@ -163,13 +164,15 @@ export function PdfPreviewModal({ open, url, title, filename, onClose }: Props) 
             </div>
           )}
           {blobUrl && !error && (
-            <iframe
-              ref={iframeRef}
-              key={blobUrl}
-              src={blobUrl}
-              title={title}
-              className="w-full h-full bg-white"
-            />
+            <div className="absolute inset-0 p-3 sm:p-5">
+              <iframe
+                ref={iframeRef}
+                key={blobUrl}
+                src={blobUrl}
+                title={title}
+                className="w-full h-full bg-surface rounded-sm shadow-card"
+              />
+            </div>
           )}
         </div>
       </div>

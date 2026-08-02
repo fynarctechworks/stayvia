@@ -1,4 +1,4 @@
-import { Suspense, lazy, useId, useState } from "react";
+import { useId, useState } from "react";
 import { Link, Navigate, useNavigate } from "react-router-dom";
 import {
   AlertCircle,
@@ -22,9 +22,19 @@ import { signupFormSchema, type SignupOtpChannel } from "@stayvia/shared";
 import { useAuth } from "@/auth/AuthContext";
 import { ApiError, api } from "@/lib/api";
 
-// Same heavy WebGL backdrop the login page uses — lazy so it only loads
-// on the public pages and never weighs down the app bundle.
-const Silk = lazy(() => import("@/components/Silk"));
+// Warm Concierge auth brand pane (same as Login): forest base + radial
+// glow + faint diagonal stripes. Inline styles are the sanctioned
+// exception for this pane only (design handoff — special surfaces).
+const forestBase = { background: "#10352A" };
+const forestGlow = {
+  background:
+    "radial-gradient(120% 90% at 15% 10%, #1A4A3A 0%, #10352A 55%, #0B281F 100%)",
+};
+const forestStripes = {
+  background:
+    "repeating-linear-gradient(115deg, rgba(255,255,255,.03) 0 2px, transparent 2px 26px)",
+};
+const brassHairline = { background: "rgba(180,136,74,.24)" };
 
 type FieldKey = "hotelName" | "ownerName" | "email" | "password" | "confirmPassword" | "phone" | "otp";
 
@@ -233,10 +243,10 @@ export default function Signup() {
         setChannel(value);
         setFieldErrors((fe) => (fe.phone ? { ...fe, phone: undefined } : fe));
       }}
-      className={`flex-1 flex items-center justify-center gap-2 rounded-sm border px-3 py-2 text-sm font-medium transition-colors ${
+      className={`flex-1 flex items-center justify-center gap-2 rounded-sm border px-3 py-2 text-sm font-semibold transition-colors ${
         channel === value
-          ? "border-brand-dark bg-brand-soft text-navy"
-          : "border-borderc text-textSecondary hover:border-brand-dark/40"
+          ? "border-brand bg-brand-soft text-brand-deep"
+          : "border-borderControl bg-surface text-textSecondary hover:border-brand/40"
       }`}
       aria-pressed={channel === value}
     >
@@ -246,16 +256,15 @@ export default function Signup() {
   );
 
   return (
-    <div className="min-h-screen grid lg:grid-cols-2 bg-ivory">
-      <aside className="hidden lg:block relative overflow-hidden bg-brand-dark text-cream min-h-screen">
-        {/* Animated silk backdrop in the allowed deep-emerald accent. */}
-        <div aria-hidden className="absolute inset-0 bg-brand-dark">
-          <Suspense fallback={null}>
-            <Silk speed={4} scale={1.1} color="#157f5f" noiseIntensity={1.2} rotation={0.2} />
-          </Suspense>
-        </div>
-        <div aria-hidden className="absolute inset-0 bg-gradient-to-tr from-brand-dark/55 via-brand-dark/25 to-transparent" />
-        <div className="absolute inset-y-0 right-0 w-px bg-brass/20" />
+    <div className="min-h-screen grid lg:grid-cols-2 bg-bg">
+      <aside
+        className="hidden lg:block relative overflow-hidden text-cream min-h-screen"
+        style={forestBase}
+      >
+        {/* Forest radial glow + faint diagonal stripes (spec: special surfaces). */}
+        <div aria-hidden className="absolute inset-0" style={forestGlow} />
+        <div aria-hidden className="absolute inset-0 opacity-50" style={forestStripes} />
+        <div aria-hidden className="absolute inset-y-0 right-0 w-px" style={brassHairline} />
 
         <div className="absolute top-10 left-10 xl:left-14 flex items-center gap-3 pointer-events-none">
           <img src="/logo.png" alt="Stayvia" className="w-14 h-14 object-contain" />
@@ -270,9 +279,9 @@ export default function Signup() {
             14-day free trial
           </span>
 
-          <h2 className="text-cream text-4xl xl:text-5xl font-bold leading-tight drop-shadow-sm max-w-md">
+          <h2 className="text-cream text-4xl xl:text-5xl font-bold leading-tight drop-shadow-sm max-w-md tracking-[-0.5px]">
             Run your hotel from{" "}
-            <span className="italic font-serif text-brass">one desk.</span>
+            <span className="font-[Georgia] italic font-semibold text-brass">one desk.</span>
           </h2>
 
           <p className="text-cream/85 text-base leading-relaxed mt-5 max-w-md">
@@ -305,15 +314,11 @@ export default function Signup() {
         </div>
       </aside>
 
-      {/* Phone/tablet: form pane carries the brand backdrop itself, same
+      {/* Phone/tablet: form pane carries the forest backdrop itself, same
           treatment as Login. */}
-      <main className="relative flex items-center justify-center p-6 sm:p-10 bg-brand-dark lg:bg-ivory overflow-hidden">
-        <div aria-hidden className="lg:hidden absolute inset-0">
-          <Suspense fallback={null}>
-            <Silk speed={4} scale={1.1} color="#157f5f" noiseIntensity={1.2} rotation={0.2} />
-          </Suspense>
-        </div>
-        <div aria-hidden className="lg:hidden absolute inset-0 bg-brand-dark/55" />
+      <main className="relative flex items-center justify-center p-6 sm:p-10 lg:bg-bg overflow-hidden">
+        <div aria-hidden className="lg:hidden absolute inset-0" style={forestGlow} />
+        <div aria-hidden className="lg:hidden absolute inset-0 opacity-50" style={forestStripes} />
         <div className="relative w-full max-w-md flex flex-col items-center py-4">
           <div className="lg:hidden flex flex-col items-center text-center mb-5">
             <img
@@ -329,7 +334,7 @@ export default function Signup() {
           <form
             onSubmit={onSubmitForm}
             noValidate
-            className="relative w-full p-7 sm:p-9 space-y-4 bg-surface rounded-2xl lg:rounded-md border border-borderc shadow-[0_20px_50px_-20px_rgba(15,61,46,0.45)]"
+            className="relative w-full p-7 sm:p-9 space-y-4 bg-surface rounded-[20px] border border-borderc shadow-modal"
           >
             <div>
               <h1 className="text-2xl font-semibold text-navy">Create your hotel</h1>
@@ -341,7 +346,7 @@ export default function Signup() {
             {error && (
               <div
                 role="alert"
-                className="flex items-start gap-2 rounded-sm border border-danger/30 bg-danger/5 px-3 py-2 text-danger text-sm"
+                className="flex items-start gap-2 rounded-sm border border-dangerBorder bg-dangerBg px-3 py-2 text-dangerFg text-sm"
               >
                 <AlertCircle className="w-4 h-4 mt-0.5 shrink-0" />
                 <span>{error}</span>
@@ -527,7 +532,7 @@ export default function Signup() {
 
             <p className="text-center text-xs text-textSecondary">
               Already have an account?{" "}
-              <Link to="/login" className="text-brand-dark font-semibold hover:underline">
+              <Link to="/login" className="text-brand-deep font-bold hover:underline">
                 Sign in
               </Link>
             </p>
@@ -538,7 +543,7 @@ export default function Signup() {
           <form
             onSubmit={onSubmitVerify}
             noValidate
-            className="relative w-full p-7 sm:p-9 space-y-4 bg-surface rounded-2xl lg:rounded-md border border-borderc shadow-[0_20px_50px_-20px_rgba(15,61,46,0.45)]"
+            className="relative w-full p-7 sm:p-9 space-y-4 bg-surface rounded-[20px] border border-borderc shadow-modal"
           >
             <div>
               <h1 className="text-2xl font-semibold text-navy">Verify your {channel === "email" ? "email" : "WhatsApp"}</h1>
@@ -551,7 +556,7 @@ export default function Signup() {
             {error && (
               <div
                 role="alert"
-                className="flex items-start gap-2 rounded-sm border border-danger/30 bg-danger/5 px-3 py-2 text-danger text-sm"
+                className="flex items-start gap-2 rounded-sm border border-dangerBorder bg-dangerBg px-3 py-2 text-dangerFg text-sm"
               >
                 <AlertCircle className="w-4 h-4 mt-0.5 shrink-0" />
                 <span>{error}</span>
@@ -611,7 +616,7 @@ export default function Signup() {
                   setStep("form");
                   setError(null);
                 }}
-                className="inline-flex items-center gap-1 text-brand-dark font-semibold hover:underline"
+                className="inline-flex items-center gap-1 text-brand-deep font-semibold hover:underline"
               >
                 <ArrowLeft className="w-3.5 h-3.5" />
                 Edit details
@@ -620,7 +625,7 @@ export default function Signup() {
                 type="button"
                 onClick={() => sendCode("resend")}
                 disabled={resendBusy}
-                className="text-brand-dark font-semibold hover:underline disabled:opacity-50"
+                className="text-brand-deep font-semibold hover:underline disabled:opacity-50"
               >
                 {resendBusy ? "Sending…" : "Resend code"}
               </button>
@@ -629,7 +634,7 @@ export default function Signup() {
           )}
 
           {step === "done" && (
-          <div className="relative w-full p-7 sm:p-9 space-y-4 bg-surface rounded-2xl lg:rounded-md border border-borderc shadow-[0_20px_50px_-20px_rgba(15,61,46,0.45)]">
+          <div className="relative w-full p-7 sm:p-9 space-y-4 bg-surface rounded-[20px] border border-borderc shadow-modal">
             <div className="w-12 h-12 rounded-full bg-brand-soft grid place-items-center">
               <CheckCircle2 className="w-6 h-6 text-brand-deep" />
             </div>
@@ -639,7 +644,7 @@ export default function Signup() {
                 The 14-day free trial is live - full access, nothing locked.
               </p>
             </div>
-            <div className="rounded-sm border border-borderc bg-bg/60 px-4 py-3 text-sm text-textSecondary">
+            <div className="rounded-sm border border-borderc bg-surfaceAlt px-4 py-3 text-sm text-textSecondary">
               Want uninterrupted service after the trial? Set up your
               subscription payment with <strong className="text-navy">Razorpay</strong> now
               - UPI, card or netbanking. Completely optional; you can also do
@@ -648,7 +653,7 @@ export default function Signup() {
             {error && (
               <div
                 role="alert"
-                className="flex items-start gap-2 rounded-sm border border-danger/30 bg-danger/5 px-3 py-2 text-danger text-sm"
+                className="flex items-start gap-2 rounded-sm border border-dangerBorder bg-dangerBg px-3 py-2 text-dangerFg text-sm"
               >
                 <AlertCircle className="w-4 h-4 mt-0.5 shrink-0" />
                 <span>{error}</span>
@@ -667,7 +672,7 @@ export default function Signup() {
               type="button"
               onClick={() => finish("/")}
               disabled={busy}
-              className="w-full flex items-center justify-center gap-2 h-11 rounded-sm border border-borderc text-sm font-semibold text-textSecondary hover:text-navy hover:border-navy/40 transition-colors disabled:opacity-50"
+              className="w-full flex items-center justify-center gap-2 h-11 rounded-sm border border-borderControl bg-surface text-sm font-semibold text-textSecondary hover:text-navy hover:border-navy/40 transition-colors disabled:opacity-50"
             >
               Skip for now - go to my dashboard <ArrowRight className="w-4 h-4" />
             </button>

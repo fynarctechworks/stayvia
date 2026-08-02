@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
+  ChevronRight,
   Loader2,
   Pencil,
   Plus,
@@ -7,6 +8,7 @@ import {
   Snowflake,
   Star,
   StarFill,
+  Tag,
   Trash2,
   Tv,
   Upload,
@@ -14,7 +16,7 @@ import {
   X,
 } from "@/lib/micons";
 import { useEffect, useRef, useState } from "react";
-import { useSearchParams } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { useAuth } from "@/auth/AuthContext";
 import { useDialog } from "@/components/Dialog";
 import { Loader } from "@/components/Loader";
@@ -43,6 +45,7 @@ interface Room {
 
 export default function Rooms() {
   const { profile } = useAuth();
+  const navigate = useNavigate();
   // Room-type management moved here from Settings — admins flip between
   // the room grid and the type catalog with these tabs. ?tab=types deep-links
   // straight to the catalog (used by the dashboard's get-started card).
@@ -73,10 +76,9 @@ export default function Rooms() {
     queryFn: () => api.get<Room[]>("/rooms", {}),
   });
 
-  // Pre-filter to the user-selected floor/status/type, then group by floor for
-  // the section headers. The status filter narrows what the grid shows; the
-  // chips above the grid always reflect *unfiltered* counts so staff knows the
-  // shape of the property at a glance.
+  // Pre-filter to the user-selected floor/status/type. byFloor feeds the
+  // "N rooms across M floors" subtitle; statusCounts feeds the stat cards
+  // and filter-chip counts.
   const totalRooms = rooms.length;
   const statusCounts: Record<string, number> = {};
   for (const r of rooms) statusCounts[r.status] = (statusCounts[r.status] ?? 0) + 1;
@@ -95,62 +97,90 @@ export default function Rooms() {
     if (!byFloor.has(r.floor)) byFloor.set(r.floor, []);
     byFloor.get(r.floor)!.push(r);
   }
-  const floors = Array.from(byFloor.entries()).sort((a, b) => a[0] - b[0]);
-  for (const [, list] of floors) {
-    list.sort((a, b) =>
+  // Flat sorted list for the table — floor first, then natural room order.
+  const sortedRooms = [...rooms].sort(
+    (a, b) =>
+      a.floor - b.floor ||
       a.roomNumber.localeCompare(b.roomNumber, undefined, { numeric: true }),
-    );
-  }
+  );
 
   return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between flex-wrap gap-3">
+    <div className="space-y-[22px]">
+      <div className="flex items-end justify-between flex-wrap gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-navy">Rooms</h1>
-          <div className="text-xs text-textSecondary mt-0.5">
+          <h1 className="text-[clamp(22px,3vw,28px)] font-semibold tracking-[-0.5px] text-ink">
+            Rooms
+          </h1>
+          <div className="text-sm text-textSecondary mt-1.5">
             {totalRooms} room{totalRooms === 1 ? "" : "s"} across{" "}
             {byFloor.size === 0
               ? "-"
               : `${byFloor.size} floor${byFloor.size === 1 ? "" : "s"}`}
+            .
           </div>
         </div>
-        {profile?.role === "admin" && view === "rooms" && (
-          <button
-            onClick={() => setShowAdd(true)}
-            className="btn-primary inline-flex items-center gap-2"
-          >
-            <Plus className="w-4 h-4" /> Add Room
-          </button>
-        )}
-      </div>
-
-      {profile?.role === "admin" && (
-        <div className="flex gap-1 border-b border-borderc">
-          {(
-            [
-              { id: "rooms", label: "Rooms" },
-              { id: "types", label: "Room Types" },
-            ] as const
-          ).map((t) => (
+        <div className="flex gap-2.5 flex-wrap">
+          {profile?.role === "admin" && (
             <button
-              key={t.id}
-              onClick={() => setView(t.id)}
-              className={`px-4 py-2 text-sm font-medium border-b-2 transition ${
-                view === t.id
-                  ? "border-gold text-navy"
-                  : "border-transparent text-textSecondary hover:text-navy"
+              onClick={() => setView(view === "types" ? "rooms" : "types")}
+              aria-pressed={view === "types"}
+              className={`btn-secondary inline-flex items-center gap-2 ${
+                view === "types" ? "!border-brand !text-brand-deep !bg-brand-soft" : ""
               }`}
             >
-              {t.label}
+              <Tag className="w-[18px] h-[18px]" /> Room Types
             </button>
-          ))}
+          )}
+          {profile?.role === "admin" && view === "rooms" && (
+            <button
+              onClick={() => setShowAdd(true)}
+              className="btn-primary inline-flex items-center gap-2"
+            >
+              <Plus className="w-4 h-4" /> Add Room
+            </button>
+          )}
         </div>
-      )}
+      </div>
 
       {view === "types" && profile?.role === "admin" ? (
         <RoomTypesManager />
       ) : (
       <>
+      {/* 4 stat cards — the at-a-glance shape of the property. */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3.5">
+        {(
+          [
+            { label: "Total rooms", value: totalRooms, tone: "text-ink" },
+            {
+              label: "Occupied",
+              value: statusCounts["occupied"] ?? 0,
+              tone: "text-inkDark",
+            },
+            {
+              label: "Available",
+              value: statusCounts["available"] ?? 0,
+              tone: "text-brand-deep",
+            },
+            {
+              label: "Out of service",
+              value: statusCounts["maintenance"] ?? 0,
+              tone: "text-danger",
+            },
+          ] as const
+        ).map((s) => (
+          <div
+            key={s.label}
+            className="bg-surface border border-borderc rounded-[14px] px-[18px] py-4 shadow-card"
+          >
+            <div className="text-[12.5px] text-textSecondary font-semibold">
+              {s.label}
+            </div>
+            <div className={`text-[26px] font-semibold mt-1.5 tabular-nums ${s.tone}`}>
+              {s.value}
+            </div>
+          </div>
+        ))}
+      </div>
       {/* Status chips — click to filter */}
       <div className="card !p-3">
         <div className="flex flex-wrap items-center gap-2">
@@ -161,10 +191,10 @@ export default function Rooms() {
               <button
                 key={c.key || "all"}
                 onClick={() => setStatus(c.key)}
-                className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold border transition ${
+                className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold border transition ${
                   isActive
-                    ? "bg-brand text-textPrimary border-brand"
-                    : "bg-surface text-textSecondary border-borderc hover:border-brand/40 hover:text-brand-dark"
+                    ? "bg-brand text-white border-brand shadow-primary"
+                    : "bg-surface text-textSecondary border-borderControl hover:bg-surfaceAlt hover:text-ink"
                 }`}
                 aria-pressed={isActive}
               >
@@ -175,7 +205,7 @@ export default function Rooms() {
                 <span>{c.label}</span>
                 <span
                   className={`inline-grid place-items-center min-w-[18px] h-[18px] px-1 rounded-full text-[10px] font-bold tabular-nums leading-none ${
-                    isActive ? "bg-brand-dark text-white" : "bg-bg text-textSecondary"
+                    isActive ? "bg-white/20 text-white" : "bg-surfaceSubtle text-textSecondary"
                   }`}
                 >
                   {count}
@@ -231,38 +261,115 @@ export default function Rooms() {
         </div>
       </div>
 
-      {/* Cards grouped by floor */}
+      {/* Rooms table — row click opens the room's detail page. */}
       {isLoading ? (
         <Loader />
       ) : rooms.length === 0 ? (
         <div className="card p-6 text-textSecondary">No rooms match these filters.</div>
       ) : (
-        <div className="space-y-5">
-          {floors.map(([floorNumber, list]) => (
-            <section key={floorNumber}>
-              <div className="flex items-baseline gap-2 mb-2">
-                <h2 className="text-sm font-bold tracking-[0.15em] uppercase text-brand-dark">
-                  Floor {floorNumber}
-                </h2>
-                <span className="text-[11px] text-textSecondary">
-                  · {list.length} room{list.length === 1 ? "" : "s"}
-                </span>
-              </div>
-              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3">
-                {list.map((r) => (
-                  <RoomCard
-                    key={r.id}
-                    room={r}
-                    typeLabel={labelForRoomType(roomTypes, r.roomType)}
-                    onEdit={
-                      profile?.role === "admin" ? () => setEditing(r) : undefined
-                    }
-                    onQr={() => setQrRoom(r)}
-                  />
-                ))}
-              </div>
-            </section>
-          ))}
+        <div className="card !p-0 overflow-hidden">
+          <table className="table-base min-w-[640px]">
+            <thead>
+              <tr>
+                <th>Room</th>
+                <th>Type</th>
+                <th>Floor</th>
+                <th className="!text-right">Rate / night</th>
+                <th>Status</th>
+                <th className="!text-right" aria-label="Actions" />
+              </tr>
+            </thead>
+            <tbody>
+              {sortedRooms.map((r) => (
+                <tr
+                  key={r.id}
+                  className="cursor-pointer transition-colors"
+                  onClick={() => navigate(`/rooms/${r.roomNumber}`)}
+                >
+                  <td className="font-mono text-base font-semibold text-ink">
+                    {r.roomNumber}
+                  </td>
+                  <td>
+                    <div
+                      className="text-[13.5px] text-inkBody capitalize"
+                      title={labelForRoomType(roomTypes, r.roomType)}
+                    >
+                      {labelForRoomType(roomTypes, r.roomType)}
+                    </div>
+                    <div className="flex items-center gap-2 text-inkMuted mt-0.5">
+                      {r.hasAc && (
+                        <span
+                          className="inline-flex items-center gap-1 text-[10px]"
+                          title="Air conditioning"
+                        >
+                          <Snowflake className="w-3 h-3" /> AC
+                        </span>
+                      )}
+                      {r.hasTv && (
+                        <span
+                          className="inline-flex items-center gap-1 text-[10px]"
+                          title="Television"
+                        >
+                          <Tv className="w-3 h-3" /> TV
+                        </span>
+                      )}
+                      {r.hasWifi && (
+                        <span
+                          className="inline-flex items-center gap-1 text-[10px]"
+                          title="Wi-Fi"
+                        >
+                          <Wifi className="w-3 h-3" /> Wi-Fi
+                        </span>
+                      )}
+                    </div>
+                  </td>
+                  <td className="text-[13px] text-textSecondary">
+                    Floor {r.floor}
+                  </td>
+                  <td className="!text-right font-mono text-[13.5px] font-semibold text-ink">
+                    {inr(r.baseRate)}
+                  </td>
+                  <td>
+                    <span className="inline-flex items-center gap-1.5 text-[13px] font-semibold text-inkBody">
+                      <span
+                        className={`w-2 h-2 rounded-full ${chipDot(r.status)}`}
+                        aria-hidden="true"
+                      />
+                      <span className="capitalize">
+                        {r.status === "dirty"
+                          ? "Needs Cleaning"
+                          : String(r.status).replace("_", " ")}
+                      </span>
+                    </span>
+                  </td>
+                  <td className="!text-right whitespace-nowrap">
+                    <span
+                      className="inline-flex items-center gap-1.5"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <button
+                        onClick={() => setQrRoom(r)}
+                        className="inline-flex items-center gap-1.5 h-8 px-2.5 rounded-[9px] border border-borderControl bg-surface text-[12px] font-semibold text-inkBody hover:bg-surfaceAlt transition-colors"
+                        aria-label={`Room ${r.roomNumber} QR sticker`}
+                      >
+                        <QrCode className="w-4 h-4" /> QR
+                      </button>
+                      {profile?.role === "admin" && (
+                        <button
+                          onClick={() => setEditing(r)}
+                          className="inline-flex items-center gap-1.5 h-8 px-2.5 rounded-[9px] border border-borderControl bg-surface text-[12px] font-semibold text-inkBody hover:bg-surfaceAlt transition-colors"
+                          aria-label={`Edit room ${r.roomNumber}`}
+                        >
+                          <Pencil className="w-4 h-4" /> Edit
+                        </button>
+                      )}
+                      <ChevronRight className="w-5 h-5 text-inkFaint" aria-hidden="true" />
+                    </span>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       )}
 
@@ -290,127 +397,25 @@ export default function Rooms() {
   );
 }
 
-// Maps a room status to a small dot color used inside the status chip filters.
+// Maps a room status to a small dot color used inside the status chip
+// filters and the table's status column.
 function chipDot(key: string): string {
   switch (key) {
     case "":
-      return "bg-textSecondary/50";
+      return "bg-inkFaint";
     case "available":
-      return "bg-[#ffdb13]";
+      return "bg-brand";
     case "occupied":
-      return "bg-navy";
+      return "bg-inkDark";
     case "reserved":
-      return "bg-[#644fc1]";
+      return "bg-reserved";
     case "dirty":
-      return "bg-warning";
+      return "bg-notReady";
     case "maintenance":
       return "bg-danger";
     default:
-      return "bg-textSecondary/50";
+      return "bg-inkFaint";
   }
-}
-
-// Per-room visual style — top stripe + status pill colors. Matches the
-// Dashboard's room-tile palette so the two pages feel consistent.
-function statusVisual(status: string): { stripe: string; pillBg: string; pillText: string } {
-  switch (status) {
-    case "available":
-      return { stripe: "bg-[#ffdb13]", pillBg: "bg-[#ffdb13]/15", pillText: "text-[#8a7500]" };
-    case "occupied":
-      return { stripe: "bg-navy", pillBg: "bg-navy/10", pillText: "text-navy" };
-    case "reserved":
-      return { stripe: "bg-[#644fc1]", pillBg: "bg-[#644fc1]/15", pillText: "text-[#4c3ba8]" };
-    case "dirty":
-      return { stripe: "bg-warning", pillBg: "bg-warning/15", pillText: "text-[#92400e]" };
-    case "maintenance":
-      return { stripe: "bg-danger", pillBg: "bg-danger/10", pillText: "text-[#b91c1c]" };
-    default:
-      return { stripe: "bg-borderc", pillBg: "bg-borderc/40", pillText: "text-textSecondary" };
-  }
-}
-
-function RoomCard({
-  room,
-  typeLabel,
-  onEdit,
-  onQr,
-}: {
-  room: Room;
-  typeLabel: string;
-  onEdit?: () => void;
-  onQr?: () => void;
-}) {
-  const v = statusVisual(room.status);
-  return (
-    <div className="group relative rounded-md border border-borderc bg-surface shadow-sm overflow-hidden hover:shadow-md hover:-translate-y-0.5 transition">
-      <div className={`h-1.5 ${v.stripe}`} />
-      <div className="px-3 pt-3 pb-2 flex items-start justify-between gap-2">
-        <div>
-          <div className="font-mono text-xl font-bold leading-none text-brand-dark">
-            {room.roomNumber}
-          </div>
-          <div className="text-[10px] uppercase tracking-wider text-textSecondary mt-0.5">
-            Floor {room.floor}
-          </div>
-        </div>
-        <span
-          className={`inline-flex items-center text-[9px] uppercase tracking-wider font-bold rounded-full px-2 py-0.5 ${v.pillBg} ${v.pillText}`}
-        >
-          {String(room.status).replace("_", " ")}
-        </span>
-      </div>
-      <div className="px-3 pb-3 space-y-2">
-        <div className="text-xs text-textPrimary capitalize line-clamp-1" title={typeLabel}>
-          {typeLabel}
-        </div>
-        <div className="flex items-center gap-1.5 text-textSecondary">
-          {room.hasAc && (
-            <span className="inline-flex items-center gap-1 text-[10px]" title="Air conditioning">
-              <Snowflake className="w-3 h-3" /> AC
-            </span>
-          )}
-          {room.hasTv && (
-            <span className="inline-flex items-center gap-1 text-[10px]" title="Television">
-              <Tv className="w-3 h-3" /> TV
-            </span>
-          )}
-          {room.hasWifi && (
-            <span className="inline-flex items-center gap-1 text-[10px]" title="Wi-Fi">
-              <Wifi className="w-3 h-3" /> Wi-Fi
-            </span>
-          )}
-        </div>
-        <div className="font-mono text-sm font-semibold text-brand-dark">
-          {inr(room.baseRate)}
-          <span className="text-[10px] font-normal text-textSecondary"> / night</span>
-        </div>
-      </div>
-      {/* Always-visible action bar. Hover-reveal text links were invisible on
-          touch screens and easy to miss on desktop. */}
-      {(onQr || onEdit) && (
-        <div className="grid grid-cols-2 border-t border-borderc divide-x divide-borderc">
-          {onQr && (
-            <button
-              onClick={onQr}
-              className={`inline-flex items-center justify-center gap-1.5 h-9 text-xs font-medium text-navy hover:bg-brand/5 hover:text-brand-dark transition-colors ${!onEdit ? "col-span-2" : ""}`}
-              aria-label={`Room ${room.roomNumber} QR sticker`}
-            >
-              <QrCode className="w-4 h-4" /> QR
-            </button>
-          )}
-          {onEdit && (
-            <button
-              onClick={onEdit}
-              className={`inline-flex items-center justify-center gap-1.5 h-9 text-xs font-medium text-navy hover:bg-brand/5 hover:text-brand-dark transition-colors ${!onQr ? "col-span-2" : ""}`}
-              aria-label={`Edit room ${room.roomNumber}`}
-            >
-              <Pencil className="w-4 h-4" /> Edit
-            </button>
-          )}
-        </div>
-      )}
-    </div>
-  );
 }
 
 interface RoomImg {
@@ -507,7 +512,7 @@ function RoomImagesManager({ roomId, roomNumber }: { roomId: string; roomNumber:
         <button
           type="button"
           onClick={() => fileRef.current?.click()}
-          className="w-full border border-dashed border-borderc rounded-md py-6 text-xs text-textSecondary hover:border-brand hover:text-brand-dark transition"
+          className="w-full border-[1.5px] border-dashed border-borderControl bg-surfaceAlt rounded-md py-6 text-xs text-textSecondary hover:border-brand hover:text-brand-deep transition"
         >
           No photos yet — add some so guests can see Room {roomNumber}
         </button>
@@ -517,7 +522,7 @@ function RoomImagesManager({ roomId, roomNumber }: { roomId: string; roomNumber:
             <div key={im.id} className="relative group aspect-square rounded-md overflow-hidden border border-borderc">
               <img src={im.url} alt="" className="w-full h-full object-cover" />
               {im.isPrimary && (
-                <span className="absolute top-1 left-1 bg-brand text-brand-dark text-[9px] font-bold rounded-full px-1.5 py-0.5 inline-flex items-center gap-0.5">
+                <span className="absolute top-1 left-1 bg-brand text-white text-[9px] font-bold rounded-full px-1.5 py-0.5 inline-flex items-center gap-0.5">
                   <StarFill className="w-2.5 h-2.5" /> Cover
                 </span>
               )}
@@ -529,7 +534,7 @@ function RoomImagesManager({ roomId, roomNumber }: { roomId: string; roomNumber:
                     className="w-7 h-7 rounded-full bg-white/90 grid place-items-center hover:bg-white"
                     onClick={() => setPrimary.mutate(im.id)}
                   >
-                    <Star className="w-3.5 h-3.5 text-navy" />
+                    <Star className="w-3.5 h-3.5 text-ink" />
                   </button>
                 )}
                 <button
@@ -669,10 +674,10 @@ function RoomModal({ room, onClose }: { room: Room | null; onClose: () => void }
       onClick={onClose}
     >
       <div
-        className="bg-surface rounded-md w-full max-w-lg p-6 space-y-4"
+        className="bg-surface rounded-2xl shadow-modal w-full max-w-lg p-6 space-y-4"
         onClick={(e) => e.stopPropagation()}
       >
-        <h2 className="text-lg font-semibold text-navy">
+        <h2 className="text-lg font-semibold text-ink">
           {isEdit ? `Edit Room ${room!.roomNumber}` : "Add Room"}
         </h2>
 
@@ -819,10 +824,10 @@ function AmenityToggle({
       type="button"
       onClick={onClick}
       aria-pressed={active}
-      className={`inline-flex items-center gap-2 px-3 py-2 rounded-sm border-2 text-sm font-medium transition ${
+      className={`inline-flex items-center gap-2 px-3 py-2 rounded-md border text-sm font-semibold transition ${
         active
-          ? "bg-accentBlue text-white border-accentBlue shadow-sm"
-          : "bg-bg text-textSecondary border-borderc hover:border-accentBlue/60 hover:text-navy"
+          ? "bg-brand text-white border-brand shadow-primary"
+          : "bg-surface text-textSecondary border-borderControl hover:border-brand/50 hover:text-ink"
       }`}
     >
       {icon}

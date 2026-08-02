@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { format } from "date-fns";
-import { BedDouble, Bell, CalendarPlus, CheckCircle2, ExternalLink, FileImage, Pencil, Plus, ShieldCheck, Trash2, Upload, Wallet, X } from "@/lib/micons";
+import { BedDouble, Bell, CalendarPlus, CheckCircle2, ExternalLink, FileImage, Pencil, Plus, ShieldCheck, Trash2, Upload, User, Wallet, X } from "@/lib/micons";
 import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { Can } from "@/auth/Can";
@@ -179,25 +179,29 @@ export default function GuestProfile() {
     <div className="space-y-5 max-w-4xl">
       <div className="flex items-start justify-between gap-4 flex-wrap">
         <div className="flex items-start gap-4">
-          {data.photoUrl && (
+          {data.photoUrl ? (
             <img
               src={data.photoUrl}
               alt={data.fullName}
-              className="w-20 h-24 object-cover rounded-md border border-borderc shrink-0"
+              className="w-16 h-20 object-cover rounded-md border border-borderControl shrink-0"
             />
+          ) : (
+            <div className="w-16 h-20 rounded-md border border-borderControl bg-parchment grid place-items-center text-inkFaint shrink-0">
+              <User className="w-6 h-6" />
+            </div>
           )}
           <div>
-          <h1 className="text-2xl font-bold text-brand-dark">{data.fullName}</h1>
-          <div className="text-sm text-textSecondary font-mono mt-0.5">{data.phone}</div>
+          <h1 className="text-2xl font-semibold tracking-tight text-textPrimary">{data.fullName}</h1>
+          <div className="text-sm text-inkMuted font-mono mt-0.5">{data.phone}</div>
           <div className="mt-2 flex flex-wrap items-center gap-2">
             {outstanding > 0 && (
-              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-sm bg-danger/10 text-danger text-xs font-semibold">
-                <span className="w-1.5 h-1.5 rounded-full bg-danger" />
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-[6px] bg-dangerBg text-dangerFg text-xs font-semibold">
+                <span className="w-1.5 h-1.5 rounded-full bg-dangerFg" />
                 Outstanding {inr(outstanding)}
               </span>
             )}
             {data.walletBalance > 0 && (
-              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-sm bg-success/10 text-success text-xs font-semibold">
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-[6px] bg-successBg text-success text-xs font-semibold">
                 <span className="w-1.5 h-1.5 rounded-full bg-success" />
                 Wallet credit {inr(data.walletBalance)}
               </span>
@@ -209,7 +213,7 @@ export default function GuestProfile() {
         <div className="flex gap-2 shrink-0">
           <Can do="delete_guests">
             <button
-              className="btn-secondary inline-flex items-center gap-2 text-danger hover:bg-danger/5 disabled:text-textSecondary disabled:hover:bg-transparent"
+              className="btn-danger inline-flex items-center gap-2 disabled:text-textSecondary disabled:border-borderControl disabled:hover:bg-surface"
               onClick={handleDelete}
               // Only allow deletion of guests with no stay history.
               // The server enforces the same rule, but disabling here
@@ -341,7 +345,7 @@ function EditGuestModal({ guest, onClose }: { guest: Guest; onClose: () => void 
         if (e.target === e.currentTarget) onClose();
       }}
     >
-      <div className="w-full max-w-2xl bg-surface rounded-md shadow-xl border border-borderc max-h-[90vh] overflow-hidden flex flex-col">
+      <div className="w-full max-w-2xl bg-surface rounded-2xl shadow-modal border border-borderc max-h-[90vh] overflow-hidden flex flex-col">
         <div className="flex items-center justify-between px-5 py-3 border-b border-borderc">
           <div className="font-semibold text-textPrimary">Edit Guest · {guest.fullName}</div>
           <button onClick={onClose} className="text-textSecondary hover:text-textPrimary">
@@ -517,17 +521,17 @@ function EditGuestModal({ guest, onClose }: { guest: Guest; onClose: () => void 
           {err && <div className="text-danger text-sm">{err}</div>}
         </div>
 
-        <div className="flex items-center justify-end gap-2 px-5 py-3 border-t border-borderc bg-bg/50">
+        <div className="flex items-center justify-end gap-2 px-5 py-3 border-t border-borderc bg-surfaceAlt">
           <button
             onClick={onClose}
-            className="px-4 h-9 text-sm font-semibold rounded-sm border-2 border-borderc text-textSecondary hover:border-textSecondary hover:text-textPrimary transition-colors"
+            className="btn-secondary !h-9 text-sm"
           >
             Cancel
           </button>
           <button
             onClick={() => save.mutate()}
             disabled={save.isPending || !form.fullName.trim() || !form.phone.trim()}
-            className="px-4 h-9 text-sm font-semibold rounded-sm bg-brand-dark text-cream border-2 border-brand-dark hover:opacity-90 transition-opacity disabled:opacity-40"
+            className="btn-primary !h-9 text-sm disabled:opacity-40"
           >
             {save.isPending ? "Saving…" : "Save changes"}
           </button>
@@ -638,9 +642,9 @@ function BalanceBreakdown({ guestId }: { guestId: string }) {
   ].sort((a, b) => b.amount - a.amount);
 
   return (
-    <div className="card border-danger/30">
-      <div className="flex items-center justify-between mb-3 pb-2 border-b border-borderc">
-        <div className="text-[10px] uppercase tracking-[0.18em] text-danger font-bold">
+    <div className="card border-dangerBorder">
+      <div className="flex items-center justify-between mb-3 pb-2 border-b border-divider">
+        <div className="text-[10px] uppercase tracking-[0.14em] text-dangerFg font-bold">
           Balance due · breakdown
         </div>
         <div className="text-xs text-textSecondary">
@@ -656,22 +660,22 @@ function BalanceBreakdown({ guestId }: { guestId: string }) {
           <button
             key={it.key}
             onClick={() => navigate(it.href)}
-            className="w-full flex items-center justify-between gap-3 py-2 px-2 -mx-2 rounded-sm hover:bg-bg text-left transition-colors"
+            className="w-full flex items-center justify-between gap-3 py-2 px-2 -mx-2 rounded-sm hover:bg-surfaceSubtle text-left transition-colors"
           >
             <div className="min-w-0 flex-1">
-              <div className="font-mono font-semibold text-brand-dark text-sm">{it.label}</div>
+              <div className="font-mono font-semibold text-brand-deep text-sm">{it.label}</div>
               <div className="text-xs text-textSecondary truncate">{it.sub}</div>
             </div>
-            <div className="font-mono font-bold text-danger text-sm shrink-0">
+            <div className="font-mono font-bold text-dangerFg text-sm shrink-0">
               {inr(it.amount)}
             </div>
           </button>
         ))}
       </div>
 
-      <div className="flex items-center justify-between mt-2 pt-2 border-t border-borderc text-sm">
+      <div className="flex items-center justify-between mt-2 pt-2 border-t border-divider text-sm">
         <strong>Total outstanding</strong>
-        <strong className="font-mono text-danger">{inr(data.total)}</strong>
+        <strong className="font-mono text-dangerFg">{inr(data.total)}</strong>
       </div>
 
       <div className="text-[11px] text-textSecondary mt-2 leading-tight">
@@ -696,14 +700,14 @@ function Stat({
   tone?: "danger" | "success";
 }) {
   const valueColor =
-    tone === "danger" ? "text-danger" : tone === "success" ? "text-success" : "text-brand-dark";
+    tone === "danger" ? "text-dangerFg" : tone === "success" ? "text-success" : "text-textPrimary";
   return (
     <div className="card">
       <div className="label">{label}</div>
-      <div className={`text-xl font-bold mt-1 ${valueColor} ${mono ? "font-mono" : ""}`}>
+      <div className={`text-xl font-bold mt-1.5 ${valueColor} ${mono ? "font-mono" : ""}`}>
         {value}
       </div>
-      {sub && <div className="text-xs text-textSecondary mt-0.5">{sub}</div>}
+      {sub && <div className="text-xs text-inkMuted mt-0.5">{sub}</div>}
     </div>
   );
 }
@@ -712,10 +716,10 @@ function TabBtn({ active, onClick, children }: { active: boolean; onClick: () =>
   return (
     <button
       onClick={onClick}
-      className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors ${
+      className={`px-4 py-2 text-sm font-semibold border-b-2 -mb-px transition-colors ${
         active
-          ? "border-brand-dark text-brand-dark"
-          : "border-transparent text-textSecondary hover:text-brand-dark"
+          ? "border-brand text-brand-deep"
+          : "border-transparent text-inkMuted hover:text-brand-deep"
       }`}
     >
       {children}
@@ -822,20 +826,20 @@ function KycSection({ guestId, idProofType }: { guestId: string; idProofType: st
 
   return (
     <div className="card">
-      <div className="flex items-center justify-between mb-3 pb-2 border-b border-borderc">
+      <div className="flex items-center justify-between mb-3 pb-2 border-b border-divider">
         <div className="flex items-center gap-2">
-          <div className="text-[10px] uppercase tracking-[0.18em] text-brand font-bold">
+          <div className="text-[10px] uppercase tracking-[0.14em] text-brand-deep font-bold">
             KYC Documents
           </div>
           {data?.verified && (
-            <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-success bg-success/10 px-1.5 py-0.5 rounded-sm">
+            <span className="inline-flex items-center gap-1 text-[10px] font-bold text-success bg-successBg px-2 py-0.5 rounded-[6px]">
               <ShieldCheck className="w-3 h-3" /> Verified
             </span>
           )}
         </div>
         <button
           onClick={() => setShowUpload(true)}
-          className="text-xs font-semibold inline-flex items-center gap-1 px-2.5 py-1 rounded-sm border border-borderc text-textSecondary hover:border-brand-dark hover:text-brand-dark transition-colors"
+          className="text-xs font-semibold inline-flex items-center gap-1 px-2.5 py-1 rounded-sm border border-borderControl text-textSecondary hover:bg-surfaceAlt hover:text-brand-deep transition-colors"
         >
           <Upload className="w-3 h-3" />
           {data?.frontUrl ? "Replace" : "Upload"}
@@ -888,7 +892,7 @@ function KycSection({ guestId, idProofType }: { guestId: string; idProofType: st
       )}
 
       {data?.kycVerifiedAt && (
-        <div className="text-[11px] text-textSecondary mt-3">
+        <div className="text-[11px] text-inkFaint mt-3">
           Verified on {format(new Date(data.kycVerifiedAt), "dd MMM yyyy · HH:mm")}
         </div>
       )}
@@ -933,7 +937,7 @@ function KycThumb({
     return (
       <button
         onClick={onReplace}
-        className="border-2 border-dashed border-borderc rounded-sm p-4 flex items-center gap-2 text-textSecondary text-xs hover:border-brand-dark hover:text-brand-dark transition-colors w-full text-left"
+        className="border-2 border-dashed border-borderControl rounded-md p-4 flex items-center gap-2 text-textSecondary text-xs hover:border-brand hover:text-brand-deep transition-colors w-full text-left"
       >
         <Upload className="w-4 h-4 opacity-70" />
         <span>{label} - click to upload</span>
@@ -941,20 +945,20 @@ function KycThumb({
     );
   }
   return (
-    <div className="group relative block border border-borderc rounded-sm overflow-hidden bg-bg hover:border-brand-dark transition-colors">
+    <div className="group relative block border border-borderc rounded-md overflow-hidden bg-surfaceAlt hover:border-borderControl hover:shadow-lift transition-all">
       <button
         onClick={onPreview}
         className="block w-full text-left"
         title="Click to enlarge"
       >
-        <div className="aspect-[3/2] bg-bg overflow-hidden">
+        <div className="aspect-[3/2] bg-parchment overflow-hidden">
           <img
             src={url}
             alt={label}
             className="w-full h-full object-cover group-hover:scale-[1.02] transition-transform"
           />
         </div>
-        <div className="px-2 py-1.5 text-[11px] font-semibold text-textSecondary group-hover:text-brand-dark">
+        <div className="px-2.5 py-1.5 text-[11px] font-semibold text-textSecondary group-hover:text-brand-deep">
           {label}
         </div>
       </button>
@@ -1021,9 +1025,9 @@ function ImagePreview({
         if (e.target === e.currentTarget) onClose();
       }}
     >
-      <div className="w-full max-w-4xl h-[90vh] bg-surface rounded-md shadow-2xl border border-borderc flex flex-col overflow-hidden">
-        <div className="flex items-center justify-between gap-3 px-5 py-3 border-b border-borderc bg-bg/50">
-          <div className="font-semibold text-brand-dark truncate">{label ?? "KYC document"}</div>
+      <div className="w-full max-w-4xl h-[90vh] bg-surface rounded-2xl shadow-modal border border-borderc flex flex-col overflow-hidden">
+        <div className="flex items-center justify-between gap-3 px-5 py-3 border-b border-borderc bg-surfaceAlt">
+          <div className="font-semibold text-textPrimary truncate">{label ?? "KYC document"}</div>
           <div className="flex items-center gap-1">
             <button
               onClick={() => setZoom((z) => Math.max(z - 0.25, 0.25))}
@@ -1053,7 +1057,7 @@ function ImagePreview({
               href={url}
               target="_blank"
               rel="noopener noreferrer"
-              className="text-xs font-semibold inline-flex items-center gap-1.5 px-2.5 h-8 rounded-sm border-2 border-borderc text-textSecondary hover:border-brand-dark hover:text-brand-dark transition-colors"
+              className="text-xs font-semibold inline-flex items-center gap-1.5 px-2.5 h-8 rounded-sm border border-borderControl text-textSecondary hover:bg-surfaceAlt hover:text-brand-deep transition-colors"
               title="Open in new tab"
             >
               <ExternalLink className="w-3.5 h-3.5" /> New tab
@@ -1064,7 +1068,7 @@ function ImagePreview({
                   onReplace();
                   onClose();
                 }}
-                className="text-xs font-semibold inline-flex items-center gap-1.5 px-2.5 h-8 rounded-sm bg-brand-dark text-cream border-2 border-brand-dark hover:opacity-90 transition-opacity"
+                className="text-xs font-semibold inline-flex items-center gap-1.5 px-2.5 h-8 rounded-sm bg-brand text-white hover:bg-brand-deep transition-colors"
                 title="Replace this document"
               >
                 <Upload className="w-3.5 h-3.5" /> Replace
@@ -1088,7 +1092,7 @@ function ImagePreview({
               transform: `scale(${zoom}) rotate(${rotation}deg)`,
               transition: "transform 120ms ease",
             }}
-            className="max-w-full max-h-full object-contain shadow-md rounded-sm bg-white"
+            className="max-w-full max-h-full object-contain shadow-md rounded-sm bg-surface"
             onMouseDown={(e) => e.stopPropagation()}
           />
         </div>
@@ -1139,16 +1143,16 @@ function WalletSection({ guestId }: { guestId: string }) {
 
   return (
     <div className="card">
-      <div className="flex items-center justify-between mb-3 pb-2 border-b border-borderc">
+      <div className="flex items-center justify-between mb-3 pb-2 border-b border-divider">
         <div className="flex items-center gap-2">
-          <Wallet className="w-4 h-4 text-brand" />
-          <div className="text-[10px] uppercase tracking-[0.18em] text-brand font-bold">
+          <Wallet className="w-4 h-4 text-brand-deep" />
+          <div className="text-[10px] uppercase tracking-[0.14em] text-brand-deep font-bold">
             Wallet Credit
           </div>
         </div>
         {balance > 0 && (
           <button
-            className="text-xs font-semibold inline-flex items-center gap-1 px-2.5 py-1 rounded-sm border border-borderc text-textSecondary hover:border-brand-dark hover:text-brand-dark transition-colors"
+            className="text-xs font-semibold inline-flex items-center gap-1 px-2.5 py-1 rounded-sm border border-borderControl text-textSecondary hover:bg-surfaceAlt hover:text-brand-deep transition-colors"
             onClick={() => setShowCashout(true)}
           >
             Cash out
@@ -1156,27 +1160,27 @@ function WalletSection({ guestId }: { guestId: string }) {
         )}
       </div>
 
-      <div className="text-2xl font-bold text-brand-dark">{inr(balance)}</div>
-      <div className="text-xs text-textSecondary mt-0.5">Available for future bookings - no expiry</div>
+      <div className="text-2xl font-bold text-textPrimary">{inr(balance)}</div>
+      <div className="text-xs text-inkMuted mt-0.5">Available for future bookings - no expiry</div>
 
       {data?.entries && data.entries.length > 0 && (
         <div className="mt-4">
-          <div className="text-[10px] uppercase tracking-wider text-textSecondary font-semibold mb-2">
+          <div className="text-[10px] uppercase tracking-[0.06em] text-inkMuted font-bold mb-2">
             History
           </div>
           <div className="space-y-1.5 max-h-60 overflow-y-auto">
             {data.entries.map((e) => {
               const signed = e.entryType === "credit_issued" || e.entryType === "adjustment";
               return (
-                <div key={e.id} className="flex items-center justify-between text-xs py-1.5 border-b border-borderc/40 last:border-0">
+                <div key={e.id} className="flex items-center justify-between text-xs py-1.5 border-b border-divider last:border-0">
                   <div className="min-w-0">
-                    <div className="font-medium capitalize text-textPrimary">
+                    <div className="font-semibold capitalize text-textPrimary">
                       {e.entryType.replace("_", " ")}
                     </div>
-                    {e.note && <div className="text-textSecondary truncate">{e.note}</div>}
-                    <div className="text-textSecondary">{format(new Date(e.createdAt), "dd MMM yyyy · HH:mm")}</div>
+                    {e.note && <div className="text-inkMuted truncate">{e.note}</div>}
+                    <div className="text-inkFaint">{format(new Date(e.createdAt), "dd MMM yyyy · HH:mm")}</div>
                   </div>
-                  <div className={`font-mono font-semibold shrink-0 ml-3 ${signed ? "text-success" : "text-danger"}`}>
+                  <div className={`font-mono font-bold shrink-0 ml-3 ${signed ? "text-success" : "text-dangerFg"}`}>
                     {signed ? "+" : "−"}{inr(Number(e.amount))}
                   </div>
                 </div>
@@ -1187,9 +1191,9 @@ function WalletSection({ guestId }: { guestId: string }) {
       )}
 
       {showCashout && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={() => setShowCashout(false)}>
-          <div className="bg-surface rounded-md w-full max-w-md p-6 space-y-1" onClick={(e) => e.stopPropagation()}>
-            <h3 className="text-lg font-semibold text-navy mb-4">Cash out wallet credit</h3>
+        <div className="fixed inset-0 bg-inkDark/50 flex items-center justify-center z-50" onClick={() => setShowCashout(false)}>
+          <div className="bg-surface rounded-2xl shadow-modal w-full max-w-md p-6 space-y-1" onClick={(e) => e.stopPropagation()}>
+            <h3 className="text-lg font-semibold text-textPrimary mb-4">Cash out wallet credit</h3>
             <div className="text-sm text-textSecondary mb-3">Available: <strong>{inr(balance)}</strong></div>
             <div className="space-y-3">
               <div>
@@ -1230,7 +1234,7 @@ function WalletSection({ guestId }: { guestId: string }) {
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <div className="card">
-      <div className="text-[10px] uppercase tracking-[0.18em] text-brand font-bold mb-3 pb-2 border-b border-borderc">
+      <div className="text-[10px] uppercase tracking-[0.14em] text-brand-deep font-bold mb-3 pb-2 border-b border-divider">
         {title}
       </div>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-4 text-sm">{children}</div>
@@ -1269,10 +1273,10 @@ function TagsEditor({ tags }: { guestId: string; tags: string[] }) {
         return (
           <span
             key={t}
-            className={`text-xs font-semibold px-2 py-1 rounded-sm capitalize ${
+            className={`text-xs font-semibold px-2.5 py-1 rounded-[6px] capitalize ${
               isSystem
-                ? "bg-brand-soft text-brand-dark"
-                : "bg-cream text-textSecondary border border-borderc"
+                ? "bg-brand-soft text-brand-deep"
+                : "bg-neutralBg text-inkMuted border border-neutralBorder"
             }`}
             title={isSystem ? "Set automatically by stay history" : "Custom tag"}
           >
@@ -1322,39 +1326,39 @@ function StaysTab({ guestId }: { guestId: string }) {
 function StayCard({ r, onOpen }: { r: GuestReservation; onOpen: () => void }) {
   const statusTone =
     r.status === "checked_in"
-      ? "bg-success/10 text-success"
+      ? "bg-successBg text-success"
       : r.status === "checked_out"
-        ? "bg-textSecondary/15 text-textSecondary"
+        ? "bg-neutralBg text-inkMuted"
         : r.status === "cancelled" || r.status === "no_show"
-          ? "bg-danger/10 text-danger"
-          : "bg-brand/10 text-brand-dark";
+          ? "bg-dangerBg text-dangerFg"
+          : "bg-brand-soft text-brand-deep";
   const balance = Number(r.balanceDue);
 
   return (
     <button
       onClick={onOpen}
-      className="card w-full text-left hover:border-brand-dark transition-colors"
+      className="card w-full text-left hover:border-borderControl hover:shadow-lift transition-all"
     >
-      <div className="flex items-center justify-between gap-3 mb-3 pb-2 border-b border-borderc">
+      <div className="flex items-center justify-between gap-3 mb-3 pb-2 border-b border-divider">
         <div className="flex items-center gap-2 min-w-0">
-          <span className="font-mono font-bold text-brand-dark">{r.reservationNumber}</span>
+          <span className="font-mono font-bold text-textPrimary">{r.reservationNumber}</span>
           <span
-            className={`text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded-sm ${statusTone}`}
+            className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-[6px] ${statusTone}`}
           >
             {r.status.replace("_", " ")}
           </span>
           {r.bookingSource === "complimentary" && (
-            <span className="text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded-sm bg-brass/10 text-[#157f5f]">
+            <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-[6px] bg-warnBg text-warnFg">
               Complimentary
             </span>
           )}
           {r.role === "occupant" && (
-            <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-sm bg-bg text-textSecondary">
+            <span className="text-[10px] font-semibold px-2 py-0.5 rounded-[6px] bg-neutralBg text-inkMuted">
               Stayed in room
             </span>
           )}
         </div>
-        <ExternalLink className="w-4 h-4 text-textSecondary shrink-0" />
+        <ExternalLink className="w-4 h-4 text-inkFaint shrink-0" />
       </div>
 
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-sm">
@@ -1381,7 +1385,7 @@ function StayCard({ r, onOpen }: { r: GuestReservation; onOpen: () => void }) {
           <div className="font-mono font-medium text-textPrimary mt-0.5">
             {inr(Number(r.grandTotal))}{" "}
             {balance > 0.009 ? (
-              <span className="text-danger">· {inr(balance)} due</span>
+              <span className="text-dangerFg">· {inr(balance)} due</span>
             ) : (
               <span className="text-success">· paid</span>
             )}
@@ -1389,23 +1393,23 @@ function StayCard({ r, onOpen }: { r: GuestReservation; onOpen: () => void }) {
         </div>
       </div>
 
-      <div className="mt-3 pt-3 border-t border-borderc">
+      <div className="mt-3 pt-3 border-t border-divider">
         <div className="label mb-1.5">Rooms</div>
         <div className="flex flex-wrap gap-2">
           {r.rooms.map((rm) => (
             <span
               key={rm.id}
-              className={`inline-flex items-center gap-1.5 px-2 py-1 rounded-sm text-xs border ${
+              className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs border ${
                 rm.isThisGuest
-                  ? "border-brand-dark bg-brand-soft text-brand-dark font-semibold"
-                  : "border-borderc bg-bg text-textSecondary"
+                  ? "border-brand-soft bg-brand-soft text-brand-deep font-semibold"
+                  : "border-borderc bg-surfaceSubtle text-textSecondary"
               }`}
               title={rm.isThisGuest ? "This guest stayed here" : "Another occupant"}
             >
               <BedDouble className="w-3 h-3" />
               <span className="font-mono">{rm.roomNumber}</span>
               <span className="capitalize">· {(rm.soldAsType ?? rm.roomType).replace(/_/g, " ")}</span>
-              <span className="font-mono text-textSecondary">· ₹{Number(rm.ratePerNight).toFixed(0)}/n</span>
+              <span className="font-mono">· ₹{Number(rm.ratePerNight).toFixed(0)}/n</span>
             </span>
           ))}
         </div>
@@ -1460,8 +1464,8 @@ function NotesTab({ guestId }: { guestId: string }) {
         <div className="space-y-2">
           {notes.map((n) => (
             <div key={n.id} className="card">
-              <div className="text-sm whitespace-pre-wrap">{n.body}</div>
-              <div className="text-xs text-textSecondary mt-2">
+              <div className="text-sm leading-relaxed whitespace-pre-wrap">{n.body}</div>
+              <div className="text-xs text-inkMuted mt-2">
                 {format(new Date(n.createdAt), "dd MMM yyyy HH:mm")}
               </div>
             </div>
@@ -1534,8 +1538,8 @@ function FollowUpsTab({ guestId }: { guestId: string }) {
       ) : (
         <>
           {pending.length > 0 && (
-            <div className="card p-0">
-              <div className="px-4 py-2 border-b flex items-center gap-2 text-sm font-semibold text-brand-dark">
+            <div className="card !p-0 overflow-hidden">
+              <div className="px-4 py-2.5 border-b border-divider flex items-center gap-2 text-sm font-semibold text-brand-deep">
                 <Bell className="w-4 h-4" /> Pending ({pending.length})
               </div>
               <ul>
@@ -1551,8 +1555,8 @@ function FollowUpsTab({ guestId }: { guestId: string }) {
             </div>
           )}
           {done.length > 0 && (
-            <div className="card p-0">
-              <div className="px-4 py-2 border-b text-sm font-semibold text-textSecondary">
+            <div className="card !p-0 overflow-hidden">
+              <div className="px-4 py-2.5 border-b border-divider text-sm font-semibold text-inkMuted">
                 History
               </div>
               <ul>
@@ -1583,12 +1587,12 @@ function FollowUpRow({
   const overdue =
     item.status === "pending" && new Date(item.dueDate) < new Date(new Date().toDateString());
   return (
-    <li className="px-4 py-3 border-b last:border-b-0 flex items-center justify-between gap-3">
+    <li className="px-4 py-3 border-b border-divider last:border-b-0 flex items-center justify-between gap-3">
       <div className="flex-1 min-w-0">
         <div className={`text-sm ${item.status === "cancelled" ? "line-through text-textSecondary" : ""}`}>
           {item.task}
         </div>
-        <div className={`text-xs ${overdue ? "text-danger font-semibold" : "text-textSecondary"}`}>
+        <div className={`text-xs mt-0.5 ${overdue ? "text-dangerFg font-semibold" : "text-inkMuted"}`}>
           Due {format(new Date(item.dueDate), "dd MMM yyyy")}
           {overdue && " · Overdue"}
           {item.status === "done" &&
@@ -1608,7 +1612,7 @@ function FollowUpRow({
           </button>
           <button
             onClick={onCancel}
-            className="btn-secondary !h-8 !px-2 text-xs text-danger"
+            className="btn-danger !h-8 !px-2 text-xs"
             title="Cancel"
           >
             <Trash2 className="w-3.5 h-3.5" />
@@ -1629,7 +1633,7 @@ function Row({ label, value }: { label: string; value: React.ReactNode }) {
     <div>
       <div className="label">{label}</div>
       <div
-        className={`mt-0.5 ${isEmpty ? "text-textSecondary/60 italic" : "text-textPrimary"}`}
+        className={`mt-0.5 ${isEmpty ? "text-inkFaint italic" : "text-textPrimary"}`}
       >
         {isEmpty ? "Not provided" : value}
       </div>

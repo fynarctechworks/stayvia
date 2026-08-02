@@ -205,8 +205,8 @@ export default function Collections() {
       <StickyBar>
       <div className="flex items-center justify-between gap-3 flex-wrap">
         <div>
-          <h1 className="text-2xl font-bold text-brand-dark">Collections</h1>
-          <p className="text-sm text-textSecondary mt-0.5">
+          <h1 className="text-2xl font-semibold tracking-tight text-ink">Collections</h1>
+          <p className="text-sm text-textSecondary mt-1 max-w-xl">
             Money due from guests - issued invoices, advance pending on open
             stays, and "collect later" promises.
           </p>
@@ -221,43 +221,43 @@ export default function Collections() {
       </StickyBar>
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        <div className="card">
+        <div className="card !rounded-[14px]">
           <div className="label">Total to collect</div>
           <Money
             value={totalAcrossStreams}
-            className="block text-2xl font-bold text-danger font-mono mt-1"
+            className="block text-2xl font-bold text-dangerFg font-mono mt-1.5"
           />
-          <div className="text-xs text-textSecondary mt-0.5">
+          <div className="text-[11px] text-inkMuted mt-1">
             {totalGuestsOwing} guest{totalGuestsOwing === 1 ? "" : "s"} owing
           </div>
         </div>
-        <div className="card">
+        <div className="card !rounded-[14px]">
           <div className="label">Within 7 days</div>
           <Money
             value={ageCounts.fresh}
-            className="block text-2xl font-bold text-success font-mono mt-1"
+            className="block text-2xl font-bold text-success font-mono mt-1.5"
           />
-          <div className="text-xs text-textSecondary mt-0.5">
+          <div className="text-[11px] text-inkMuted mt-1">
             {ageCounts.fresh_count} guest(s)
           </div>
         </div>
-        <div className="card">
+        <div className="card !rounded-[14px]">
           <div className="label">8–30 days</div>
           <Money
             value={ageCounts.warm}
-            className="block text-2xl font-bold text-warning font-mono mt-1"
+            className="block text-2xl font-bold text-warnFg font-mono mt-1.5"
           />
-          <div className="text-xs text-textSecondary mt-0.5">
+          <div className="text-[11px] text-inkMuted mt-1">
             {ageCounts.warm_count} guest(s)
           </div>
         </div>
-        <div className="card">
+        <div className="card !rounded-[14px]">
           <div className="label">Over 30 days</div>
           <Money
             value={ageCounts.old}
-            className="block text-2xl font-bold text-danger font-mono mt-1"
+            className="block text-2xl font-bold text-dangerFg font-mono mt-1.5"
           />
-          <div className="text-xs text-textSecondary mt-0.5">
+          <div className="text-[11px] text-inkMuted mt-1">
             {ageCounts.old_count} guest(s)
           </div>
         </div>
@@ -306,34 +306,34 @@ export default function Collections() {
                           key={g.guestId}
                           role="button"
                           tabIndex={0}
-                          className="cursor-pointer hover:bg-brand-soft/30"
+                          className="cursor-pointer"
                           onClick={() => navigate(`/guests/${g.guestPhone}`)}
                         >
                           <td>
-                            <div className="text-brand-dark font-semibold">
+                            <div className="text-ink font-semibold">
                               {g.guestName}
                             </div>
                           </td>
                           <td>
-                            <div className="font-mono text-xs text-textSecondary">
+                            <div className="font-mono text-xs text-inkMuted">
                               {g.guestPhone}
                             </div>
                           </td>
                           <td className="text-xs">
                             {format(new Date(g.oldest), "dd MMM yyyy")}
                             <span
-                              className={`ml-1.5 px-1.5 py-0.5 rounded-sm text-[10px] font-bold uppercase tracking-wider border ${
+                              className={`ml-1.5 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider border ${
                                 bucket === "fresh"
-                                  ? "bg-success/15 text-success border-success/30"
+                                  ? "bg-successBg text-success border-successBorder"
                                   : bucket === "warm"
-                                    ? "bg-warning/15 text-warning border-warning/30"
-                                    : "bg-danger/15 text-danger border-danger/30"
+                                    ? "bg-warnBg text-warnFg border-warnBorder"
+                                    : "bg-dangerBg text-dangerFg border-dangerBorder"
                               }`}
                             >
                               {ageDays}d
                             </span>
                           </td>
-                          <td className="text-right font-mono text-danger font-bold">
+                          <td className="text-right font-mono text-dangerFg font-bold">
                             {inr(g.balance)}
                           </td>
                         </tr>
@@ -374,28 +374,28 @@ export default function Collections() {
                         key={r.reservationId}
                         role="button"
                         tabIndex={0}
-                        className="cursor-pointer hover:bg-brand-soft/30"
+                        className="cursor-pointer"
                         onClick={() =>
                           navigate(`/reservations/${r.reservationNumber}`)
                         }
                       >
                         <td>
-                          <span className="font-mono text-brand hover:underline">
+                          <span className="font-mono text-xs font-semibold text-brand-deep hover:underline">
                             {r.reservationNumber}
                           </span>
                         </td>
                         <td>
-                          <div className="text-brand-dark font-medium">
+                          <div className="text-ink font-medium">
                             {r.guestName}
                           </div>
-                          <div className="text-xs text-textSecondary font-mono">
+                          <div className="text-xs text-inkMuted font-mono">
                             {r.guestPhone}
                           </div>
                         </td>
                         <td className="text-xs">
                           {format(new Date(r.checkInDate), "dd MMM")} →{" "}
                           {format(new Date(r.checkOutDate), "dd MMM yyyy")}
-                          <div className="text-[10px] text-textSecondary">
+                          <div className="text-[10px] text-inkFaint">
                             booked {daysSince(r.createdAt)}d ago
                           </div>
                         </td>
@@ -408,7 +408,7 @@ export default function Collections() {
                         <td className="text-right font-mono text-success">
                           {inr(r.advancePaid)}
                         </td>
-                        <td className="text-right font-mono text-danger font-semibold">
+                        <td className="text-right font-mono text-dangerFg font-bold">
                           {inr(r.balanceDue)}
                         </td>
                       </tr>
@@ -448,13 +448,13 @@ export default function Collections() {
                         key={r.invoiceId}
                         role="button"
                         tabIndex={0}
-                        className="cursor-pointer hover:bg-brand-soft/30"
+                        className="cursor-pointer"
                         onClick={() =>
                           navigate(`/reservations/${r.reservationNumber}`)
                         }
                       >
                         <td>
-                          <span className="font-mono text-brand">
+                          <span className="font-mono text-xs font-semibold text-brand-deep">
                             {r.invoiceNumber}
                           </span>
                         </td>
@@ -464,16 +464,16 @@ export default function Collections() {
                           </span>
                         </td>
                         <td>
-                          <div className="text-brand-dark font-medium">
+                          <div className="text-ink font-medium">
                             {r.guestName}
                           </div>
-                          <div className="text-xs text-textSecondary font-mono">
+                          <div className="text-xs text-inkMuted font-mono">
                             {r.guestPhone}
                           </div>
                         </td>
                         <td className="text-xs">
                           {format(new Date(r.issuedAt), "dd MMM yyyy")}
-                          <div className="text-[10px] text-textSecondary">
+                          <div className="text-[10px] text-inkFaint">
                             {daysSince(r.issuedAt)}d ago
                           </div>
                         </td>
@@ -483,7 +483,7 @@ export default function Collections() {
                         <td className="text-right font-mono text-success">
                           {inr(r.totalPaid)}
                         </td>
-                        <td className="text-right font-mono text-danger font-semibold">
+                        <td className="text-right font-mono text-dangerFg font-bold">
                           {inr(r.balanceDue)}
                         </td>
                       </tr>
@@ -522,7 +522,7 @@ export default function Collections() {
                       <tr key={p.paymentId}>
                         <td>
                           <button
-                            className="font-mono text-brand hover:underline"
+                            className="font-mono text-xs font-semibold text-brand-deep hover:underline"
                             onClick={() =>
                               navigate(`/reservations/${p.reservationNumber}`)
                             }
@@ -531,26 +531,26 @@ export default function Collections() {
                           </button>
                         </td>
                         <td>
-                          <div>{p.guestName}</div>
-                          <div className="text-xs text-textSecondary font-mono">
+                          <div className="text-ink font-semibold">{p.guestName}</div>
+                          <div className="text-xs text-inkMuted font-mono">
                             {p.guestPhone}
                           </div>
                         </td>
-                        <td className="text-xs text-textSecondary">
+                        <td className="text-xs text-inkMuted">
                           {p.notes ?? ""}
                         </td>
                         <td>
                           {format(new Date(p.promisedAt), "dd MMM yyyy")}{" "}
-                          <span className="text-xs text-textSecondary">
+                          <span className="text-xs text-inkFaint">
                             · {daysSince(p.promisedAt)}d ago
                           </span>
                         </td>
-                        <td className="text-right font-mono text-danger font-semibold">
+                        <td className="text-right font-mono text-dangerFg font-bold">
                           <Money value={p.amount} />
                         </td>
                         <td className="text-right">
                           <button
-                            className="!h-7 !px-2 text-xs font-semibold rounded-sm bg-success text-white border-2 border-success hover:opacity-90 inline-flex items-center gap-1"
+                            className="!h-7 !px-2.5 text-xs font-semibold rounded-sm bg-success text-white border border-success hover:opacity-90 disabled:opacity-50 inline-flex items-center gap-1"
                             onClick={async () => {
                               const chosen = await dialog.prompt({
                                 title: "Mark payment received",
@@ -608,15 +608,15 @@ function SectionHeader({
   return (
     <div className="flex items-baseline justify-between gap-3 mb-2 flex-wrap">
       <div>
-        <div className="text-xs uppercase tracking-wider text-textSecondary font-semibold inline-flex items-center gap-1.5">
+        <div className="text-[11px] font-bold uppercase tracking-[0.07em] text-inkMuted inline-flex items-center gap-1.5">
           {icon}
           {title}
         </div>
         {sub && (
-          <div className="text-[11px] text-textSecondary mt-0.5">{sub}</div>
+          <div className="text-[11px] text-inkFaint mt-0.5">{sub}</div>
         )}
       </div>
-      <div className="text-[11px] text-textSecondary">
+      <div className="text-[11px] text-inkFaint">
         {count} row{count === 1 ? "" : "s"}
       </div>
     </div>

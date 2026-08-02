@@ -29,17 +29,13 @@ import { citiesForState } from "@/lib/indianCities";
 import { INDIAN_STATES, INDIAN_UNION_TERRITORIES } from "@/lib/indianStates";
 import { GUEST_TAGS, ID_PROOF_TYPES, type IdProofType } from "@stayvia/shared";
 
-// Tag style registry. Each tag gets its own icon + color so the row of
-// filters reads at a glance instead of looking like a row of identical pills.
-// Filter chips (large) and table cell tags (compact) both consume this map.
+// Tag style registry. Each tag gets its own icon + tint triad so the card
+// pills read at a glance instead of looking like a row of identical chips.
+// Filter chips (icon + label) and card tag pills (tint) both consume this map.
 interface TagStyle {
   label: string;
   icon: LucideIcon;
-  // Solid color used when the chip is active (filter selection) or as the
-  // dot/icon background in compact mode.
-  solidBg: string;
-  solidText: string;
-  // Tinted color used when the chip is idle.
+  // Tinted triad used on card tag pills.
   tintBg: string;
   tintText: string;
   tintBorder: string;
@@ -49,76 +45,60 @@ const TAG_STYLES: Record<string, TagStyle> = {
   first_time: {
     label: "First-time",
     icon: Star,
-    solidBg: "bg-brand",
-    solidText: "text-textPrimary",
-    tintBg: "bg-brand/15",
-    tintText: "text-[#157f5f]",
-    tintBorder: "border-brand/35",
+    tintBg: "bg-brand-soft",
+    tintText: "text-brand-deep",
+    tintBorder: "border-brand-tint",
   },
   vip: {
     label: "VIP",
     icon: Star,
-    solidBg: "bg-[#ffdb13]",
-    solidText: "text-textPrimary",
-    tintBg: "bg-[#ffdb13]/15",
-    tintText: "text-[#8a7500]",
-    tintBorder: "border-[#ffdb13]/40",
+    tintBg: "bg-warnBg",
+    tintText: "text-warnFg",
+    tintBorder: "border-warnBorder",
   },
   corporate: {
     label: "Corporate",
     icon: Building2,
-    solidBg: "bg-info",
-    solidText: "text-white",
-    tintBg: "bg-info/10",
-    tintText: "text-[#1d4ed8]",
-    tintBorder: "border-info/30",
+    tintBg: "bg-infoBg",
+    tintText: "text-info",
+    tintBorder: "border-infoBorder",
   },
   repeat: {
     label: "Repeat",
     icon: RefreshCw,
-    solidBg: "bg-navy",
-    solidText: "text-white",
-    tintBg: "bg-navy/10",
-    tintText: "text-brand-dark",
-    tintBorder: "border-navy/25",
+    tintBg: "bg-brand-soft",
+    tintText: "text-brand-deep",
+    tintBorder: "border-brand-tint",
   },
   blacklist: {
     label: "Blacklist",
     icon: Ban,
-    solidBg: "bg-danger",
-    solidText: "text-white",
-    tintBg: "bg-danger/10",
-    tintText: "text-danger",
-    tintBorder: "border-danger/30",
+    tintBg: "bg-dangerBg",
+    tintText: "text-dangerFg",
+    tintBorder: "border-dangerBorder",
   },
   long_stay: {
     label: "Long Stay",
     icon: CalendarDays,
-    solidBg: "bg-navy",
-    solidText: "text-cream",
-    tintBg: "bg-navy/8",
-    tintText: "text-navy",
-    tintBorder: "border-navy/25",
+    tintBg: "bg-infoBg",
+    tintText: "text-reserved",
+    tintBorder: "border-infoBorder",
   },
   high_value: {
     label: "High Value",
     icon: BadgeIndianRupee,
-    solidBg: "bg-success",
-    solidText: "text-white",
-    tintBg: "bg-success/12",
+    tintBg: "bg-successBg",
     tintText: "text-success",
-    tintBorder: "border-success/30",
+    tintBorder: "border-successBorder",
   },
 };
 
 const FALLBACK_TAG_STYLE: TagStyle = {
   label: "Tag",
   icon: Tag,
-  solidBg: "bg-textSecondary",
-  solidText: "text-white",
-  tintBg: "bg-borderc/40",
-  tintText: "text-textSecondary",
-  tintBorder: "border-borderc",
+  tintBg: "bg-neutralBg",
+  tintText: "text-inkMuted",
+  tintBorder: "border-neutralBorder",
 };
 
 function tagStyle(key: string): TagStyle {
@@ -165,8 +145,13 @@ export default function Guests() {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold text-navy">Guests</h1>
+      <div className="flex items-center justify-between gap-4 flex-wrap">
+        <div>
+          <h1 className="text-2xl font-semibold tracking-tight text-textPrimary">Guests</h1>
+          <p className="text-sm text-textSecondary mt-1">
+            Everyone who's ever stayed. Search, filter and open a profile.
+          </p>
+        </div>
         <button onClick={() => setShowAdd(true)} className="btn-primary inline-flex items-center gap-2">
           <Plus className="w-4 h-4" /> Add Guest
         </button>
@@ -174,8 +159,8 @@ export default function Guests() {
 
       <StickyBar>
       <div className="card space-y-3">
-        <div className="flex items-center gap-3">
-          <Search className="w-4 h-4 text-textSecondary" />
+        <div className="flex items-center gap-3 border-b border-divider pb-3">
+          <Search className="w-4 h-4 text-inkFaint" />
           <input
             className="input flex-1 border-0 focus:ring-0"
             placeholder="Search by name, phone, ID last 4, email, company…"
@@ -187,7 +172,7 @@ export default function Guests() {
           />
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <span className="inline-flex items-center gap-1 text-[10px] uppercase tracking-wider text-textSecondary font-semibold pr-1">
+          <span className="inline-flex items-center gap-1 text-[10px] uppercase tracking-[0.08em] text-inkMuted font-bold pr-1">
             <Tag className="w-3.5 h-3.5" /> Filter
           </span>
 
@@ -213,10 +198,10 @@ export default function Guests() {
                   setTag(t);
                   setPage(1);
                 }}
-                className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold border transition ${
+                className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold border transition ${
                   active
-                    ? `${s.solidBg} ${s.solidText} border-transparent shadow-sm`
-                    : `${s.tintBg} ${s.tintText} ${s.tintBorder} hover:brightness-95`
+                    ? "bg-brand text-white border-brand shadow-sm"
+                    : "bg-surfaceAlt text-textSecondary border-borderControl hover:bg-surfaceSubtle"
                 }`}
               >
                 <s.icon className="w-3.5 h-3.5" />
@@ -254,7 +239,7 @@ export default function Guests() {
       )}
 
       {pages > 1 && (
-        <div className="flex items-center justify-between text-xs text-textSecondary">
+        <div className="flex items-center justify-between text-xs text-inkMuted">
           <div>{total} guests total</div>
           <div className="flex gap-2">
             <button
@@ -295,12 +280,12 @@ function initialsOf(name: string): string {
 
 function avatarTone(seed: string): string {
   const tones = [
-    "bg-[#24b47e] text-white",
-    "bg-[#644fc1] text-white",
-    "bg-[#2563eb] text-white",
-    "bg-brand text-textPrimary",
-    "bg-[#e2005a] text-white",
-    "bg-[#157f5f] text-white",
+    "bg-brand text-white",
+    "bg-navy text-white",
+    "bg-info text-white",
+    "bg-gold text-white",
+    "bg-dangerFg text-white",
+    "bg-success text-white",
   ];
   let h = 0;
   for (let i = 0; i < seed.length; i++) h = (h * 31 + seed.charCodeAt(i)) >>> 0;
@@ -319,22 +304,22 @@ function GuestCard({ g, onOpen }: { g: Guest; onOpen: () => void }) {
           onOpen();
         }
       }}
-      className="group card !p-4 cursor-pointer transition border border-borderc hover:border-brand/50 hover:shadow-sm focus:outline-none focus:ring-2 focus:ring-brand/40"
+      className="group card !p-4 cursor-pointer transition border border-borderc hover:border-borderControl hover:shadow-lift focus:outline-none focus:ring-2 focus:ring-brand/40"
     >
       <div className="flex items-start gap-3">
         <div
-          className={`w-10 h-10 rounded-full grid place-items-center font-semibold text-sm shrink-0 ${avatarTone(g.fullName)}`}
+          className={`w-10 h-10 rounded-full grid place-items-center font-bold text-sm shrink-0 ${avatarTone(g.fullName)}`}
         >
           {initialsOf(g.fullName)}
         </div>
         <div className="min-w-0 flex-1">
-          <div className="text-base font-semibold text-brand-dark truncate">{g.fullName}</div>
-          <div className="text-xs text-textSecondary font-mono flex items-center gap-1 mt-0.5">
+          <div className="text-base font-semibold text-textPrimary truncate">{g.fullName}</div>
+          <div className="text-xs text-inkMuted font-mono flex items-center gap-1 mt-0.5">
             <Phone className="w-3 h-3" />
             {g.phone}
           </div>
         </div>
-        <ChevronRight className="w-5 h-5 text-textSecondary/50 group-hover:text-brand shrink-0 mt-1" />
+        <ChevronRight className="w-5 h-5 text-inkFaint group-hover:text-brand shrink-0 mt-1" />
       </div>
 
       {(g.tags ?? []).length > 0 && (
@@ -355,14 +340,14 @@ function GuestCard({ g, onOpen }: { g: Guest; onOpen: () => void }) {
         </div>
       )}
 
-      <div className="mt-3 pt-3 border-t border-borderc space-y-1.5 text-xs">
+      <div className="mt-3 pt-3 border-t border-divider space-y-1.5 text-xs">
         <div className="flex items-center gap-2 text-textSecondary">
-          <Mail className="w-3.5 h-3.5 shrink-0" />
+          <Mail className="w-3.5 h-3.5 shrink-0 text-inkFaint" />
           <span className="truncate">{g.email ?? "-"}</span>
         </div>
         <div className="flex items-center justify-between gap-2">
           <div className="flex items-center gap-2 text-textSecondary min-w-0">
-            <IdCard className="w-3.5 h-3.5 shrink-0" />
+            <IdCard className="w-3.5 h-3.5 shrink-0 text-inkFaint" />
             <span className="capitalize truncate">{g.idProofType.replace("_", " ")}</span>
           </div>
           <span className="font-mono text-textSecondary shrink-0">
@@ -370,7 +355,7 @@ function GuestCard({ g, onOpen }: { g: Guest; onOpen: () => void }) {
           </span>
         </div>
         <div className="flex items-center gap-2 text-textSecondary">
-          <MapPin className="w-3.5 h-3.5 shrink-0" />
+          <MapPin className="w-3.5 h-3.5 shrink-0 text-inkFaint" />
           <span className="truncate">{g.city ?? "-"}</span>
         </div>
       </div>
@@ -463,14 +448,14 @@ function AddGuestModal({ onClose }: { onClose: () => void }) {
 
   return (
     <div
-      className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
+      className="fixed inset-0 bg-inkDark/50 flex items-center justify-center z-50 p-4"
       onClick={onClose}
     >
       <div
-        className="bg-surface rounded-md w-full max-w-2xl p-6 space-y-4 max-h-[90vh] overflow-y-auto"
+        className="bg-surface rounded-2xl shadow-modal w-full max-w-2xl p-6 space-y-4 max-h-[90vh] overflow-y-auto"
         onClick={(e) => e.stopPropagation()}
       >
-        <h2 className="text-lg font-semibold text-navy">Add Guest</h2>
+        <h2 className="text-lg font-semibold text-textPrimary">Add Guest</h2>
 
         <div className="grid grid-cols-2 gap-3">
           <Field label="Full Name" required>
@@ -635,7 +620,7 @@ function AddGuestModal({ onClose }: { onClose: () => void }) {
         </div>
 
         {dupMatch && (
-          <div className="text-warning bg-warning/10 border border-warning/30 px-3 py-2 rounded-sm text-xs space-y-1">
+          <div className="text-warnFg bg-warnBg border border-warnBorder px-3 py-2 rounded-md text-xs space-y-1">
             <div>
               <strong>{dupMatch.fullName}</strong> already has this{" "}
               {dupMatch.reasons
@@ -646,7 +631,7 @@ function AddGuestModal({ onClose }: { onClose: () => void }) {
             </div>
             <button
               type="button"
-              className="text-brand-dark underline font-semibold"
+              className="text-brand-deep underline font-semibold"
               onClick={() => {
                 onClose();
                 navigate(`/guests/${dupMatch.phone}`);
@@ -702,10 +687,10 @@ function FilterChip({
       type="button"
       aria-pressed={active}
       onClick={onClick}
-      className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold border transition ${
+      className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold border transition ${
         active
-          ? "bg-brand text-textPrimary border-transparent shadow-sm"
-          : "bg-surface text-textSecondary border-borderc hover:border-brand/40 hover:text-brand-dark"
+          ? "bg-brand text-white border-brand shadow-sm"
+          : "bg-surfaceAlt text-textSecondary border-borderControl hover:bg-surfaceSubtle"
       }`}
     >
       <Icon className="w-3.5 h-3.5" />

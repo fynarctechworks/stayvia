@@ -165,7 +165,7 @@ export default function Messages() {
   return (
     // Phone: ONE pane at a time — list, or the open chat (driven by the
     // ?with= param). md+: the classic two-column split.
-    <div className="grid grid-cols-1 md:grid-cols-[21rem_1fr] h-[calc(100vh-9.5rem)] md:h-[calc(100vh-6.5rem)] rounded-md overflow-hidden border border-borderc shadow-[0_2px_8px_-2px_rgba(15,61,46,0.06)]">
+    <div className="max-w-[1180px] mx-auto w-full grid grid-cols-1 md:grid-cols-[21rem_1fr] h-[calc(100vh-9.5rem)] md:h-[calc(100vh-6.5rem)] rounded-2xl overflow-hidden border border-borderc shadow-card">
       {/* ============ LEFT: conversation list ============ */}
       <aside
         className={`bg-white border-r border-borderc flex-col min-w-0 ${
@@ -180,7 +180,7 @@ export default function Messages() {
             </span>
           )}
         </div>
-        <div className="px-3 py-2 border-b border-borderc/60 shrink-0">
+        <div className="px-3 py-2 border-b border-divider shrink-0">
           <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-[#667781]" />
             <input
@@ -290,7 +290,7 @@ export default function Messages() {
         )}
         {activeId && (
           <>
-            <div className={`px-4 py-2.5 ${WA.bar} flex items-center gap-3 shrink-0 border-b border-borderc/60`}>
+            <div className={`px-4 py-2.5 ${WA.bar} flex items-center gap-3 shrink-0 border-b border-divider`}>
               {/* Back to the conversation list (phone only). */}
               <button
                 onClick={() => setParams({})}

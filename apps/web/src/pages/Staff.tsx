@@ -20,6 +20,23 @@ interface Staff {
   isActive: boolean;
 }
 
+// Warm Concierge role chips (tinted per role, nearest semantic triads).
+const ROLE_CHIP: Record<string, string> = {
+  admin: "bg-brand-soft text-brand-deep",
+  frontdesk: "bg-infoBg text-info",
+  housekeeping: "bg-successBg text-success",
+};
+
+function initials(name: string) {
+  return name
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((w) => w[0])
+    .slice(0, 2)
+    .join("")
+    .toUpperCase();
+}
+
 export default function StaffPage() {
   const qc = useQueryClient();
   const dialog = useDialog();
@@ -51,9 +68,16 @@ export default function StaffPage() {
   });
 
   return (
-    <div className="space-y-4">
+    <div className="max-w-[1080px] mx-auto w-full space-y-4">
       <div className="flex items-center justify-between flex-wrap gap-3">
-        <h1 className="text-2xl font-bold text-navy">Staff</h1>
+        <div>
+          <h1 className="text-[clamp(22px,3vw,28px)] leading-tight font-semibold tracking-[-0.5px] text-ink">
+            Staff
+          </h1>
+          <p className="text-sm text-textSecondary mt-1.5">
+            Team members, their roles and what each can access.
+          </p>
+        </div>
         {view === "staff" && canStaff && (
           <button className="btn-primary inline-flex items-center gap-2" onClick={() => setShowAdd(true)}>
             <UserPlus className="w-4 h-4" /> Add Staff
@@ -62,7 +86,7 @@ export default function StaffPage() {
       </div>
 
       {canStaff && canRoles && (
-        <div className="flex gap-1 border-b border-borderc">
+        <div className="flex gap-0.5 border-b border-borderc">
           {(
             [
               { id: "staff", label: "Staff" },
@@ -72,10 +96,10 @@ export default function StaffPage() {
             <button
               key={t.id}
               onClick={() => setView(t.id)}
-              className={`px-4 py-2 text-sm font-medium border-b-2 transition ${
+              className={`px-4 py-2.5 text-sm font-semibold border-b-2 -mb-px transition-colors ${
                 view === t.id
-                  ? "border-gold text-navy"
-                  : "border-transparent text-textSecondary hover:text-navy"
+                  ? "border-gold text-ink"
+                  : "border-transparent text-inkMuted hover:text-ink"
               }`}
             >
               {t.label}
@@ -103,22 +127,47 @@ export default function StaffPage() {
           <tbody>
             {data.map((s) => (
               <tr key={s.id} className={s.isActive ? "" : "opacity-60"}>
-                <td>{s.fullName}</td>
-                <td>{s.email}</td>
-                <td className="capitalize">{s.role}</td>
-                <td>{s.phone ?? "-"}</td>
-                <td>{s.isActive ? "Active" : "Deactivated"}</td>
+                <td>
+                  <div className="flex items-center gap-2.5 min-w-0">
+                    <span className="w-[34px] h-[34px] shrink-0 rounded-full bg-parchment text-inkBody grid place-items-center font-bold text-xs">
+                      {initials(s.fullName)}
+                    </span>
+                    <span className="font-semibold text-ink whitespace-nowrap">{s.fullName}</span>
+                  </div>
+                </td>
+                <td className="text-textSecondary">{s.email}</td>
+                <td>
+                  <span
+                    className={`inline-flex items-center px-2 py-0.5 text-[11px] font-semibold rounded-[6px] capitalize ${
+                      ROLE_CHIP[s.role] ?? "bg-neutralBg text-inkMuted"
+                    }`}
+                  >
+                    {s.role}
+                  </span>
+                </td>
+                <td className="font-mono text-xs text-textSecondary">{s.phone ?? "-"}</td>
+                <td>
+                  <span
+                    className={`inline-flex items-center px-2.5 py-0.5 text-[11px] font-semibold rounded-full ${
+                      s.isActive
+                        ? "bg-successBg text-success"
+                        : "bg-neutralBg text-inkMuted"
+                    }`}
+                  >
+                    {s.isActive ? "Active" : "Deactivated"}
+                  </span>
+                </td>
                 <td className="!text-right">
                   <div className="inline-flex items-center gap-3">
                     <button
-                      className="text-brand hover:underline text-xs inline-flex items-center gap-1"
+                      className="text-brand-deep hover:underline text-xs font-semibold inline-flex items-center gap-1"
                       onClick={() => setEditing(s)}
                     >
                       <Pencil className="w-3 h-3" /> Edit
                     </button>
                     {s.isActive && (
                       <button
-                        className="text-warning hover:underline text-xs inline-flex items-center gap-1"
+                        className="text-warnFg hover:underline text-xs font-semibold inline-flex items-center gap-1"
                         onClick={async () => {
                           const ok = await dialog.confirm({
                             title: `Deactivate ${s.fullName}?`,
@@ -134,14 +183,14 @@ export default function StaffPage() {
                     )}
                     {!s.isActive && (
                       <button
-                        className="text-success hover:underline text-xs"
+                        className="text-success hover:underline text-xs font-semibold"
                         onClick={() => reactivate.mutate(s.id)}
                       >
                         Reactivate
                       </button>
                     )}
                     <button
-                      className="text-danger hover:underline text-xs inline-flex items-center gap-1"
+                      className="text-dangerFg hover:underline text-xs font-semibold inline-flex items-center gap-1"
                       onClick={async () => {
                         const ans = await dialog.prompt({
                           title: `Permanently delete ${s.fullName}?`,
@@ -302,12 +351,12 @@ function EditStaffModal({ staff, onClose }: { staff: Staff; onClose: () => void 
     return (
       <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={onClose}>
         <div
-          className="bg-surface rounded-md w-full max-w-md p-6 space-y-4"
+          className="bg-surface rounded-2xl shadow-modal w-full max-w-md p-6 space-y-4"
           onClick={(e) => e.stopPropagation()}
         >
-          <h2 className="text-lg font-semibold text-brand-dark">Password reset</h2>
+          <h2 className="text-lg font-semibold text-ink">Password reset</h2>
           <p className="text-sm text-textSecondary">
-            New password for <strong className="text-brand-dark">{staff.fullName}</strong>. Copy it
+            New password for <strong className="text-ink">{staff.fullName}</strong>. Copy it
             and share securely - it <strong>won&apos;t be shown again</strong> (stored encrypted, can
             only be reset).
           </p>
@@ -338,11 +387,11 @@ function EditStaffModal({ staff, onClose }: { staff: Staff; onClose: () => void 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={onClose}>
       <div
-        className="bg-surface rounded-md w-full max-w-2xl max-h-[90vh] overflow-hidden flex flex-col"
+        className="bg-surface rounded-2xl shadow-modal w-full max-w-2xl max-h-[90vh] overflow-hidden flex flex-col"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="px-5 py-3 border-b border-borderc">
-          <h2 className="text-lg font-semibold text-brand-dark">Edit Staff · {staff.fullName}</h2>
+          <h2 className="text-lg font-semibold text-ink">Edit Staff · {staff.fullName}</h2>
         </div>
         <div className="p-5 space-y-4 overflow-y-auto">
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -392,8 +441,8 @@ function EditStaffModal({ staff, onClose }: { staff: Staff; onClose: () => void 
         </div>
 
         {selectedRole && (
-          <div className="bg-bg/50 border border-borderc rounded-sm px-3 py-2 text-xs text-textSecondary">
-            <span className="font-semibold text-brand-dark">{selectedRole.label}</span> grants{" "}
+          <div className="bg-surfaceAlt border border-divider rounded-md px-3 py-2 text-xs text-textSecondary">
+            <span className="font-semibold text-ink">{selectedRole.label}</span> grants{" "}
             {selectedRole.permissions.includes("*") ? (
               <span className="font-semibold text-success">all permissions (god mode)</span>
             ) : (
@@ -416,7 +465,7 @@ function EditStaffModal({ staff, onClose }: { staff: Staff; onClose: () => void 
               {showAdvanced ? "Hide" : "Show"} advanced permission overrides
             </button>
             {showAdvanced && (
-              <div className="mt-3 border border-borderc rounded-sm p-3 space-y-3">
+              <div className="mt-3 border border-borderc rounded-md p-3 space-y-3">
                 <p className="text-xs text-textSecondary">
                   Three-state for each permission: <strong>Inherit</strong> (use role default),{" "}
                   <strong className="text-success">Grant</strong> (force allow), or{" "}
@@ -424,7 +473,7 @@ function EditStaffModal({ staff, onClose }: { staff: Staff; onClose: () => void 
                 </p>
                 {Object.entries(groupByArea(catalog)).map(([area, defs]) => (
                   <div key={area}>
-                    <div className="text-xs font-bold text-brand-dark mb-1.5">{area}</div>
+                    <div className="text-[10px] font-bold uppercase tracking-[0.08em] text-brand-deep mb-1.5">{area}</div>
                     <div className="space-y-1">
                       {defs.map((d) => {
                         const ovr = overrides[d.key];
@@ -458,8 +507,8 @@ function EditStaffModal({ staff, onClose }: { staff: Staff; onClose: () => void 
                                         ? "bg-danger text-white border-danger"
                                         : "border-borderc text-danger hover:border-danger"
                                       : active
-                                        ? "bg-brand-dark text-cream border-brand-dark"
-                                        : "border-borderc text-textSecondary hover:border-brand-dark";
+                                        ? "bg-inkDark text-cream border-inkDark"
+                                        : "border-borderc text-textSecondary hover:border-inkDark";
                                 return (
                                   <button
                                     key={opt}
@@ -490,8 +539,8 @@ function EditStaffModal({ staff, onClose }: { staff: Staff; onClose: () => void 
           </div>
         )}
 
-        <div className="border-t border-borderc pt-3 mt-2">
-          <div className="text-xs uppercase tracking-wide text-textSecondary mb-2">Reset password</div>
+        <div className="border-t border-divider pt-3 mt-2">
+          <div className="label mb-2">Reset password</div>
           <div className="relative">
             <input
               className="input pr-20 font-mono"
@@ -538,7 +587,7 @@ function EditStaffModal({ staff, onClose }: { staff: Staff; onClose: () => void 
         {err && <div className="text-danger text-sm">{err}</div>}
         {msg && <div className="text-success text-sm">{msg}</div>}
         </div>
-        <div className="flex justify-end gap-2 px-5 py-3 border-t border-borderc bg-bg/50">
+        <div className="flex justify-end gap-2 px-5 py-3 border-t border-divider bg-surfaceAlt">
           <button className="btn-secondary" onClick={onClose}>Cancel</button>
           <button
             className="btn-primary"
@@ -610,12 +659,12 @@ function AddStaffModal({ onClose }: { onClose: () => void }) {
         onClick={onClose}
       >
         <div
-          className="bg-surface rounded-md w-full max-w-md p-6 space-y-4"
+          className="bg-surface rounded-2xl shadow-modal w-full max-w-md p-6 space-y-4"
           onClick={(e) => e.stopPropagation()}
         >
-          <h2 className="text-lg font-semibold text-navy">Staff created</h2>
+          <h2 className="text-lg font-semibold text-ink">Staff created</h2>
           <p className="text-sm text-textSecondary">
-            <strong className="text-navy">{created.name}</strong> can now sign in. Copy the
+            <strong className="text-ink">{created.name}</strong> can now sign in. Copy the
             password below and share it securely - it{" "}
             <strong>won&apos;t be shown again</strong> (it&apos;s stored encrypted and can only be
             reset, never viewed).
@@ -658,10 +707,10 @@ function AddStaffModal({ onClose }: { onClose: () => void }) {
       onClick={onClose}
     >
       <div
-        className="bg-surface rounded-md w-full max-w-md p-6 space-y-4"
+        className="bg-surface rounded-2xl shadow-modal w-full max-w-md p-6 space-y-4"
         onClick={(e) => e.stopPropagation()}
       >
-        <h2 className="text-lg font-semibold text-navy">Add Staff</h2>
+        <h2 className="text-lg font-semibold text-ink">Add Staff</h2>
         <Field label="Full Name">
           <input
             className="input"

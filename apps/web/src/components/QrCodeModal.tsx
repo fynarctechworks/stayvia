@@ -55,52 +55,58 @@ export default function QrCodeModal({ open, onClose, url, title, subtitle }: Pro
 
   return (
     <div
-      className="fixed inset-0 z-50 bg-black/50 grid place-items-center p-4"
+      className="fixed inset-0 z-50 bg-inkDark/50 backdrop-blur-[3px] grid place-items-center p-4"
       onClick={onClose}
     >
       <div
-        className="bg-surface rounded-md shadow-xl w-full max-w-sm p-5"
+        className="bg-surface rounded-[18px] shadow-modal w-full max-w-sm overflow-hidden"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex items-start justify-between mb-3">
-          <div>
-            <div className="font-semibold text-navy">{title}</div>
-            {subtitle && <div className="text-xs text-textSecondary mt-0.5">{subtitle}</div>}
-          </div>
-          <button className="text-textSecondary hover:text-navy" onClick={onClose}>
+        <div className="flex items-center justify-between gap-3 px-5 py-3.5 border-b border-divider">
+          <div className="text-sm font-semibold text-ink">{title}</div>
+          <button
+            className="w-[34px] h-[34px] shrink-0 grid place-items-center rounded-[9px] border border-borderControl bg-surface text-textSecondary hover:text-ink"
+            onClick={onClose}
+          >
             <X className="w-5 h-5" />
           </button>
         </div>
-        <div className="grid place-items-center bg-white rounded-sm p-3">
-          <canvas ref={canvasRef} />
-        </div>
-        <button
-          onClick={copyUrl}
-          title="Copy link"
-          className="w-full mt-2 flex items-center gap-2 rounded-sm border border-borderc bg-bg px-2.5 py-1.5 text-left hover:border-brand transition-colors group"
-        >
-          <span className="flex-1 min-w-0 text-[11px] text-textSecondary font-mono truncate">
-            {url}
-          </span>
-          {copied ? (
-            <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-brand-deep shrink-0">
-              <Check className="w-3.5 h-3.5" /> Copied
-            </span>
-          ) : (
-            <Copy className="w-3.5 h-3.5 text-textSecondary group-hover:text-brand-dark shrink-0" />
-          )}
-        </button>
-        <div className="flex gap-2 mt-4">
-          <button className="btn-primary flex-1" onClick={printQr}>
-            Print
-          </button>
-          <a
-            className="btn-secondary flex-1 inline-flex items-center justify-center"
-            href={dataUrl}
-            download={`${title.replace(/\s+/g, "-").toLowerCase()}-qr.png`}
+        <div className="p-6 flex flex-col items-center text-center gap-4">
+          <div className="w-16 h-16 rounded-2xl bg-brand-soft text-brand-deep grid place-items-center font-bold text-[28px]">
+            S
+          </div>
+          {subtitle && <div className="text-[13px] text-inkMuted">{subtitle}</div>}
+          <div className="p-3 border border-divider rounded-xl bg-surface">
+            <canvas ref={canvasRef} />
+          </div>
+          <button
+            onClick={copyUrl}
+            title="Copy link"
+            className="w-full flex items-center gap-2 rounded-sm border border-divider bg-surfaceAlt px-2.5 py-1.5 text-left hover:border-brand transition-colors group"
           >
-            Download PNG
-          </a>
+            <span className="flex-1 min-w-0 text-[11.5px] text-inkMuted font-mono truncate">
+              {url}
+            </span>
+            {copied ? (
+              <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-brand-deep shrink-0">
+                <Check className="w-3.5 h-3.5" /> Copied
+              </span>
+            ) : (
+              <Copy className="w-3.5 h-3.5 text-inkMuted group-hover:text-ink shrink-0" />
+            )}
+          </button>
+          <div className="flex gap-2 w-full">
+            <a
+              className="btn-secondary flex-1 inline-flex items-center justify-center"
+              href={dataUrl}
+              download={`${title.replace(/\s+/g, "-").toLowerCase()}-qr.png`}
+            >
+              Download PNG
+            </a>
+            <button className="btn-primary flex-1" onClick={printQr}>
+              Print
+            </button>
+          </div>
         </div>
       </div>
     </div>

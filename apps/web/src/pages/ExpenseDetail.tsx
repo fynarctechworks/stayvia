@@ -128,16 +128,16 @@ export default function ExpenseDetail() {
         <div className="flex items-start gap-3 min-w-0">
           <button
             onClick={() => navigate("/expenses")}
-            className="grid place-items-center h-9 w-9 rounded-sm border border-borderc text-textSecondary hover:border-brand-dark hover:text-brand-dark"
+            className="grid place-items-center h-10 w-10 shrink-0 rounded-sm border border-borderControl bg-surface text-inkBody hover:bg-surfaceAlt transition-colors"
             title="Back to Expenses"
           >
             <ArrowLeft className="w-4 h-4" />
           </button>
           <div className="min-w-0">
-            <h1 className="text-2xl font-bold text-brand-dark truncate">
+            <h1 className="text-2xl font-semibold tracking-tight text-ink truncate">
               {data.description}
             </h1>
-            <p className="text-xs text-textSecondary mt-0.5">
+            <p className="text-[13px] text-inkMuted mt-0.5">
               {CATEGORY_LABELS[data.category]}
               {data.subcategory ? ` · ${data.subcategory}` : ""}
             </p>
@@ -145,10 +145,10 @@ export default function ExpenseDetail() {
         </div>
         <div className="flex items-center gap-2 flex-wrap">
           <span
-            className={`inline-flex items-center px-2 h-7 rounded-sm text-[11px] font-bold uppercase tracking-wider border ${
+            className={`inline-flex items-center px-2.5 h-7 rounded-[7px] text-[11px] font-bold uppercase tracking-wider border ${
               isPending
-                ? "bg-warning/15 text-warning border-warning/30"
-                : "bg-success/15 text-success border-success/30"
+                ? "bg-warnBg text-warnFg border-warnBorder"
+                : "bg-successBg text-success border-successBorder"
             }`}
           >
             {PAYMENT_METHOD_LABELS[data.paymentMethod]}
@@ -172,7 +172,7 @@ export default function ExpenseDetail() {
                 <Pencil className="w-4 h-4" /> Edit
               </button>
               <button
-                className="inline-flex items-center gap-2 px-3 h-9 text-xs font-semibold rounded-sm border-2 border-danger text-danger hover:bg-danger hover:text-cream disabled:opacity-40"
+                className="btn-danger inline-flex items-center gap-2 disabled:opacity-40"
                 onClick={confirmDelete}
                 disabled={del.isPending}
               >
@@ -224,7 +224,7 @@ export default function ExpenseDetail() {
 
       {/* Money card — amount + GST + total. */}
       <div className="card">
-        <h2 className="text-sm font-semibold text-brand-dark mb-3">Money</h2>
+        <h2 className="text-sm font-semibold text-ink mb-3">Money</h2>
         <div className="grid grid-cols-3 gap-3">
           <Money label="Amount" value={amount} tone="default" />
           <Money
@@ -245,7 +245,7 @@ export default function ExpenseDetail() {
       {/* Vendor card — always rendered, "—" when staff didn't fill
           it in. Keeps the page layout predictable. */}
       <div className="card">
-        <h2 className="text-sm font-semibold text-brand-dark mb-3">Vendor</h2>
+        <h2 className="text-sm font-semibold text-ink mb-3">Vendor</h2>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           <Detail
             label="Name"
@@ -259,7 +259,7 @@ export default function ExpenseDetail() {
               data.vendorPhone ? (
                 <a
                   href={`tel:${data.vendorPhone}`}
-                  className="text-accentBlue hover:underline font-mono"
+                  className="text-brand-deep hover:underline font-mono"
                 >
                   {data.vendorPhone}
                 </a>
@@ -273,7 +273,7 @@ export default function ExpenseDetail() {
 
       {/* Notes — always rendered. */}
       <div className="card">
-        <h2 className="text-sm font-semibold text-brand-dark mb-2">Notes</h2>
+        <h2 className="text-sm font-semibold text-ink mb-2">Notes</h2>
         {data.notes ? (
           <p className="text-sm text-textPrimary whitespace-pre-wrap">
             {data.notes}
@@ -286,8 +286,8 @@ export default function ExpenseDetail() {
       {/* Bill attachment — always rendered, with empty-state when
           nothing was uploaded. Image inline, PDF in iframe. */}
       <div className="card !p-0 overflow-hidden">
-        <div className="px-4 py-3 border-b border-borderc bg-bg/50 flex items-center justify-between gap-2">
-          <h2 className="text-sm font-semibold text-brand-dark inline-flex items-center gap-1.5">
+        <div className="px-4 py-3 border-b border-divider flex items-center justify-between gap-2">
+          <h2 className="text-sm font-semibold text-ink inline-flex items-center gap-1.5">
             <FileText className="w-4 h-4" /> Bill / Receipt
           </h2>
           {data.attachmentSignedUrl && (
@@ -295,54 +295,59 @@ export default function ExpenseDetail() {
               href={data.attachmentSignedUrl}
               target="_blank"
               rel="noopener noreferrer"
-              className="text-[11px] text-accentBlue hover:underline"
+              className="text-[11.5px] font-semibold text-brand-deep hover:underline"
             >
               Open in new tab ↗
             </a>
           )}
         </div>
         {data.attachmentSignedUrl ? (
-          <div className="bg-bg grid place-items-center">
+          <div className="bg-surfaceSubtle grid place-items-center">
             {isPdf ? (
               <iframe
                 src={data.attachmentSignedUrl}
                 title="bill"
-                className="w-full h-[70vh] bg-white"
+                className="w-full h-[70vh] bg-surface"
               />
             ) : (
               <img
                 src={data.attachmentSignedUrl}
                 alt={data.description}
-                className="max-w-full max-h-[70vh] object-contain bg-white"
+                className="max-w-full max-h-[70vh] object-contain bg-surface"
               />
             )}
           </div>
         ) : (
-          <div className="bg-bg/40 py-10 text-center text-sm text-textSecondary italic">
-            No bill or receipt attached.
-            {canManage && (
-              <>
-                {" "}
-                Use{" "}
-                <button
-                  type="button"
-                  className="text-accentBlue hover:underline"
-                  onClick={() => setEditOpen(true)}
-                >
-                  Edit
-                </button>{" "}
-                to upload one.
-              </>
-            )}
+          <div className="bg-surfaceSubtle grid place-items-center py-12 text-center">
+            <div className="text-inkFaint">
+              <Receipt className="w-10 h-10 mx-auto opacity-70" />
+              <div className="text-sm mt-2">
+                No bill or receipt attached.
+                {canManage && (
+                  <>
+                    {" "}
+                    Use{" "}
+                    <button
+                      type="button"
+                      className="text-brand-deep font-semibold hover:underline"
+                      onClick={() => setEditOpen(true)}
+                    >
+                      Edit
+                    </button>{" "}
+                    to upload one.
+                  </>
+                )}
+              </div>
+            </div>
           </div>
         )}
       </div>
 
       {/* Audit footer — who recorded, when, last touched. */}
-      <div className="text-[11px] text-textSecondary flex flex-wrap gap-x-3 gap-y-1 px-1">
+      <div className="text-[11.5px] text-inkMuted flex flex-wrap gap-x-3 gap-y-1 px-1">
         <span>
           Recorded by{" "}
-          <span className="text-brand-dark font-semibold">
+          <span className="text-inkBody font-semibold">
             {data.recordedByName ?? "-"}
           </span>{" "}
           on {format(new Date(data.createdAt), "dd MMM yyyy, h:mm a")}
@@ -378,14 +383,14 @@ function Detail({
 }) {
   return (
     <div className="min-w-0">
-      <div className="text-[10px] uppercase tracking-wider text-textSecondary font-semibold inline-flex items-center gap-1">
+      <div className="text-[10px] font-bold uppercase tracking-[0.06em] text-inkMuted inline-flex items-center gap-1">
         {icon}
         {label}
       </div>
-      <div className="text-sm text-brand-dark font-medium mt-0.5 break-words">
+      <div className="text-sm text-ink font-medium mt-1 break-words">
         {value}
       </div>
-      {sub && <div className="text-[11px] text-textSecondary mt-0.5">{sub}</div>}
+      {sub && <div className="text-[11px] text-inkMuted mt-0.5">{sub}</div>}
     </div>
   );
 }
@@ -403,17 +408,17 @@ function Money({
 }) {
   const toneClass =
     tone === "primary"
-      ? "text-brand-dark font-bold"
+      ? "text-ink font-bold"
       : tone === "muted"
         ? "text-textSecondary font-semibold"
-        : "text-brand-dark font-semibold";
+        : "text-ink font-semibold";
   return (
     <div className="min-w-0">
-      <div className="text-[10px] uppercase tracking-wider text-textSecondary font-semibold">
+      <div className="text-[10px] font-bold uppercase tracking-[0.06em] text-inkMuted">
         {label}
       </div>
       <div className={`text-xl font-mono mt-1 ${toneClass}`}>{inr(value)}</div>
-      {sub && <div className="text-[11px] text-textSecondary mt-0.5">{sub}</div>}
+      {sub && <div className="text-[11px] text-inkMuted mt-0.5">{sub}</div>}
     </div>
   );
 }

@@ -195,7 +195,7 @@ export function CheckInReceiptModal({ data, onClose, variant = "checkin" }: Prop
   }
 
   return (
-    <div className="print-portal fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-brand-dark/40 p-4 print:bg-white print:p-0 print:static print:overflow-visible print:block">
+    <div className="print-portal fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-inkDark/50 backdrop-blur-[3px] p-4 print:bg-white print:p-0 print:static print:overflow-visible print:block">
       <style>{`
         @media print {
           /* Zero @page margin so Chrome's auto-generated headers (date,
@@ -308,12 +308,12 @@ export function CheckInReceiptModal({ data, onClose, variant = "checkin" }: Prop
       `}</style>
 
       <div
-        className="checkin-receipt my-auto w-full max-w-md bg-white rounded-md shadow-xl border border-borderc print:max-w-full print:my-0 print:shadow-none"
+        className="checkin-receipt my-auto w-full max-w-md bg-surface rounded-[14px] overflow-hidden shadow-modal print:max-w-full print:my-0 print:shadow-none"
         role="dialog"
         aria-modal="true"
       >
-        <div className="no-print flex items-center justify-between px-5 py-3 border-b border-borderc bg-brand-soft">
-          <div className="font-semibold text-brand-dark">{title}</div>
+        <div className="no-print flex items-center justify-between px-5 py-3 bg-brand-soft">
+          <div className="text-sm font-semibold text-brand-deep">{title}</div>
           <button onClick={onClose} className="text-textSecondary hover:text-textPrimary">
             <X className="w-5 h-5" />
           </button>
@@ -348,7 +348,7 @@ export function CheckInReceiptModal({ data, onClose, variant = "checkin" }: Prop
                 />
               )}
               <div className="leading-tight">
-                <div className="text-[15px] font-bold text-brand-dark uppercase">{data.hotel.name}</div>
+                <div className="text-[15px] font-bold text-brand-deep uppercase tracking-[0.02em]">{data.hotel.name}</div>
                 <div className="text-[10px] text-textSecondary mt-0.5">
                   {data.hotel.address}
                   {(data.hotel.phone || data.hotel.ownerPhone) && (
@@ -366,10 +366,10 @@ export function CheckInReceiptModal({ data, onClose, variant = "checkin" }: Prop
               </div>
             </div>
             <div className="text-right shrink-0">
-              <div className="inline-block text-[10px] tracking-[0.2em] uppercase font-bold text-[#157f5f] border border-brass rounded-full px-2.5 py-0.5">
+              <div className="inline-block text-[10px] tracking-[0.2em] uppercase font-bold text-brand-deep border border-gold rounded-full px-2.5 py-0.5">
                 {isAdvance ? "Advance" : "Check-in"}
               </div>
-              <div className="text-[13px] font-bold font-mono text-brand-dark mt-1.5">
+              <div className="text-[13px] font-bold font-mono text-brand-deep mt-1.5">
                 {data.reservationNumber}
               </div>
               <div className="text-[10px] text-textSecondary">
@@ -387,8 +387,8 @@ export function CheckInReceiptModal({ data, onClose, variant = "checkin" }: Prop
           </div>
 
           <div className="receipt-section grid grid-cols-2 gap-2 mt-3">
-            <div className="border border-borderc rounded-sm bg-cream/40 p-2.5">
-              <div className="text-[9px] uppercase tracking-wider text-textSecondary font-semibold">
+            <div className="border border-divider rounded-lg bg-surfaceAlt p-2.5">
+              <div className="text-[9px] uppercase tracking-wider text-inkMuted font-semibold">
                 Guest
               </div>
               <div className="mt-1 flex items-start gap-2">
@@ -422,7 +422,7 @@ export function CheckInReceiptModal({ data, onClose, variant = "checkin" }: Prop
               </div>
               {data.coGuests && data.coGuests.length > 0 && (
                 <div className="mt-2 pt-2 border-t border-borderc/60 space-y-1">
-                  <div className="text-[9px] uppercase tracking-wider text-textSecondary font-semibold">
+                  <div className="text-[9px] uppercase tracking-wider text-inkMuted font-semibold">
                     Also occupying
                   </div>
                   {data.coGuests.map((cg, i) => (
@@ -440,13 +440,13 @@ export function CheckInReceiptModal({ data, onClose, variant = "checkin" }: Prop
                 </div>
               )}
             </div>
-            <div className="border border-borderc rounded-sm bg-cream/40 p-2.5">
-              <div className="text-[9px] uppercase tracking-wider text-textSecondary font-semibold">
+            <div className="border border-divider rounded-lg bg-surfaceAlt p-2.5">
+              <div className="text-[9px] uppercase tracking-wider text-inkMuted font-semibold">
                 Stay
               </div>
               <div className="grid grid-cols-2 gap-2 mt-1">
                 <div>
-                  <div className="text-[9px] uppercase tracking-wider text-[#157f5f] font-bold">Check-in</div>
+                  <div className="text-[9px] uppercase tracking-wider text-brand-deep font-bold">Check-in</div>
                   <div className="font-semibold text-brand-dark text-[12px] leading-tight">
                     {format(
                       new Date(
@@ -470,7 +470,7 @@ export function CheckInReceiptModal({ data, onClose, variant = "checkin" }: Prop
                   </div>
                 </div>
                 <div>
-                  <div className="text-[9px] uppercase tracking-wider text-[#157f5f] font-bold">Check-out</div>
+                  <div className="text-[9px] uppercase tracking-wider text-brand-deep font-bold">Check-out</div>
                   {(() => {
                     // Day-use bookings exit at checkedInAt + durationHours,
                     // not at the hotel's overnight check-out time.
@@ -520,15 +520,15 @@ export function CheckInReceiptModal({ data, onClose, variant = "checkin" }: Prop
           </div>
 
           <div className="receipt-section mt-4">
-            <div className="text-[10px] uppercase tracking-[0.2em] font-bold text-[#157f5f] mb-1.5">
+            <div className="text-[10px] uppercase tracking-[0.2em] font-bold text-brand-deep mb-1.5">
               Rooms Allotted
             </div>
             <table className="w-full text-[11px]">
               <thead>
-                <tr className="text-left text-brand-dark">
-                  <th className="py-1.5 border-b border-brand/30 font-semibold">Room</th>
-                  <th className="py-1.5 border-b border-brand/30 font-semibold">Type</th>
-                  <th className="py-1.5 border-b border-brand/30 font-semibold text-right">
+                <tr className="text-left text-[10px] text-brand-deep">
+                  <th className="py-1.5 border-b border-brand-soft font-bold">Room</th>
+                  <th className="py-1.5 border-b border-brand-soft font-bold">Type</th>
+                  <th className="py-1.5 border-b border-brand-soft font-bold text-right">
                     {data.stayType === "short_stay"
                       ? `Rate / ${Number(data.durationHours ?? 0)} hrs`
                       : "Rate/Night"}
@@ -539,21 +539,21 @@ export function CheckInReceiptModal({ data, onClose, variant = "checkin" }: Prop
                 {data.rooms.map((rm) => (
                   <Fragment key={rm.roomNumber}>
                     <tr>
-                      <td className="py-1.5 border-b border-borderc font-mono font-bold">{rm.roomNumber}</td>
-                      <td className="py-1.5 border-b border-borderc capitalize">
+                      <td className="py-1.5 border-b border-divider font-mono font-bold">{rm.roomNumber}</td>
+                      <td className="py-1.5 border-b border-divider capitalize">
                         {rm.displayType ?? rm.roomType.replace(/_/g, " ")}
                       </td>
-                      <td className="py-1.5 border-b border-borderc text-right font-mono">
+                      <td className="py-1.5 border-b border-divider text-right font-mono">
                         {inr(rm.ratePerNight)}
                       </td>
                     </tr>
                     {Number(rm.extraBeds ?? 0) > 0 && Number(rm.extraBedRate ?? 0) > 0 && (
                       <tr>
-                        <td className="py-1.5 border-b border-borderc"></td>
-                        <td className="py-1.5 border-b border-borderc text-textSecondary">
+                        <td className="py-1.5 border-b border-divider"></td>
+                        <td className="py-1.5 border-b border-divider text-textSecondary">
                           + Extra person × {rm.extraBeds}
                         </td>
-                        <td className="py-1.5 border-b border-borderc text-right font-mono text-textSecondary">
+                        <td className="py-1.5 border-b border-divider text-right font-mono text-textSecondary">
                           {inr(rm.extraBedRate!)}
                         </td>
                       </tr>
@@ -565,7 +565,7 @@ export function CheckInReceiptModal({ data, onClose, variant = "checkin" }: Prop
           </div>
 
           {data.latestPayment && (
-            <div className="mt-4 p-3 rounded-md text-cream text-center bg-brand-dark">
+            <div className="mt-4 p-3 rounded-sm text-cream text-center bg-inkDark">
               <div className="text-[9px] tracking-[0.25em] uppercase text-brass font-bold">
                 {isAdvance ? "Advance Received" : "Amount Received"}
               </div>
@@ -612,9 +612,9 @@ export function CheckInReceiptModal({ data, onClose, variant = "checkin" }: Prop
                     </>
                   );
                 })()}
-                <tr className="border-t border-brand/30">
-                  <td className="py-1.5 pt-2 font-bold text-brand-dark">Grand Total</td>
-                  <td className="py-1.5 pt-2 text-right font-mono font-bold text-brand-dark">
+                <tr className="border-t border-brand-soft">
+                  <td className="py-1.5 pt-2 font-bold text-brand-deep">Grand Total</td>
+                  <td className="py-1.5 pt-2 text-right font-mono font-bold text-brand-deep">
                     {inr(data.grandTotal)}
                   </td>
                 </tr>
@@ -665,8 +665,8 @@ export function CheckInReceiptModal({ data, onClose, variant = "checkin" }: Prop
                   );
                 })()}
                 <tr>
-                  <td className="py-1 font-bold text-danger">Balance Due</td>
-                  <td className="py-1 text-right font-mono font-bold text-danger">
+                  <td className="py-1 font-bold text-dangerFg">Balance Due</td>
+                  <td className="py-1 text-right font-mono font-bold text-dangerFg">
                     {inr(data.balanceDue)}
                   </td>
                 </tr>
@@ -674,7 +674,7 @@ export function CheckInReceiptModal({ data, onClose, variant = "checkin" }: Prop
             </table>
           </div>
 
-          <div className="mt-5 pt-3 border-t border-borderc text-[10px] text-textSecondary leading-relaxed">
+          <div className="mt-5 pt-3 border-t border-divider text-[10px] text-inkMuted leading-relaxed">
             {(() => {
               const isShort = data.stayType === "short_stay";
               const dur = Number(data.durationHours ?? 0);
@@ -698,7 +698,7 @@ export function CheckInReceiptModal({ data, onClose, variant = "checkin" }: Prop
           {isAdvance &&
             Number(data.balanceDue) > 0.009 &&
             data.bookingSource === "phone_whatsapp" && (
-              <div className="receipt-section mt-3 px-3 py-2 rounded-sm border border-[#B45309] bg-[#fef3c7] text-[#7C2D12] text-center text-[11px] font-semibold">
+              <div className="receipt-section mt-3 px-3 py-2 rounded-sm border border-warnBorder bg-warnBg text-warnFg text-center text-[11px] font-semibold">
                 Note: The remaining balance of {inr(data.balanceDue)} must be paid on or before check-in.
               </div>
             )}
@@ -717,7 +717,7 @@ export function CheckInReceiptModal({ data, onClose, variant = "checkin" }: Prop
           </div>
         </div>
 
-        <div className="no-print flex justify-end gap-2 px-5 py-3 border-t border-borderc bg-bg">
+        <div className="no-print flex justify-end gap-2 px-5 py-3 border-t border-divider bg-surfaceAlt">
           <button onClick={onClose} className="btn-secondary">
             Done
           </button>

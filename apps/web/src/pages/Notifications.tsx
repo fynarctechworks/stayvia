@@ -47,14 +47,14 @@ function timeAgo(iso: string): string {
 }
 
 const TYPE_META: Record<string, { icon: typeof Bell; label: string; tint: string }> = {
-  reservation_created: { icon: Calendar, label: "Booking", tint: "text-brand bg-brand/10" },
-  reservation_cancelled: { icon: XCircle, label: "Cancelled", tint: "text-danger bg-danger/10" },
-  guest_checked_in: { icon: LogIn, label: "Check-in", tint: "text-success bg-success/10" },
-  guest_checked_out: { icon: LogOut, label: "Check-out", tint: "text-[#157f5f] bg-brass/10" },
-  housekeeping_assigned: { icon: SprayCan, label: "Housekeeping", tint: "text-accentBlue bg-accentBlue/10" },
-  housekeeping_completed: { icon: SprayCan, label: "Housekeeping", tint: "text-success bg-success/10" },
-  invoice_issued: { icon: FileText, label: "Invoice", tint: "text-brand bg-brand/10" },
-  message_received: { icon: MessageSquare, label: "Message", tint: "text-accentBlue bg-accentBlue/10" },
+  reservation_created: { icon: Calendar, label: "Booking", tint: "text-brand-deep bg-brand-soft" },
+  reservation_cancelled: { icon: XCircle, label: "Cancelled", tint: "text-dangerFg bg-dangerBg" },
+  guest_checked_in: { icon: LogIn, label: "Check-in", tint: "text-success bg-successBg" },
+  guest_checked_out: { icon: LogOut, label: "Check-out", tint: "text-warnFg bg-warnBg" },
+  housekeeping_assigned: { icon: SprayCan, label: "Housekeeping", tint: "text-info bg-infoBg" },
+  housekeeping_completed: { icon: SprayCan, label: "Housekeeping", tint: "text-success bg-successBg" },
+  invoice_issued: { icon: FileText, label: "Invoice", tint: "text-brand-deep bg-brand-soft" },
+  message_received: { icon: MessageSquare, label: "Message", tint: "text-info bg-infoBg" },
   system: { icon: Bell, label: "System", tint: "text-textSecondary bg-bg" },
 };
 
@@ -106,12 +106,12 @@ export default function Notifications() {
   }
 
   return (
-    <div className="space-y-4">
+    <div className="max-w-[820px] mx-auto w-full space-y-4">
       <StickyBar>
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-brand-dark">Notifications</h1>
-          <p className="text-sm text-textSecondary mt-0.5">
+          <h1 className="text-[clamp(22px,3vw,28px)] font-semibold tracking-[-0.5px] text-ink leading-tight">Notifications</h1>
+          <p className="text-sm text-textSecondary mt-1">
             {unread > 0 ? `${unread} unread` : "All caught up"}
           </p>
         </div>
@@ -126,7 +126,7 @@ export default function Notifications() {
         )}
       </div>
 
-      <div className="inline-flex rounded-sm border border-borderc overflow-hidden text-sm bg-surface">
+      <div className="inline-flex self-start rounded-sm border border-borderControl divide-x divide-borderControl overflow-hidden bg-surface">
         {(
           [
             { v: "all", label: "All", count: items.length },
@@ -137,17 +137,17 @@ export default function Notifications() {
             key={opt.v}
             type="button"
             onClick={() => setFilter(opt.v)}
-            className={`px-4 py-2 transition-colors ${
+            className={`inline-flex items-center gap-1.5 h-[38px] px-4 text-[13px] font-semibold transition-colors ${
               filter === opt.v
-                ? "bg-brand text-textPrimary"
-                : "text-textSecondary hover:bg-bg"
+                ? "bg-brand text-white"
+                : "bg-surface text-textSecondary hover:bg-surfaceAlt"
             }`}
           >
             {opt.label}
             {opt.count > 0 && (
               <span
-                className={`ml-2 inline-grid place-items-center min-w-[1.2rem] h-[1.2rem] px-1 rounded-full text-[10px] font-bold ${
-                  filter === opt.v ? "bg-brand-dark text-white" : "bg-bg text-textSecondary"
+                className={`inline-grid place-items-center min-w-[19px] h-[19px] px-[5px] rounded-full text-[10px] font-bold ${
+                  filter === opt.v ? "bg-white/25 text-white" : "bg-bg text-inkMuted"
                 }`}
               >
                 {opt.count}
@@ -170,43 +170,43 @@ export default function Notifications() {
       <div className="space-y-6">
         {Array.from(groups.entries()).map(([day, list]) => (
           <section key={day}>
-            <div className="text-[10px] uppercase tracking-[0.2em] text-textSecondary font-semibold mb-2">
+            <div className="text-[10px] uppercase tracking-[0.16em] text-inkMuted font-bold mb-2">
               {day}
             </div>
-            <div className="card p-0 divide-y divide-borderc/60">
+            <div className="card p-0 overflow-hidden divide-y divide-divider">
               {list.map((n) => {
                 const meta = TYPE_META[n.type] ?? TYPE_META.system!;
                 const Icon = meta.icon;
                 return (
                   <div
                     key={n.id}
-                    className={`flex items-start gap-3 px-4 py-3 transition-colors ${
-                      !n.readAt ? "bg-brand-soft/30" : ""
-                    } ${n.href ? "cursor-pointer hover:bg-bg" : ""}`}
+                    className={`flex items-start gap-3 px-4 py-3.5 transition-colors ${
+                      !n.readAt ? "bg-brand-softer" : ""
+                    } ${n.href ? "cursor-pointer hover:bg-surfaceAlt" : ""}`}
                     onClick={() => {
                       if (!n.readAt) markRead.mutate(n.id);
                       if (n.href) navigate(n.href);
                     }}
                   >
                     <span
-                      className={`grid place-items-center w-9 h-9 rounded-md shrink-0 ${meta.tint}`}
+                      className={`grid place-items-center w-[38px] h-[38px] rounded-sm shrink-0 ${meta.tint}`}
                     >
-                      <Icon className="w-4 h-4" />
+                      <Icon className="w-[19px] h-[19px]" />
                     </span>
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-2">
                         {!n.readAt && (
                           <span className="w-2 h-2 rounded-full bg-brand shrink-0" />
                         )}
-                        <div className="font-semibold text-textPrimary truncate">{n.title}</div>
+                        <div className="font-semibold text-sm text-textPrimary truncate">{n.title}</div>
                         <span
-                          className={`shrink-0 text-[9px] uppercase tracking-wider px-1.5 py-0.5 rounded font-semibold ${meta.tint}`}
+                          className={`shrink-0 text-[9px] uppercase tracking-[0.05em] px-[7px] py-0.5 rounded-[5px] font-bold ${meta.tint}`}
                         >
                           {meta.label}
                         </span>
                       </div>
-                      <div className="text-sm text-textSecondary mt-0.5">{n.body}</div>
-                      <div className="text-[11px] text-textSecondary mt-1">
+                      <div className="text-[13px] text-textSecondary mt-[3px]">{n.body}</div>
+                      <div className="text-[11px] text-inkMuted mt-1">
                         {timeAgo(n.createdAt)}
                       </div>
                     </div>
@@ -217,7 +217,7 @@ export default function Notifications() {
                           e.stopPropagation();
                           markRead.mutate(n.id);
                         }}
-                        className="text-textSecondary hover:text-brand p-1.5 rounded shrink-0"
+                        className="text-inkMuted hover:text-brand p-1.5 rounded shrink-0"
                         title="Mark as read"
                       >
                         <Check className="w-4 h-4" />

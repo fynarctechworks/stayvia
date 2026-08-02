@@ -37,13 +37,14 @@ interface CalendarBooking {
   roomNumbers: string;
 }
 
-// Status → pill colour. Brand palette + standard semantic hints.
+// Status → chip colour. Warm Concierge semantic triads; checked-in is the
+// one legitimate dark chip (matches the prototype's calendar).
 const STATUS_STYLES: Record<CalendarBooking["status"], string> = {
-  confirmed: "bg-brass/15 text-brand-dark border-brass/40",
-  checked_in: "bg-brand-dark text-cream border-brand-dark",
-  checked_out: "bg-bg text-textSecondary border-borderc",
-  cancelled: "bg-danger/10 text-danger border-danger/30 line-through",
-  no_show: "bg-warning/15 text-warning border-warning/40",
+  confirmed: "bg-brass/20 text-warnFg border-brass/40",
+  checked_in: "bg-inkDark text-cream border-inkDark",
+  checked_out: "bg-neutralBg text-inkMuted border-neutralBorder",
+  cancelled: "bg-dangerBg text-dangerFg border-dangerBorder",
+  no_show: "bg-warnBg text-warnDeep border-warnBorder",
 };
 
 const STATUS_LABELS: Record<CalendarBooking["status"], string> = {
@@ -126,44 +127,46 @@ export default function CalendarPage() {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-start justify-between flex-wrap gap-3">
+      <div className="flex items-start justify-between flex-wrap gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-navy">Calendar</h1>
-          <div className="text-xs text-textSecondary mt-0.5">
-            {totals.total} booking{totals.total === 1 ? "" : "s"} in {format(cursor, "MMMM yyyy")}
+          <h1 className="text-[clamp(22px,3vw,28px)] font-semibold tracking-[-0.5px] text-ink">
+            Calendar
+          </h1>
+          <div className="text-sm text-textSecondary mt-1.5">
+            {totals.total} booking{totals.total === 1 ? "" : "s"} in {format(cursor, "MMMM yyyy")}.
           </div>
         </div>
-        <div className="flex items-center gap-2 flex-wrap justify-end">
+        <div className="flex items-center gap-2.5 flex-wrap justify-end">
           {/* Prev / Today / Next as a single segmented pill. */}
-          <div className="inline-flex rounded-md border border-borderc overflow-hidden shadow-sm">
+          <div className="inline-flex rounded-[11px] border border-borderControl overflow-hidden bg-surface shadow-card">
             <button
               onClick={() => setCursor((c) => subMonths(c, 1))}
-              className="px-2 py-2 bg-surface text-textSecondary hover:bg-bg hover:text-brand-dark transition-colors"
+              className="w-10 h-10 grid place-items-center text-textSecondary hover:bg-surfaceAlt transition-colors"
               aria-label="Previous month"
               title="Previous month"
             >
-              <ChevronLeft className="w-4 h-4" />
+              <ChevronLeft className="w-5 h-5" />
             </button>
             <button
               onClick={() => setCursor(startOfMonth(new Date()))}
-              className="px-3 py-2 text-sm font-medium border-l border-r border-borderc bg-surface text-brand-dark hover:bg-bg transition-colors"
+              className="h-10 px-4 text-[13.5px] font-semibold border-l border-r border-divider text-ink hover:bg-surfaceAlt transition-colors"
             >
               Today
             </button>
             <button
               onClick={() => setCursor((c) => addMonths(c, 1))}
-              className="px-2 py-2 bg-surface text-textSecondary hover:bg-bg hover:text-brand-dark transition-colors"
+              className="w-10 h-10 grid place-items-center text-textSecondary hover:bg-surfaceAlt transition-colors"
               aria-label="Next month"
               title="Next month"
             >
-              <ChevronRight className="w-4 h-4" />
+              <ChevronRight className="w-5 h-5" />
             </button>
           </div>
           {/* Month picker — same height/border/shadow as the nav pill so
               the two controls visually pair up. */}
           <input
             type="month"
-            className="h-[38px] px-3 text-sm rounded-md border border-borderc bg-surface text-brand-dark shadow-sm cursor-pointer hover:bg-bg focus:outline-none focus:ring-2 focus:ring-brand-dark/30"
+            className="h-10 px-3 text-[13.5px] font-semibold rounded-[11px] border border-borderControl bg-surface text-ink shadow-card cursor-pointer hover:bg-surfaceAlt focus:outline-none focus:border-brand focus:ring-[3px] focus:ring-brand-soft transition-colors"
             value={monthParam}
             onChange={(e) => {
               if (!e.target.value) return;
@@ -173,13 +176,15 @@ export default function CalendarPage() {
           />
         </div>
       </div>
-      <div className="flex flex-wrap items-center gap-3 text-[11px]">
+      <div className="flex flex-wrap items-center gap-4">
         {(["confirmed", "checked_in", "checked_out", "cancelled", "no_show"] as const).map((s) => (
-          <span key={s} className="inline-flex items-center gap-1.5">
-            <span className={`inline-block w-3 h-3 rounded border ${STATUS_STYLES[s]}`} />
-            <span className="text-textSecondary">
+          <span key={s} className="inline-flex items-center gap-1.5 text-xs text-inkBody">
+            <span className={`inline-block w-3 h-3 rounded-[4px] border ${STATUS_STYLES[s]}`} />
+            <span>
               {STATUS_LABELS[s]}
-              {totals.byStatus[s] ? ` · ${totals.byStatus[s]}` : ""}
+              {totals.byStatus[s] ? (
+                <span className="text-inkMuted"> · {totals.byStatus[s]}</span>
+              ) : null}
             </span>
           </span>
         ))}
@@ -190,11 +195,11 @@ export default function CalendarPage() {
       ) : (
         <div className="card !p-0 overflow-hidden">
           {/* Weekday header. Monday-start matches Indian hospitality norm. */}
-          <div className="grid grid-cols-7 bg-brand-soft/40 border-b border-borderc">
+          <div className="grid grid-cols-7 bg-surfaceAlt border-b border-divider">
             {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map((d) => (
               <div
                 key={d}
-                className="text-[11px] tracking-wider uppercase text-textSecondary px-2 py-2 text-center font-semibold"
+                className="text-[10.5px] tracking-[0.08em] uppercase text-inkMuted px-1 py-2.5 text-center font-bold"
               >
                 {d}
               </div>
@@ -213,24 +218,24 @@ export default function CalendarPage() {
                 <button
                   key={key}
                   onClick={() => setSelectedDay(day)}
-                  className={`group relative text-left min-h-[72px] sm:min-h-[110px] p-1 sm:p-1.5 border-r border-b border-borderc last:border-r-0 flex flex-col gap-0.5 sm:gap-1 transition-colors ${
-                    inMonth ? "bg-surface" : "bg-bg/60"
-                  } ${isSelected ? "ring-2 ring-brand-dark ring-inset" : ""} hover:bg-brand-soft/30`}
+                  className={`group relative text-left min-h-[72px] sm:min-h-[112px] p-1 sm:p-[7px] border-r border-b border-divider last:border-r-0 flex flex-col gap-0.5 sm:gap-1 transition-colors ${
+                    inMonth ? "bg-surface" : "bg-surfaceAlt"
+                  } ${isSelected ? "ring-2 ring-brand ring-inset" : ""} hover:bg-brand-softer`}
                 >
                   <div className="flex items-center justify-between">
                     <span
-                      className={`text-xs font-semibold ${
+                      className={`text-xs font-semibold min-w-[22px] h-[22px] inline-flex items-center justify-center ${
                         isToday(day)
-                          ? "bg-brand-dark text-cream rounded-full w-6 h-6 grid place-items-center"
+                          ? "bg-brand text-white rounded-full"
                           : inMonth
-                          ? "text-brand-dark"
-                          : "text-textSecondary/60"
+                          ? "text-ink"
+                          : "text-inkFaint"
                       }`}
                     >
                       {format(day, "d")}
                     </span>
                     {dayBookings.length > 0 && (
-                      <span className="text-[10px] font-mono text-textSecondary">
+                      <span className="text-[10px] font-mono text-inkFaint">
                         {dayBookings.length}
                       </span>
                     )}
@@ -239,7 +244,7 @@ export default function CalendarPage() {
                     {visible.map((b) => (
                       <span
                         key={b.id}
-                        className={`text-[10px] leading-tight px-1.5 py-0.5 rounded border truncate ${STATUS_STYLES[b.status]}`}
+                        className={`text-[10px] leading-tight px-1.5 py-0.5 rounded-[6px] border truncate ${STATUS_STYLES[b.status]}`}
                         title={`${b.reservationNumber} · ${b.guestName}${b.roomNumbers ? ` · Room ${b.roomNumbers}` : ""}`}
                       >
                         {b.bookingSource === "complimentary" && (
@@ -250,7 +255,7 @@ export default function CalendarPage() {
                       </span>
                     ))}
                     {overflow > 0 && (
-                      <span className="text-[10px] text-textSecondary pl-1">
+                      <span className="text-[10px] text-inkMuted pl-1">
                         +{overflow} more
                       </span>
                     )}
@@ -271,16 +276,16 @@ export default function CalendarPage() {
           onClick={() => setSelectedDay(null)}
         >
           <div
-            className="bg-surface rounded-lg shadow-2xl w-full max-w-3xl max-h-[85vh] flex flex-col overflow-hidden"
+            className="bg-surface rounded-2xl shadow-modal w-full max-w-3xl max-h-[85vh] flex flex-col overflow-hidden"
             onClick={(e) => e.stopPropagation()}
           >
-            <header className="flex items-center justify-between gap-3 px-6 py-4 border-b border-borderc bg-brand-soft/30 shrink-0">
+            <header className="flex items-center justify-between gap-3 px-6 py-4 border-b border-divider bg-surfaceAlt shrink-0">
               <div className="flex items-center gap-3">
-                <span className="grid place-items-center w-10 h-10 rounded-md bg-brand-dark text-cream font-bold">
+                <span className="grid place-items-center w-10 h-10 rounded-md bg-brand text-white font-mono font-semibold">
                   {format(selectedDay, "d")}
                 </span>
                 <div>
-                  <h2 className="text-lg font-semibold text-navy leading-tight">
+                  <h2 className="text-lg font-semibold text-ink leading-tight">
                     {format(selectedDay, "EEEE, d MMMM yyyy")}
                   </h2>
                   <div className="text-xs text-textSecondary">
@@ -292,7 +297,7 @@ export default function CalendarPage() {
               </div>
               <button
                 onClick={() => setSelectedDay(null)}
-                className="grid place-items-center w-8 h-8 rounded-md text-textSecondary hover:text-brand-dark hover:bg-bg transition-colors"
+                className="grid place-items-center w-8 h-8 rounded-md text-textSecondary hover:text-ink hover:bg-parchment transition-colors"
                 aria-label="Close"
               >
                 <X className="w-4 h-4" />

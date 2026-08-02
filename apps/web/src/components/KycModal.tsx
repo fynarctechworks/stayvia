@@ -50,22 +50,22 @@ export function KycModal({
 
   return (
     <div
-      className="fixed inset-0 bg-black/50 flex items-end justify-center sm:items-center z-50 sm:p-4"
+      className="fixed inset-0 bg-inkDark/50 backdrop-blur-[3px] flex items-end justify-center sm:items-center z-50 sm:p-4"
       onClick={onClose}
     >
       <div
-        className="bg-surface rounded-t-2xl sm:rounded-md w-full sm:max-w-lg p-6 sm:p-7 pb-safe max-h-[92vh] overflow-y-auto"
+        className="bg-surface rounded-t-2xl sm:rounded-2xl shadow-modal w-full sm:max-w-[480px] p-6 sm:p-7 pb-safe max-h-[92vh] overflow-y-auto"
         onClick={(e) => e.stopPropagation()}
       >
-        <h2 className="text-lg font-semibold text-navy mb-1 flex items-center gap-2">
-          <ShieldCheck className="w-5 h-5" /> KYC Documents
+        <h2 className="text-base font-semibold text-ink mb-1 flex items-center gap-2">
+          <ShieldCheck className="w-5 h-5 text-brand-deep" /> KYC Documents
         </h2>
-        <div className="text-xs text-textSecondary mb-4">
+        <div className="text-[12.5px] leading-relaxed text-inkMuted mb-4">
           Upload a clear photo/scan of the guest's government ID proof (Aadhaar, PAN, Passport, or Driving License). Required by Form C / Foreigners Order before check-in.
         </div>
 
         {status?.verified && (
-          <div className="mb-3 rounded bg-success/10 border border-success/30 text-success text-sm px-3 py-2">
+          <div className="mb-3 rounded-sm bg-successBg border border-successBorder text-success text-sm px-3 py-2">
             Verified. Re-uploading will replace the existing documents.
           </div>
         )}
@@ -74,19 +74,19 @@ export function KycModal({
           <div className="grid grid-cols-3 gap-2 mb-3">
             {status?.photoUrl && (
               <a href={status.photoUrl} target="_blank" rel="noreferrer" className="block">
-                <img src={status.photoUrl} alt="Customer photo" className="w-full h-32 object-cover border rounded" />
+                <img src={status.photoUrl} alt="Customer photo" className="w-full h-32 object-cover border border-borderc rounded-lg" />
                 <div className="text-xs text-center mt-1 text-textSecondary">Customer</div>
               </a>
             )}
             {status?.frontUrl && (
               <a href={status.frontUrl} target="_blank" rel="noreferrer" className="block">
-                <img src={status.frontUrl} alt="ID front" className="w-full h-32 object-cover border rounded" />
+                <img src={status.frontUrl} alt="ID front" className="w-full h-32 object-cover border border-borderc rounded-lg" />
                 <div className="text-xs text-center mt-1 text-textSecondary">ID Front</div>
               </a>
             )}
             {status?.backUrl && (
               <a href={status.backUrl} target="_blank" rel="noreferrer" className="block">
-                <img src={status.backUrl} alt="ID back" className="w-full h-32 object-cover border rounded" />
+                <img src={status.backUrl} alt="ID back" className="w-full h-32 object-cover border border-borderc rounded-lg" />
                 <div className="text-xs text-center mt-1 text-textSecondary">ID Back</div>
               </a>
             )}
@@ -102,7 +102,7 @@ export function KycModal({
               type="file"
               accept="image/jpeg,image/png,image/webp"
               onChange={(e) => setPhoto(e.target.files?.[0] ?? null)}
-              className="input"
+              className="block w-full cursor-pointer rounded-[12px] border-[1.5px] border-dashed border-borderControl bg-surfaceAlt px-4 py-4 text-[13px] text-inkBody transition-colors hover:border-brand/40 file:mr-3 file:cursor-pointer file:rounded-sm file:border-0 file:bg-brand-soft file:px-3 file:py-1.5 file:text-xs file:font-semibold file:text-brand-deep"
             />
           </div>
           <div>
@@ -113,7 +113,7 @@ export function KycModal({
               type="file"
               accept="image/jpeg,image/png,image/webp"
               onChange={(e) => setFront(e.target.files?.[0] ?? null)}
-              className="input"
+              className="block w-full cursor-pointer rounded-[12px] border-[1.5px] border-dashed border-borderControl bg-surfaceAlt px-4 py-4 text-[13px] text-inkBody transition-colors hover:border-brand/40 file:mr-3 file:cursor-pointer file:rounded-sm file:border-0 file:bg-brand-soft file:px-3 file:py-1.5 file:text-xs file:font-semibold file:text-brand-deep"
             />
           </div>
           <div>
@@ -122,7 +122,7 @@ export function KycModal({
               type="file"
               accept="image/jpeg,image/png,image/webp"
               onChange={(e) => setBack(e.target.files?.[0] ?? null)}
-              className="input"
+              className="block w-full cursor-pointer rounded-[12px] border-[1.5px] border-dashed border-borderControl bg-surfaceAlt px-4 py-4 text-[13px] text-inkBody transition-colors hover:border-brand/40 file:mr-3 file:cursor-pointer file:rounded-sm file:border-0 file:bg-brand-soft file:px-3 file:py-1.5 file:text-xs file:font-semibold file:text-brand-deep"
             />
           </div>
           {err && <div className="text-danger text-sm">{err}</div>}

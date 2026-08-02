@@ -53,13 +53,13 @@ const PER_PAGE = 25;
 function statusTone(status: string): string {
   switch (status) {
     case "paid":
-      return "bg-success/15 text-success border-success/30";
+      return "bg-successBg text-success border-successBorder";
     case "partial":
-      return "bg-warning/15 text-warning border-warning/30";
+      return "bg-warnBg text-warnFg border-warnBorder";
     case "voided":
-      return "bg-textSecondary/15 text-textSecondary border-textSecondary/30 line-through";
+      return "bg-neutralBg text-inkMuted border-neutralBorder line-through";
     default:
-      return "bg-info/15 text-info border-info/30";
+      return "bg-infoBg text-info border-infoBorder";
   }
 }
 
@@ -177,15 +177,15 @@ export default function Invoices() {
     <div className="space-y-4">
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
-          <h1 className="text-2xl font-bold text-brand-dark">Invoices</h1>
-          <p className="text-xs text-textSecondary mt-0.5">
+          <h1 className="text-2xl font-semibold tracking-tight text-ink">Invoices</h1>
+          <p className="text-sm text-textSecondary mt-1">
             {total} invoice{total === 1 ? "" : "s"} - issued, partial, paid, and voided
           </p>
         </div>
         <button
           onClick={exportAll}
           disabled={total === 0 || exporting}
-          className="inline-flex items-center gap-1.5 px-3 h-9 text-xs font-semibold rounded-sm border border-borderc bg-surface text-textSecondary hover:border-brand hover:text-brand transition-colors disabled:opacity-40 disabled:hover:border-borderc disabled:hover:text-textSecondary"
+          className="inline-flex items-center gap-1.5 px-3.5 h-10 text-[13px] font-semibold rounded-sm border border-borderControl bg-surface text-inkBody hover:bg-surfaceAlt transition-colors disabled:opacity-40 disabled:hover:bg-surface"
         >
           <Download className="w-3.5 h-3.5" />
           {exporting ? "Exporting…" : "Export CSV"}
@@ -193,30 +193,30 @@ export default function Invoices() {
       </div>
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        <div className="card">
+        <div className="card !rounded-[14px]">
           <div className="label">Invoices</div>
-          <div className="text-2xl font-bold text-brand-dark mt-1">{total}</div>
-          <div className="text-xs text-textSecondary mt-0.5">
+          <div className="text-2xl font-bold font-mono text-ink mt-1.5">{total}</div>
+          <div className="text-[11px] text-inkMuted mt-1">
             matching current filters
           </div>
         </div>
-        <div className="card">
+        <div className="card !rounded-[14px]">
           <div className="label">Total billed</div>
-          <Money value={totals.grand} className="block text-2xl font-bold text-brand-dark font-mono mt-1" />
-          <div className="text-xs text-textSecondary mt-0.5">non-voided · all matches</div>
+          <Money value={totals.grand} className="block text-2xl font-bold text-ink font-mono mt-1.5" />
+          <div className="text-[11px] text-inkMuted mt-1">non-voided · all matches</div>
         </div>
-        <div className="card">
+        <div className="card !rounded-[14px]">
           <div className="label">Settled</div>
-          <Money value={settled} className="block text-2xl font-bold text-success font-mono mt-1" />
-          <div className="text-xs text-textSecondary mt-0.5">
+          <Money value={settled} className="block text-2xl font-bold text-success font-mono mt-1.5" />
+          <div className="text-[11px] text-inkMuted mt-1">
             cash {inr(totals.paid)}
             {totals.walletCredit > 0.009 ? ` + credit ${inr(totals.walletCredit)}` : ""}
           </div>
         </div>
-        <div className="card">
+        <div className="card !rounded-[14px]">
           <div className="label">Outstanding</div>
-          <Money value={totals.balance} className="block text-2xl font-bold text-danger font-mono mt-1" />
-          <div className="text-xs text-textSecondary mt-0.5">balance due</div>
+          <Money value={totals.balance} className="block text-2xl font-bold text-dangerFg font-mono mt-1.5" />
+          <div className="text-[11px] text-inkMuted mt-1">balance due</div>
         </div>
       </div>
 
@@ -322,7 +322,7 @@ export default function Invoices() {
         </div>
       ) : (
         <div className="card !p-0 overflow-hidden">
-          <div className="hidden md:grid grid-cols-[150px_140px_minmax(180px,1fr)_90px_120px_120px_120px_120px] gap-3 px-3 py-2 text-[10px] font-semibold uppercase tracking-wider text-textSecondary bg-bg/60 border-b border-borderc">
+          <div className="hidden md:grid grid-cols-[150px_140px_minmax(180px,1fr)_90px_120px_120px_120px_120px] gap-3 px-3 py-2.5 text-[10px] font-bold uppercase tracking-[0.06em] text-inkMuted bg-surfaceAlt border-b border-divider">
             <div>Invoice #</div>
             <div>Issued</div>
             <div>Billed to</div>
@@ -332,7 +332,7 @@ export default function Invoices() {
             <div className="text-right">Balance</div>
             <div className="text-right">Actions</div>
           </div>
-          <ul className="divide-y divide-borderc">
+          <ul className="divide-y divide-divider">
             {rows.map((inv) => (
               <InvoiceRow
                 key={inv.id}
@@ -364,14 +364,14 @@ export default function Invoices() {
             <button
               onClick={() => setPage((p) => Math.max(1, p - 1))}
               disabled={page <= 1}
-              className="h-8 px-2 rounded-sm border-2 border-borderc text-textSecondary hover:border-brand-dark hover:text-brand-dark disabled:opacity-40 disabled:hover:border-borderc disabled:hover:text-textSecondary inline-flex items-center gap-1"
+              className="h-8 px-2.5 rounded-sm border border-borderControl bg-surface text-textSecondary hover:bg-surfaceAlt hover:text-ink disabled:opacity-40 disabled:hover:bg-surface disabled:hover:text-textSecondary inline-flex items-center gap-1"
             >
               <ChevronLeft className="w-3.5 h-3.5" /> Prev
             </button>
             <button
               onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
               disabled={page >= totalPages}
-              className="h-8 px-2 rounded-sm border-2 border-borderc text-textSecondary hover:border-brand-dark hover:text-brand-dark disabled:opacity-40 disabled:hover:border-borderc disabled:hover:text-textSecondary inline-flex items-center gap-1"
+              className="h-8 px-2.5 rounded-sm border border-borderControl bg-surface text-textSecondary hover:bg-surfaceAlt hover:text-ink disabled:opacity-40 disabled:hover:bg-surface disabled:hover:text-textSecondary inline-flex items-center gap-1"
             >
               Next <ChevronRight className="w-3.5 h-3.5" />
             </button>
@@ -407,11 +407,11 @@ function InvoiceRow({
       : "Stay";
 
   return (
-    <li className="group hover:bg-brand-soft/30 transition-colors">
+    <li className="group hover:bg-surfaceAlt transition-colors">
       {/* DESKTOP */}
       <div className="hidden md:grid grid-cols-[150px_140px_minmax(180px,1fr)_90px_120px_120px_120px_120px] gap-3 items-center px-3 py-2.5">
         <div className="min-w-0">
-          <div className="font-mono text-xs font-semibold text-brand-dark truncate">
+          <div className="font-mono text-xs font-semibold text-ink truncate">
             {inv.invoiceNumber}
           </div>
           <button
@@ -423,26 +423,26 @@ function InvoiceRow({
         </div>
 
         <div className="text-xs">
-          <div className="text-brand-dark font-medium">
+          <div className="text-ink font-medium">
             {format(new Date(inv.createdAt), "dd MMM yyyy")}
           </div>
-          <div className="text-[10px] text-textSecondary font-mono">
+          <div className="text-[10px] text-inkMuted font-mono">
             {format(new Date(inv.createdAt), "h:mm a")}
           </div>
         </div>
 
         <div className="min-w-0">
-          <div className="text-sm font-semibold text-brand-dark truncate">{inv.guestName}</div>
+          <div className="text-sm font-semibold text-ink truncate">{inv.guestName}</div>
           {inv.guestGstin && (
-            <div className="text-[10px] text-textSecondary font-mono truncate">
+            <div className="text-[10px] text-inkMuted font-mono truncate">
               GSTIN {inv.guestGstin}
             </div>
           )}
         </div>
 
-        <div className="text-[11px] text-textSecondary">{scopeLabel}</div>
+        <div className="text-[11px] text-inkMuted">{scopeLabel}</div>
 
-        <div className="text-right text-sm font-mono font-semibold text-brand-dark">
+        <div className="text-right text-sm font-mono font-semibold text-ink">
           {inr(inv.grandTotal)}
         </div>
 
@@ -453,12 +453,12 @@ function InvoiceRow({
               the status badge already reads PAID, so a second "Paid" line is
               redundant. */}
           {hasBalance && (
-            <div className="text-sm font-mono font-semibold text-danger">
+            <div className="text-sm font-mono font-semibold text-dangerFg">
               {inr(inv.balanceDue)}
             </div>
           )}
           <span
-            className={`inline-block ${hasBalance ? "mt-0.5" : ""} px-1.5 py-0 rounded-sm text-[9px] font-bold uppercase tracking-wider border ${statusTone(inv.status)}`}
+            className={`inline-block ${hasBalance ? "mt-0.5" : ""} px-2 py-0 rounded-full text-[9px] font-bold uppercase tracking-wider border ${statusTone(inv.status)}`}
           >
             {inv.status}
           </span>
@@ -467,14 +467,14 @@ function InvoiceRow({
         <div className="flex justify-end gap-1">
           <button
             onClick={onPreview}
-            className="h-7 px-2 rounded-sm border-2 border-borderc text-textSecondary hover:border-brand-dark hover:text-brand-dark text-[11px] font-semibold inline-flex items-center gap-1"
+            className="h-7 px-2 rounded-sm border border-borderControl bg-surface text-textSecondary hover:bg-surfaceAlt hover:text-ink text-[11px] font-semibold inline-flex items-center gap-1"
             title="Preview PDF"
           >
             <Eye className="w-3 h-3" /> PDF
           </button>
           <button
             onClick={onOpenReservation}
-            className="h-7 px-2 rounded-sm bg-brand-dark text-cream hover:opacity-90 text-[11px] font-semibold inline-flex items-center gap-1"
+            className="h-7 px-2 rounded-sm border border-inkDark bg-inkDark text-cream hover:opacity-90 text-[11px] font-semibold inline-flex items-center gap-1"
             title="Open reservation"
           >
             <FileText className="w-3 h-3" /> Open
@@ -486,10 +486,10 @@ function InvoiceRow({
       <div className="md:hidden px-3 py-3">
         <div className="flex items-start justify-between gap-2">
           <div className="min-w-0 flex-1">
-            <div className="font-mono text-xs font-semibold text-brand-dark truncate">
+            <div className="font-mono text-xs font-semibold text-ink truncate">
               {inv.invoiceNumber}
             </div>
-            <div className="text-sm font-semibold text-brand-dark truncate mt-0.5">
+            <div className="text-sm font-semibold text-ink truncate mt-0.5">
               {inv.guestName}
             </div>
             <button
@@ -498,21 +498,21 @@ function InvoiceRow({
             >
               {inv.reservationNumber ?? "-"}
             </button>
-            <div className="text-[10px] text-textSecondary mt-1">
+            <div className="text-[10px] text-inkMuted mt-1">
               {format(new Date(inv.createdAt), "dd MMM yyyy")} · {scopeLabel}
             </div>
           </div>
           <div className="text-right shrink-0">
-            <div className="text-sm font-mono font-semibold text-brand-dark">
+            <div className="text-sm font-mono font-semibold text-ink">
               {inr(inv.grandTotal)}
             </div>
             {hasBalance && (
-              <div className="text-xs font-mono font-semibold mt-0.5 text-danger">
+              <div className="text-xs font-mono font-semibold mt-0.5 text-dangerFg">
                 {inr(inv.balanceDue)} due
               </div>
             )}
             <span
-              className={`inline-block mt-1 px-1.5 py-0 rounded-sm text-[9px] font-bold uppercase tracking-wider border ${statusTone(inv.status)}`}
+              className={`inline-block mt-1 px-2 py-0 rounded-full text-[9px] font-bold uppercase tracking-wider border ${statusTone(inv.status)}`}
             >
               {inv.status}
             </span>
@@ -521,13 +521,13 @@ function InvoiceRow({
         <div className="flex gap-2 mt-2">
           <button
             onClick={onPreview}
-            className="flex-1 h-8 rounded-sm border-2 border-borderc text-textSecondary text-xs font-semibold inline-flex items-center justify-center gap-1"
+            className="flex-1 h-8 rounded-sm border border-borderControl bg-surface text-textSecondary text-xs font-semibold inline-flex items-center justify-center gap-1"
           >
             <Eye className="w-3.5 h-3.5" /> PDF
           </button>
           <button
             onClick={onOpenReservation}
-            className="flex-1 h-8 rounded-sm bg-brand-dark text-cream text-xs font-semibold inline-flex items-center justify-center gap-1"
+            className="flex-1 h-8 rounded-sm border border-inkDark bg-inkDark text-cream text-xs font-semibold inline-flex items-center justify-center gap-1"
           >
             <FileText className="w-3.5 h-3.5" /> Open
           </button>

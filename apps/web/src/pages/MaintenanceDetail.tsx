@@ -8,7 +8,7 @@ import {
 } from "@stayvia/shared";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { format } from "date-fns";
-import { ChevronLeft, Send } from "@/lib/micons";
+import { CheckCircle2, ChevronLeft, Send } from "@/lib/micons";
 import { useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { Loader } from "@/components/Loader";
@@ -49,17 +49,18 @@ interface IssueDetail {
   comments: IssueComment[];
 }
 
+// Semantic bg/fg/border triads per the Warm Concierge spec.
 const STATUS_STYLES: Record<MaintenanceStatus, string> = {
-  open: "bg-danger/10 text-danger border-danger/30",
-  in_progress: "bg-warning/10 text-[#B45309] border-warning/40",
-  resolved: "bg-success/10 text-success border-success/30",
-  cancelled: "bg-bg text-textSecondary border-borderc",
+  open: "bg-dangerBg text-dangerFg border-dangerBorder",
+  in_progress: "bg-warnBg text-warning border-warnBorder",
+  resolved: "bg-successBg text-success border-successBorder",
+  cancelled: "bg-neutralBg text-inkMuted border-neutralBorder",
 };
 
 const SEVERITY_STYLES: Record<MaintenanceSeverity, string> = {
-  urgent: "bg-danger/10 text-danger border-danger/30",
-  normal: "bg-warning/10 text-[#B45309] border-warning/40",
-  low: "bg-bg text-textSecondary border-borderc",
+  urgent: "bg-dangerBg text-dangerFg border-dangerBorder",
+  normal: "bg-warnBg text-warning border-warnBorder",
+  low: "bg-bg text-textSecondary border-borderControl",
 };
 
 export default function MaintenanceDetail() {
@@ -105,23 +106,25 @@ export default function MaintenanceDetail() {
     issue.status === "resolved" || issue.status === "cancelled";
 
   return (
-    <div className="space-y-5 max-w-4xl">
+    <div className="space-y-4 max-w-[820px]">
       <div className="flex items-center gap-3 flex-wrap">
         <button
           onClick={() => navigate(-1)}
-          className="btn-secondary !h-9 !px-2"
+          className="btn-secondary !h-10 w-10 !px-0 grid place-items-center !rounded-[11px]"
           title="Back"
         >
-          <ChevronLeft className="w-4 h-4" />
+          <ChevronLeft className="w-5 h-5" />
         </button>
-        <h1 className="text-2xl font-bold text-brand-dark">{issue.title}</h1>
+        <h1 className="text-[clamp(19px,2.6vw,24px)] font-semibold tracking-[-0.4px] text-ink">
+          {issue.title}
+        </h1>
         <span
-          className={`text-[10px] uppercase tracking-wider font-bold px-2 py-0.5 rounded border ${STATUS_STYLES[issue.status]}`}
+          className={`text-[10px] uppercase tracking-[0.05em] font-bold px-2 py-0.5 rounded-[6px] border ${STATUS_STYLES[issue.status]}`}
         >
           {MAINTENANCE_STATUS_LABELS[issue.status]}
         </span>
         <span
-          className={`text-[10px] uppercase tracking-wider font-bold px-2 py-0.5 rounded border ${SEVERITY_STYLES[issue.severity]}`}
+          className={`text-[10px] uppercase tracking-[0.05em] font-bold px-2 py-0.5 rounded-[6px] border ${SEVERITY_STYLES[issue.severity]}`}
         >
           {MAINTENANCE_SEVERITY_LABELS[issue.severity]}
         </span>
@@ -137,12 +140,12 @@ export default function MaintenanceDetail() {
               <div>
                 <div className="label">Room</div>
                 <button
-                  className="font-mono font-bold text-brand-dark hover:underline"
+                  className="font-mono font-bold text-brand-deep hover:underline"
                   onClick={() => navigate(`/rooms/${issue.room.roomNumber}`)}
                 >
                   {issue.room.roomNumber}
                 </button>
-                <span className="ml-2 text-textSecondary text-xs">
+                <span className="ml-2 text-inkMuted text-xs">
                   Floor {issue.room.floor} ·{" "}
                   {issue.room.roomType.replace(/_/g, " ")}
                 </span>
@@ -199,9 +202,9 @@ export default function MaintenanceDetail() {
             )}
 
             {issue.resolutionNotes && (
-              <div className="border-t border-borderc pt-3">
+              <div className="border-t border-divider pt-3">
                 <div className="label mb-1">Resolution Notes</div>
-                <div className="text-sm text-textPrimary whitespace-pre-wrap bg-success/5 border border-success/20 p-3 rounded-sm">
+                <div className="text-sm text-textPrimary whitespace-pre-wrap bg-successBg border border-successBorder p-3 rounded-md">
                   {issue.resolutionNotes}
                 </div>
               </div>
@@ -214,18 +217,19 @@ export default function MaintenanceDetail() {
               file a new issue if the same problem recurs, which keeps
               the chronic-issue history honest. */}
           <div className="card space-y-3">
-            <div className="font-semibold text-brand-dark">Actions</div>
+            <div className="text-[15px] font-semibold text-ink">Actions</div>
             {!isClosed ? (
               <button
                 onClick={() => setShowResolve(true)}
-                className="w-full sm:w-auto text-sm px-4 py-2 bg-success text-cream rounded-sm hover:opacity-90 font-semibold inline-flex items-center justify-center gap-1.5 shadow-sm"
+                className="w-full sm:w-auto text-sm h-[42px] px-[18px] bg-success text-white rounded-[11px] hover:opacity-90 font-semibold inline-flex items-center justify-center gap-1.5 shadow-sm transition-opacity"
               >
+                <CheckCircle2 className="w-[18px] h-[18px]" />
                 Mark Closed
               </button>
             ) : (
               <div>
                 <div
-                  className="inline-flex items-center text-[11px] font-semibold uppercase tracking-wider px-2.5 py-1 rounded border bg-success/20 text-success border-success/50"
+                  className="inline-flex items-center text-[11px] font-semibold uppercase tracking-[0.05em] px-2.5 py-1 rounded-full border bg-successBg text-success border-successBorder"
                 >
                   Closed
                 </div>
@@ -238,25 +242,25 @@ export default function MaintenanceDetail() {
           </div>
 
           {/* Comments thread */}
-          <div className="card space-y-3">
-            <div className="font-semibold text-brand-dark">Updates</div>
+          <div className="card space-y-3.5">
+            <div className="text-[15px] font-semibold text-ink">Updates</div>
             {issue.comments.length === 0 ? (
               <div className="text-xs text-textSecondary italic">
                 No updates yet. Use the box below to record progress.
               </div>
             ) : (
-              <ul className="space-y-3">
+              <ul className="space-y-3.5">
                 {issue.comments.map((c) => (
                   <li
                     key={c.id}
-                    className="border-l-2 border-brand-soft pl-3 py-1"
+                    className="border-l-2 border-brand-soft pl-3.5 py-0.5"
                   >
-                    <div className="text-[11px] text-textSecondary">
-                      <strong className="text-brand-dark">{c.authorName}</strong>
+                    <div className="text-[11.5px] text-inkMuted">
+                      <strong className="text-brand-deep">{c.authorName}</strong>
                       {" · "}
                       {format(new Date(c.createdAt), "dd MMM · h:mm a")}
                     </div>
-                    <div className="text-sm whitespace-pre-wrap mt-1">
+                    <div className="text-sm leading-relaxed whitespace-pre-wrap mt-1">
                       {c.body}
                     </div>
                   </li>
@@ -265,7 +269,7 @@ export default function MaintenanceDetail() {
             )}
 
             {!isClosed && (
-              <div className="flex gap-2 pt-2 border-t border-borderc">
+              <div className="flex gap-2 pt-3 border-t border-divider">
                 <textarea
                   className="input flex-1 min-h-[60px]"
                   placeholder="Record an update - e.g. technician arrived, parts ordered…"
@@ -293,10 +297,10 @@ export default function MaintenanceDetail() {
           onClick={() => setShowResolve(false)}
         >
           <div
-            className="bg-surface rounded-md w-full max-w-md p-6 space-y-4"
+            className="bg-surface rounded-2xl shadow-modal w-full max-w-md p-6 space-y-4"
             onClick={(e) => e.stopPropagation()}
           >
-            <h2 className="text-lg font-semibold text-brand-dark">
+            <h2 className="text-lg font-semibold text-ink">
               Mark issue resolved
             </h2>
             <div className="text-xs text-textSecondary">

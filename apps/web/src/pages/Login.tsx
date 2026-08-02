@@ -1,4 +1,4 @@
-import { Suspense, lazy, useEffect, useId, useMemo, useState } from "react";
+import { useEffect, useId, useMemo, useState } from "react";
 import { Link, Navigate, useLocation } from "react-router-dom";
 import {
   AlertCircle,
@@ -14,9 +14,19 @@ import { useDialog } from "@/components/Dialog";
 import { api } from "@/lib/api";
 import { supabase } from "@/lib/supabase";
 
-// Heavy WebGL backdrop (three + r3f) — lazy so it only loads on /login and
-// never weighs down the rest of the app bundle.
-const Silk = lazy(() => import("@/components/Silk"));
+// Warm Concierge auth brand pane: forest base + radial glow + faint
+// diagonal stripes. Inline styles are the sanctioned exception for this
+// pane only (see design handoff — special surfaces).
+const forestBase = { background: "#10352A" };
+const forestGlow = {
+  background:
+    "radial-gradient(120% 90% at 15% 10%, #1A4A3A 0%, #10352A 55%, #0B281F 100%)",
+};
+const forestStripes = {
+  background:
+    "repeating-linear-gradient(115deg, rgba(255,255,255,.03) 0 2px, transparent 2px 26px)",
+};
+const brassHairline = { background: "rgba(180,136,74,.24)" };
 
 export default function Login() {
   const { signIn, verifyMfa, session, mfaPending } = useAuth();
@@ -193,18 +203,15 @@ export default function Login() {
   }
 
   return (
-    <div className="min-h-screen grid lg:grid-cols-2 bg-ivory">
-      <aside className="hidden lg:block relative overflow-hidden bg-brand-dark text-cream min-h-screen">
-        {/* Animated WebGL "silk" backdrop in the brand jade. Lazy-loaded;
-            a plain brand fill shows until it mounts. */}
-        <div aria-hidden className="absolute inset-0 bg-brand-dark">
-          <Suspense fallback={null}>
-            <Silk speed={4} scale={1.1} color="#1c1c1c" noiseIntensity={1.2} rotation={0.2} />
-          </Suspense>
-        </div>
-        {/* Subtle darkening so text stays legible over the animation. */}
-        <div aria-hidden className="absolute inset-0 bg-gradient-to-tr from-brand-dark/55 via-brand-dark/25 to-transparent" />
-        <div className="absolute inset-y-0 right-0 w-px bg-brass/20" />
+    <div className="min-h-screen grid lg:grid-cols-2 bg-bg">
+      <aside
+        className="hidden lg:block relative overflow-hidden text-cream min-h-screen"
+        style={forestBase}
+      >
+        {/* Forest radial glow + faint diagonal stripes (spec: special surfaces). */}
+        <div aria-hidden className="absolute inset-0" style={forestGlow} />
+        <div aria-hidden className="absolute inset-0 opacity-50" style={forestStripes} />
+        <div aria-hidden className="absolute inset-y-0 right-0 w-px" style={brassHairline} />
 
         {/* Logo + name, top-left. */}
         <div className="absolute top-10 left-10 xl:left-14 flex items-center gap-3 pointer-events-none">
@@ -221,9 +228,9 @@ export default function Login() {
             Front Office Suite
           </span>
 
-          <h2 className="text-cream text-4xl xl:text-5xl font-bold leading-tight drop-shadow-sm max-w-md">
+          <h2 className="text-cream text-4xl xl:text-5xl font-bold leading-tight drop-shadow-sm max-w-md tracking-[-0.5px]">
             Welcome to your{" "}
-            <span className="italic font-serif text-brass">front desk.</span>
+            <span className="font-[Georgia] italic font-semibold text-brass">front desk.</span>
           </h2>
 
           <p className="text-cream/85 text-base leading-relaxed mt-5 max-w-md">
@@ -261,20 +268,13 @@ export default function Login() {
         </div>
       </aside>
 
-      {/* On phone/tablet (no brand aside) the form pane gets the brand
-          backdrop itself — a jade gradient + soft logo watermark — so the
-          card floats on something rich instead of empty cream. On lg+ it
-          reverts to plain ivory next to the brand aside. */}
-      <main className="relative flex items-center justify-center p-6 sm:p-10 bg-brand-dark lg:bg-ivory overflow-hidden">
-        {/* Animated silk backdrop — phone/tablet only (lg+ has the brand
-            aside). Same lazy WebGL silk so the card floats on living jade,
-            with a dark overlay to keep the card and logo legible. */}
-        <div aria-hidden className="lg:hidden absolute inset-0">
-          <Suspense fallback={null}>
-            <Silk speed={4} scale={1.1} color="#1c1c1c" noiseIntensity={1.2} rotation={0.2} />
-          </Suspense>
-        </div>
-        <div aria-hidden className="lg:hidden absolute inset-0 bg-brand-dark/55" />
+      {/* On phone/tablet (no brand aside) the form pane gets the forest
+          backdrop itself — same gradient + stripes — so the card floats on
+          something rich instead of empty paper. On lg+ it reverts to the
+          warm-paper canvas next to the brand aside. */}
+      <main className="relative flex items-center justify-center p-6 sm:p-10 lg:bg-bg overflow-hidden">
+        <div aria-hidden className="lg:hidden absolute inset-0" style={forestGlow} />
+        <div aria-hidden className="lg:hidden absolute inset-0 opacity-50" style={forestStripes} />
         <img
           src="/logo.png"
           alt=""
@@ -296,7 +296,7 @@ export default function Login() {
         <form
           onSubmit={onSubmit}
           noValidate
-          className="relative w-full p-9 space-y-5 bg-surface rounded-2xl lg:rounded-md border border-borderc shadow-[0_20px_50px_-20px_rgba(15,61,46,0.45)]"
+          className="relative w-full p-7 sm:p-9 space-y-5 bg-surface rounded-[20px] border border-borderc shadow-modal"
           aria-describedby={error ? errId : undefined}
         >
 
@@ -312,7 +312,7 @@ export default function Login() {
           {expired && !error && (
             <div
               role="status"
-              className="flex items-start gap-2 rounded-sm border border-warning/40 bg-warning/10 px-3 py-2 text-warning text-sm"
+              className="flex items-start gap-2 rounded-sm border border-warnBorder bg-warnBg px-3 py-2 text-warnFg text-sm"
             >
               <AlertCircle className="w-4 h-4 mt-0.5 shrink-0" />
               <span>Your session expired. Please sign in again.</span>
@@ -323,7 +323,7 @@ export default function Login() {
             <div
               id={errId}
               role="alert"
-              className="flex items-start gap-2 rounded-sm border border-danger/30 bg-danger/5 px-3 py-2 text-danger text-sm"
+              className="flex items-start gap-2 rounded-sm border border-dangerBorder bg-dangerBg px-3 py-2 text-dangerFg text-sm"
             >
               <AlertCircle className="w-4 h-4 mt-0.5 shrink-0" />
               <span>{error}</span>
@@ -367,7 +367,7 @@ export default function Login() {
               </label>
               <button
                 type="button"
-                className="text-xs text-accentBlue hover:underline"
+                className="text-xs font-semibold text-brand-deep hover:underline"
                 onClick={onForgotPassword}
               >
                 Forgot password?
@@ -419,7 +419,7 @@ export default function Login() {
               type="checkbox"
               checked={remember}
               onChange={(e) => setRemember(e.target.checked)}
-              className="w-4 h-4 rounded-sm border-borderc text-navy focus:ring-accentBlue/40"
+              className="w-4 h-4 rounded-sm border-borderControl text-brand focus:ring-brand/40"
             />
             Remember me
           </label>
@@ -441,7 +441,7 @@ export default function Login() {
 
           <p className="text-center text-xs text-textSecondary">
             New hotel?{" "}
-            <Link to="/signup" className="text-brand-dark font-semibold hover:underline">
+            <Link to="/signup" className="text-brand-deep font-bold hover:underline">
               Start your free 14-day trial
             </Link>
           </p>
@@ -452,7 +452,7 @@ export default function Login() {
             <div className="space-y-5">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-md bg-brand-soft grid place-items-center shrink-0">
-                  <ShieldCheck className="w-5 h-5 text-navy" />
+                  <ShieldCheck className="w-5 h-5 text-brand-deep" />
                 </div>
                 <div className="leading-tight">
                   <div className="font-semibold text-navy">Two-factor verification</div>
@@ -468,7 +468,7 @@ export default function Login() {
                 </label>
                 <input
                   id={`${pwId}-mfa`}
-                  className="input text-center tracking-[0.5em] text-lg font-semibold"
+                  className="input text-center tracking-[0.5em] text-lg font-semibold font-mono"
                   type="text"
                   inputMode="numeric"
                   autoComplete="one-time-code"
@@ -503,7 +503,7 @@ export default function Login() {
                   setMfaCode("");
                   setError(null);
                 }}
-                className="w-full text-center text-xs text-accentBlue hover:underline"
+                className="w-full text-center text-xs font-semibold text-brand-deep hover:underline"
               >
                 Back to sign in
               </button>

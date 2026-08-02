@@ -740,18 +740,32 @@ export default function ReservationDetail() {
   })();
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-5">
       <div className="flex items-center gap-3 flex-wrap">
-        <button onClick={() => navigate(-1)} className="btn-secondary !h-9 !px-2">
-          <ChevronLeft className="w-4 h-4" />
+        <button
+          onClick={() => navigate(-1)}
+          className="w-10 h-10 shrink-0 rounded-[11px] border border-borderControl bg-surface text-inkBody grid place-items-center hover:bg-surfaceAlt transition-colors"
+        >
+          <ChevronLeft className="w-5 h-5" />
         </button>
-        <h1 className="text-2xl font-bold text-navy font-mono">{r.reservationNumber}</h1>
-        <StatusBadge status={r.status} />
-        {overdueDays > 0 && (
-          <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-sm bg-danger/10 text-danger text-[11px] font-bold uppercase tracking-wider">
-            Overdue · {overdueDays}d
-          </span>
-        )}
+        <div className="min-w-0">
+          <div className="flex items-center gap-2.5 flex-wrap">
+            <h1 className="text-[clamp(20px,3vw,26px)] font-semibold tracking-[-0.4px] text-ink">
+              {guest?.fullName ?? r.reservationNumber}
+            </h1>
+            <StatusBadge status={r.status} />
+            {overdueDays > 0 && (
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-dangerBg border border-dangerBorder text-dangerFg text-[11px] font-bold uppercase tracking-wider">
+                Overdue · {overdueDays}d
+              </span>
+            )}
+          </div>
+          <div className="font-mono text-[12.5px] text-inkMuted mt-0.5">
+            {r.reservationNumber}
+            {rooms.length > 0 &&
+              ` · Room ${rooms.map((rm) => rm.roomNumber).join(", ")}`}
+          </div>
+        </div>
         {/* Corrective action, not part of the day-to-day flow — it lives in
             the header rather than the action bar so it doesn't sit among the
             buttons staff press on every stay. Only rendered for a booking
@@ -786,10 +800,10 @@ export default function ReservationDetail() {
           payment, then the hold becomes a real confirmed booking. Reject =
           the normal cancel flow (holds carry no payments). */}
       {r.status === "hold" && r.bookingSource === "qr" && (
-        <div className="card border-warning/50 bg-warning/5 flex items-start gap-3 flex-wrap">
-          <div className="text-warning text-lg leading-none mt-0.5">⏳</div>
+        <div className="card !bg-warnBg !border-warnBorder flex items-start gap-3 flex-wrap">
+          <div className="text-warnDeep text-lg leading-none mt-0.5">⏳</div>
           <div className="flex-1 min-w-48">
-            <div className="font-semibold text-navy">
+            <div className="font-semibold text-ink">
               Guest self-booking, awaiting confirmation
             </div>
             <div className="text-xs text-textSecondary mt-0.5">
@@ -835,7 +849,7 @@ export default function ReservationDetail() {
       )}
 
       {overdueDays > 0 && (
-        <div className="card border-danger/40 bg-danger/5 flex items-start gap-3">
+        <div className="card !bg-dangerBg !border-dangerBorder flex items-start gap-3">
           <div className="text-danger text-lg leading-none mt-0.5">⚠</div>
           <div className="flex-1">
             <div className="font-semibold text-danger">
@@ -861,7 +875,7 @@ export default function ReservationDetail() {
         const daysLate = Math.floor((today.getTime() - ci.getTime()) / 86400000);
         if (daysLate < 1) return null;
         return (
-          <div className="card border-danger/40 bg-danger/5 flex items-start gap-3">
+          <div className="card !bg-dangerBg !border-dangerBorder flex items-start gap-3">
             <div className="text-danger text-lg leading-none mt-0.5">⚠</div>
             <div className="flex-1">
               <div className="font-semibold text-danger">
@@ -879,59 +893,16 @@ export default function ReservationDetail() {
         );
       })()}
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      {/* Two-column detail layout — main flow on the left, sticky Bill
+          summary + guest card rail on the right (per the Warm Concierge
+          spec). Pure presentation: every card and control kept. */}
+      <div className="flex flex-wrap gap-4 items-start">
+        <div className="flex-[3_1_380px] min-w-0 space-y-4">
         <div className="card">
-          <div className="label">Guest</div>
-          <div className="flex items-start gap-3">
-            {guest?.photoUrl && (
-              <img
-                src={guest.photoUrl}
-                alt=""
-                className="w-14 h-16 object-cover rounded border border-borderc shrink-0"
-              />
-            )}
-            <div className="min-w-0">
-              <button
-                onClick={() => guest?.phone && navigate(`/guests/${guest.phone}`)}
-                className="font-semibold text-navy hover:underline text-left"
-              >
-                {guest?.fullName}
-              </button>
-              <div className="text-sm text-textSecondary">{guest?.phone}</div>
-              <div className="text-xs text-textSecondary mt-1">
-                {r.numAdults} adult{r.numAdults === 1 ? "" : "s"}
-                {r.numChildren > 0 && `, ${r.numChildren} child${r.numChildren === 1 ? "" : "ren"}`}
-              </div>
-            </div>
-          </div>
-          {/* Co-guests (migration 0020). Additional adults whose KYC
-              was captured at booking. Shown only when present. */}
-          {r.coGuests && r.coGuests.length > 0 && (
-            <div className="mt-3 pt-3 border-t border-borderc space-y-1.5">
-              <div className="text-[11px] uppercase tracking-wider text-textSecondary font-semibold">
-                Also occupying
-              </div>
-              {r.coGuests.map((cg) => (
-                <div key={cg.id} className="text-sm flex items-center justify-between gap-2">
-                  <button
-                    onClick={() => navigate(`/guests/${cg.guest.phone}`)}
-                    className="text-navy hover:underline text-left truncate"
-                  >
-                    {cg.guest.fullName}
-                  </button>
-                  <span className="font-mono text-xs text-textSecondary shrink-0">
-                    {cg.guest.phone}
-                  </span>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-        <div className="card">
-          <div className="label">Dates</div>
-          <div className="text-sm">
+          <h2 className="text-base font-semibold text-ink mb-4">Stay details</h2>
+          <div className="grid grid-cols-[repeat(auto-fit,minmax(170px,1fr))] gap-x-4 gap-y-4 text-sm">
             <div>
-              <strong>In:</strong>{" "}
+              <div className="label mb-1">Check-in</div>{" "}
               {format(
                 r.plannedCheckInAt
                   ? new Date(r.plannedCheckInAt)
@@ -960,7 +931,7 @@ export default function ReservationDetail() {
               )}
             </div>
             <div>
-              <strong>Out:</strong>{" "}
+              <div className="label mb-1">Check-out</div>{" "}
               {format(
                 // Priority: staff-entered checkout time (0023) wins so the
                 // header reflects what was set > short-stay computed exit >
@@ -994,10 +965,13 @@ export default function ReservationDetail() {
                 </span>
               )}
             </div>
-            <div className="text-textSecondary text-xs mt-1">
-              {isShortStay
-                ? `Day use · ${durationHours} hour${durationHours === 1 ? "" : "s"}`
-                : `${nights} night${nights === 1 ? "" : "s"}`}
+            <div>
+              <div className="label mb-1">Nights</div>
+              <div className="text-inkBody">
+                {isShortStay
+                  ? `Day use · ${durationHours} hour${durationHours === 1 ? "" : "s"}`
+                  : `${nights} night${nights === 1 ? "" : "s"}`}
+              </div>
             </div>
             {/* "This stay was extended" belongs on the Dates card, because the
                 per-room ORIGINAL/EXTENDED breakdown below is deliberately
@@ -1011,7 +985,7 @@ export default function ReservationDetail() {
                 never overwritten, so this correctly spans several extends. */}
             {r.originalCheckOutDate && !isShortStay && (
               <div
-                className="mt-1.5 inline-flex items-center gap-1.5 rounded-sm bg-warning/10 px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-[#B45309]"
+                className="mt-1.5 inline-flex items-center gap-1.5 rounded-full bg-warnBg border border-warnBorder px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider text-warnDeep"
                 title={`Originally booked to ${format(new Date(r.originalCheckOutDate), "dd MMM yyyy")}. Extended to ${format(new Date(r.checkOutDate), "dd MMM yyyy")}.`}
               >
                 <CalendarPlus className="w-3 h-3" />
@@ -1033,26 +1007,8 @@ export default function ReservationDetail() {
             )}
           </div>
         </div>
-        <div className="card">
-          <div className="label">{overpaid > 0.009 ? "Overpaid" : "Balance"}</div>
-          <div
-            className={`text-2xl font-bold font-mono ${overpaid > 0.009 ? "text-warning" : "text-navy"}`}
-          >
-            {overpaid > 0.009 ? inr(overpaid) : inr(r.balanceDue)}
-          </div>
-          <div className="text-xs text-textSecondary">
-            of {inr(r.grandTotal)} · paid {inr(totalPaid)}
-          </div>
-          {overpaid > 0.009 && (
-            <div className="text-xs text-warning font-medium mt-1">
-              Guest overpaid - refund or credit due
-            </div>
-          )}
-        </div>
-      </div>
-
       {r.specialRequests && (
-        <div className="card bg-warning/5 border-warning/30">
+        <div className="card !bg-warnBg !border-warnBorder">
           <div className="label mb-1">Special Requests</div>
           <div className="text-sm">{r.specialRequests}</div>
         </div>
@@ -1060,7 +1016,7 @@ export default function ReservationDetail() {
 
       <div
         className={`card flex items-center justify-between ${
-          kycVerified ? "bg-success/5 border-success/30" : "bg-danger/5 border-danger/40"
+          kycVerified ? "!bg-successBg !border-successBorder" : "!bg-dangerBg !border-dangerBorder"
         }`}
       >
         <div className="flex items-center gap-3">
@@ -1100,19 +1056,6 @@ export default function ReservationDetail() {
                 : "Check In"}
           </button>
         )}
-        {canCheckOut && can("check_out") && (
-          <button
-            className="btn-primary"
-            onClick={() => {
-              // Go straight to checkout. If the stay is overdue, the checkout
-              // modal surfaces an optional late-fee field there — the fee is
-              // applied only on Complete Check-out, never saved separately.
-              setShowCheckout(true);
-            }}
-          >
-            Check Out & Generate Invoice
-          </button>
-        )}
         {canCheckOut && (
           <button
             className="btn-secondary inline-flex items-center gap-2"
@@ -1130,11 +1073,6 @@ export default function ReservationDetail() {
         {(r.status === "checked_in" || r.status === "confirmed") && can("add_charge") && (
           <button className="btn-secondary inline-flex items-center gap-2" onClick={() => setShowCharge(true)}>
             <Plus className="w-4 h-4" /> Add Charge
-          </button>
-        )}
-        {(r.status === "checked_in" || r.status === "confirmed") && can("extend_stay") && (
-          <button className="btn-secondary inline-flex items-center gap-2" onClick={() => setShowExtend(true)}>
-            <CalendarPlus className="w-4 h-4" /> Extend Stay
           </button>
         )}
         {(r.status === "checked_in" || r.status === "confirmed") && can("manage_rooms_on_stay") && (
@@ -1205,21 +1143,13 @@ export default function ReservationDetail() {
             <AlertTriangle className="w-4 h-4" /> Mark No-show
           </button>
         )}
-        {canCancel && can("cancel_reservations") && (
-          <button
-            className="btn-danger inline-flex items-center gap-2"
-            onClick={() => setShowCancel(true)}
-          >
-            <XCircle className="w-4 h-4" /> Cancel
-          </button>
-        )}
         </div>
       </div>
 
-      {err && <div className="card bg-danger/5 border-danger text-danger text-sm">{err}</div>}
+      {err && <div className="card !bg-dangerBg !border-dangerBorder text-dangerFg text-sm">{err}</div>}
 
       <div className="card p-0">
-        <div className="px-4 py-3 border-b"><strong>Rooms</strong></div>
+        <div className="px-5 py-3.5 border-b border-divider text-base font-semibold text-ink">Rooms</div>
         <table className="table-base">
           <thead>
             <tr>
@@ -1353,7 +1283,7 @@ export default function ReservationDetail() {
 
       {charges.length > 0 && (
         <div className="card p-0">
-          <div className="px-4 py-3 border-b"><strong>Additional Charges</strong></div>
+          <div className="px-5 py-3.5 border-b border-divider text-base font-semibold text-ink">Additional Charges</div>
           <table className="table-base">
             <thead>
               <tr>
@@ -1398,7 +1328,7 @@ export default function ReservationDetail() {
           card with scope and guest visible. */}
       {(data.invoices ?? (invoice ? [invoice] : [])).length > 0 && (
         <div className="card p-0">
-          <div className="px-4 py-3 border-b flex items-center justify-between">
+          <div className="px-5 py-3.5 border-b border-divider flex items-center justify-between">
             <strong>
               Invoices (
               {(() => {
@@ -1526,7 +1456,7 @@ export default function ReservationDetail() {
                     <div className="flex items-center gap-2 flex-wrap">
                       <span className="font-mono font-bold text-navy">{richInv.invoiceNumber}</span>
                       {isCreditNote ? (
-                        <span className="text-[10px] uppercase tracking-wider font-semibold px-1.5 py-0.5 rounded border bg-danger/10 text-danger border-danger/30">
+                        <span className="text-[10px] uppercase tracking-wider font-semibold px-2 py-0.5 rounded-full border bg-dangerBg text-dangerFg border-dangerBorder">
                           Credit note
                         </span>
                       ) : (
@@ -1534,7 +1464,7 @@ export default function ReservationDetail() {
                       )}
                       {showScopeBadge && !isCreditNote && (
                         <span
-                          className={`text-[10px] uppercase tracking-wider font-semibold px-1.5 py-0.5 rounded border ${scope === "room" ? "bg-brand-soft text-brand-dark border-brand-dark/30" : "bg-accentBlue/10 text-accentBlue border-accentBlue/30"}`}
+                          className={`text-[10px] uppercase tracking-wider font-semibold px-2 py-0.5 rounded-full border ${scope === "room" ? "bg-brand-soft text-brand-deep border-brand-tint" : "bg-infoBg text-info border-infoBorder"}`}
                         >
                           {scope === "room" ? "Per room" : "Combined"}
                         </span>
@@ -1542,7 +1472,7 @@ export default function ReservationDetail() {
                     </div>
                     <div className="text-xs text-textSecondary mt-0.5">
                       Grand Total{" "}
-                      <span className="font-mono text-brand-dark">{inr(richInv.grandTotal)}</span>
+                      <span className="font-mono text-ink">{inr(richInv.grandTotal)}</span>
                       {Number(richInv.balanceDue) > 0.009 && (
                         <span className="ml-2">
                           · Balance{" "}
@@ -1604,7 +1534,7 @@ export default function ReservationDetail() {
                                 onClick={() =>
                                   previewRoomBill(richInv.invoiceNumber, richInv.id, num)
                                 }
-                                className="text-[10px] font-mono font-semibold px-1.5 py-0.5 rounded-sm border border-borderc text-brand-dark hover:border-brand hover:bg-brand-soft/40"
+                                className="text-[10px] font-mono font-semibold px-1.5 py-0.5 rounded-[6px] border border-borderControl text-inkBody hover:border-brand hover:bg-brand-soft"
                                 title={`Room ${num} bill (split of ${richInv.invoiceNumber})`}
                               >
                                 {num}
@@ -1651,7 +1581,7 @@ export default function ReservationDetail() {
 
       {(payments.length > 0 || (r.walletLedger?.length ?? 0) > 0) && (
         <div className="card p-0">
-          <div className="px-4 py-3 border-b"><strong>Payment History</strong></div>
+          <div className="px-5 py-3.5 border-b border-divider text-base font-semibold text-ink">Payment History</div>
           <table className="table-base">
             <thead>
               <tr>
@@ -1709,6 +1639,152 @@ export default function ReservationDetail() {
           </table>
         </div>
       )}
+        </div>
+
+        {/* Right rail — sticky Bill summary + guest card. */}
+        <div className="flex-[1_1_262px] min-w-[250px] space-y-4 lg:sticky lg:top-20">
+          <div className="card">
+            <h2 className="text-base font-semibold text-ink mb-3.5">Bill summary</h2>
+            <div className="flex justify-between items-baseline py-1 text-[13.5px] text-inkBody">
+              <span>Subtotal</span>
+              <span className="font-mono">{inr(r.subtotal)}</span>
+            </div>
+            <div className="flex justify-between items-baseline py-1 text-[13.5px] text-inkBody">
+              <span>CGST ({(Number(r.gstRate ?? 0) / 2).toFixed(1).replace(/\.0$/, "")}%)</span>
+              <span className="font-mono">{inr(Number(r.gstAmount ?? 0) / 2)}</span>
+            </div>
+            <div className="flex justify-between items-baseline py-1 text-[13.5px] text-inkBody">
+              <span>SGST ({(Number(r.gstRate ?? 0) / 2).toFixed(1).replace(/\.0$/, "")}%)</span>
+              <span className="font-mono">{inr(Number(r.gstAmount ?? 0) / 2)}</span>
+            </div>
+            <div className="flex justify-between items-baseline py-2.5 mt-1 border-t border-divider text-[15px] font-bold text-ink">
+              <span>Grand total</span>
+              <span className="font-mono">{inr(r.grandTotal)}</span>
+            </div>
+            <div className="flex justify-between items-baseline py-1 text-[13.5px] text-success">
+              <span>Paid</span>
+              <span className="font-mono">{inr(totalPaid)}</span>
+            </div>
+            {overpaid > 0.009 ? (
+              <div className="mt-2.5 rounded-[11px] bg-warnBg border border-warnBorder px-3.5 py-2.5">
+                <div className="flex justify-between items-center">
+                  <span className="text-[13px] font-semibold text-warnFg">Overpaid</span>
+                  <span className="font-mono font-bold text-base text-warnFg">
+                    {inr(overpaid)}
+                  </span>
+                </div>
+                <div className="text-xs text-warnFg mt-1">
+                  Guest overpaid - refund or credit due
+                </div>
+              </div>
+            ) : (
+              <div className="mt-2.5 flex justify-between items-center rounded-[11px] bg-warnBg border border-warnBorder px-3.5 py-2.5">
+                <span className="text-[13px] font-semibold text-warnFg">Balance due</span>
+                <span className="font-mono font-bold text-base text-warnFg">
+                  {inr(r.balanceDue)}
+                </span>
+              </div>
+            )}
+            {canCheckOut && can("check_out") && (
+              <button
+                className="btn-primary w-full mt-3.5 inline-flex items-center justify-center gap-2 shadow-primary"
+                onClick={() => {
+                  // Go straight to checkout. If the stay is overdue, the checkout
+                  // modal surfaces an optional late-fee field there — the fee is
+                  // applied only on Complete Check-out, never saved separately.
+                  setShowCheckout(true);
+                }}
+              >
+                Check Out & Generate Invoice
+              </button>
+            )}
+            {((r.status === "checked_in" || r.status === "confirmed") &&
+              can("extend_stay")) ||
+            (canCancel && can("cancel_reservations")) ? (
+              <div className="grid grid-cols-2 gap-2 mt-2">
+                {(r.status === "checked_in" || r.status === "confirmed") &&
+                  can("extend_stay") && (
+                    <button
+                      className="btn-secondary inline-flex items-center justify-center gap-1.5"
+                      onClick={() => setShowExtend(true)}
+                    >
+                      <CalendarPlus className="w-4 h-4" /> Extend
+                    </button>
+                  )}
+                {canCancel && can("cancel_reservations") && (
+                  <button
+                    className="btn-danger inline-flex items-center justify-center gap-1.5"
+                    onClick={() => setShowCancel(true)}
+                  >
+                    <XCircle className="w-4 h-4" /> Cancel
+                  </button>
+                )}
+              </div>
+            ) : null}
+          </div>
+
+          <div className="card">
+            <div className="flex items-start gap-3">
+              {guest?.photoUrl ? (
+                <img
+                  src={guest.photoUrl}
+                  alt=""
+                  className="w-11 h-11 object-cover rounded-full border border-borderc shrink-0"
+                />
+              ) : (
+                <span className="w-11 h-11 shrink-0 rounded-full bg-parchment text-inkBody grid place-items-center font-bold text-sm">
+                  {(guest?.fullName ?? "?")
+                    .trim()
+                    .split(/\s+/)
+                    .map((p) => p[0])
+                    .slice(0, 2)
+                    .join("")
+                    .toUpperCase()}
+                </span>
+              )}
+              <div className="min-w-0">
+                <button
+                  onClick={() => guest?.phone && navigate(`/guests/${guest.phone}`)}
+                  className="font-semibold text-ink hover:underline text-left text-[14.5px]"
+                >
+                  {guest?.fullName}
+                </button>
+                <div className="text-[12.5px] text-inkMuted font-mono">{guest?.phone}</div>
+                <div className="text-xs text-textSecondary mt-1">
+                  {r.numAdults} adult{r.numAdults === 1 ? "" : "s"}
+                  {r.numChildren > 0 && `, ${r.numChildren} child${r.numChildren === 1 ? "" : "ren"}`}
+                </div>
+              </div>
+            </div>
+            {/* Co-guests (migration 0020). Additional adults whose KYC
+                was captured at booking. Shown only when present. */}
+            {r.coGuests && r.coGuests.length > 0 && (
+              <div className="mt-3 pt-3 border-t border-divider space-y-1.5">
+                <div className="label">Also occupying</div>
+                {r.coGuests.map((cg) => (
+                  <div key={cg.id} className="text-sm flex items-center justify-between gap-2">
+                    <button
+                      onClick={() => navigate(`/guests/${cg.guest.phone}`)}
+                      className="text-ink hover:underline text-left truncate"
+                    >
+                      {cg.guest.fullName}
+                    </button>
+                    <span className="font-mono text-xs text-inkMuted shrink-0">
+                      {cg.guest.phone}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
+            <button
+              onClick={() => guest?.phone && navigate(`/guests/${guest.phone}`)}
+              className="btn-secondary w-full mt-3 !h-9 text-[13px]"
+            >
+              View guest profile
+            </button>
+          </div>
+        </div>
+      </div>
 
       {showCharge && (
         <ChargeModal
@@ -2273,7 +2349,7 @@ function SwapClosedLegRow(props: {
           <span className="text-textSecondary">{props.fromRoom.roomNumber}</span>
         </div>
         <div className="mt-1 flex items-center gap-1.5 flex-wrap">
-          <span className="text-[9px] uppercase tracking-wide font-semibold px-1.5 py-0.5 rounded border bg-textSecondary/10 text-textSecondary border-textSecondary/30">
+          <span className="text-[9px] uppercase tracking-wide font-semibold px-1.5 py-0.5 rounded border bg-neutralBg text-inkMuted border-neutralBorder">
             Swapped to Room {props.toRoomNumber}
           </span>
           <span className="text-[11px] text-textSecondary font-mono">{segLabel}</span>
@@ -2286,17 +2362,17 @@ function SwapClosedLegRow(props: {
         {hasAnyAmenity && (
           <div className="flex flex-wrap gap-1 mt-1 opacity-60">
             {props.fromRoom.hasAc && (
-              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-sm text-[10px] font-semibold bg-accentBlue/15 text-accentBlue">
+              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-sm text-[10px] font-semibold bg-infoBg text-info">
                 <Snowflake className="w-2.5 h-2.5" /> AC
               </span>
             )}
             {props.fromRoom.hasTv && (
-              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-sm text-[10px] font-semibold bg-gray-200 text-textSecondary">
+              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-sm text-[10px] font-semibold bg-neutralBg text-inkMuted">
                 <Tv className="w-2.5 h-2.5" /> TV
               </span>
             )}
             {props.fromRoom.hasWifi && (
-              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-sm text-[10px] font-semibold bg-gray-200 text-textSecondary">
+              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-sm text-[10px] font-semibold bg-neutralBg text-inkMuted">
                 <Wifi className="w-2.5 h-2.5" /> Wi-Fi
               </span>
             )}
@@ -2392,7 +2468,7 @@ function ExtensionBreakdownRows(props: {
     return n > 0
       ? seg("Added room", props.windowFrom, props.windowTo, n, {
           text: "Added",
-          cls: "bg-brand-soft text-brand-dark border-brand-dark/30",
+          cls: "bg-brand-soft text-brand-deep border-brand-tint",
         })
       : null;
   }
@@ -2402,12 +2478,12 @@ function ExtensionBreakdownRows(props: {
       {origNights > 0 &&
         seg("Original booking", origFrom, origTo, origNights, {
           text: "Original",
-          cls: "bg-textSecondary/10 text-textSecondary border-textSecondary/30",
+          cls: "bg-neutralBg text-inkMuted border-neutralBorder",
         })}
       {extNights > 0 &&
         seg("Stay extension", extFrom, extTo, extNights, {
           text: "Extended",
-          cls: "bg-accentBlue/10 text-accentBlue border-accentBlue/30",
+          cls: "bg-infoBg text-info border-infoBorder",
         })}
     </>
   );
@@ -2536,10 +2612,10 @@ function RoomRow(props: {
   // Per-room status pill colours. Maps the new reservation-room
   // statuses to badge styles (different from physical room status).
   const roomStatusBadge: Record<string, string> = {
-    confirmed: "bg-brand-soft text-brand-dark border-brand-dark/30",
-    checked_in: "bg-success/15 text-success border-success/30",
-    checked_out: "bg-bg text-textSecondary border-borderc",
-    cancelled: "bg-danger/10 text-danger border-danger/30 line-through",
+    confirmed: "bg-infoBg text-info border-infoBorder",
+    checked_in: "bg-successBg text-success border-successBorder",
+    checked_out: "bg-neutralBg text-inkMuted border-neutralBorder",
+    cancelled: "bg-dangerBg text-dangerFg border-dangerBorder line-through",
   };
 
   const status = props.room.status;
@@ -2549,9 +2625,9 @@ function RoomRow(props: {
   const statusBadge =
     status && status !== "occupied" && status !== "reserved"
       ? {
-          dirty: "bg-warning/15 text-warning border-warning/30",
-          available: "bg-success/10 text-success border-success/30",
-          maintenance: "bg-danger/10 text-danger border-danger/30",
+          dirty: "bg-warnBg text-warnFg border-warnBorder",
+          available: "bg-successBg text-success border-successBorder",
+          maintenance: "bg-dangerBg text-dangerFg border-dangerBorder",
         }[status as "dirty" | "available" | "maintenance"]
       : null;
 
@@ -2565,7 +2641,9 @@ function RoomRow(props: {
     <tr>
       <td className="font-mono">
         <div className="flex items-center gap-2 flex-wrap">
-          {props.room.roomNumber}
+          <span className="w-[42px] h-[42px] shrink-0 rounded-[11px] bg-inkDark text-cream grid place-items-center font-mono font-semibold text-sm">
+            {props.room.roomNumber}
+          </span>
           {/* Per-room (0017) reservation state pill. Distinct from
               the physical-room status pill below; e.g. a room can be
               checked_out AND dirty at the same time.
@@ -2601,7 +2679,7 @@ function RoomRow(props: {
             split into different occupants. */}
         {props.room.occupant && !props.room.occupant.isBooker && (
           <div className="text-[11px] text-textSecondary mt-1">
-            <span className="font-medium text-brand-dark">{props.room.occupant.fullName}</span>
+            <span className="font-medium text-ink">{props.room.occupant.fullName}</span>
             {props.room.occupant.phone && (
               <span className="font-mono ml-1">· {props.room.occupant.phone}</span>
             )}
@@ -2629,7 +2707,7 @@ function RoomRow(props: {
           // itself were under maintenance — confusing for staff.
           return (
             <div className="mt-1 flex items-center gap-1.5 flex-wrap">
-              <span className="text-[9px] uppercase tracking-wide font-semibold px-1.5 py-0.5 rounded border bg-accentBlue/10 text-accentBlue border-accentBlue/30">
+              <span className="text-[9px] uppercase tracking-wide font-semibold px-1.5 py-0.5 rounded border bg-infoBg text-info border-infoBorder">
                 Swapped from Room {prevRoomNumber}
               </span>
             </div>
@@ -2641,7 +2719,7 @@ function RoomRow(props: {
             sibling leg to name. */}
         {isSegmented && props.isAddedRoom && (
           <div className="mt-1 flex items-center gap-1.5 flex-wrap">
-            <span className="text-[9px] uppercase tracking-wide font-semibold px-1.5 py-0.5 rounded border bg-brand-soft text-brand-dark border-brand-dark/30">
+            <span className="text-[9px] uppercase tracking-wide font-semibold px-1.5 py-0.5 rounded border bg-brand-soft text-brand-deep border-brand-tint">
               Added mid-stay
             </span>
             <span className="text-[11px] text-textSecondary font-mono">
@@ -2660,8 +2738,8 @@ function RoomRow(props: {
             <span
               className={`text-[9px] uppercase tracking-wide font-semibold px-1.5 py-0.5 rounded border ${
                 props.swapDirection === "to"
-                  ? "bg-textSecondary/10 text-textSecondary border-textSecondary/30"
-                  : "bg-accentBlue/10 text-accentBlue border-accentBlue/30"
+                  ? "bg-neutralBg text-inkMuted border-neutralBorder"
+                  : "bg-infoBg text-info border-infoBorder"
               }`}
             >
               {props.swapDirection === "to" && props.swapSiblingNumber
@@ -2701,16 +2779,16 @@ function RoomRow(props: {
         {hasAnyAmenity && (
           <div className="flex flex-wrap gap-1 mt-1">
             {props.room.hasAc ? (
-              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-sm text-[10px] font-semibold bg-accentBlue/15 text-accentBlue">
+              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-sm text-[10px] font-semibold bg-infoBg text-info">
                 <Snowflake className="w-2.5 h-2.5" /> AC
               </span>
             ) : (
-              <span className="inline-flex items-center px-1.5 py-0.5 rounded-sm text-[10px] font-semibold bg-gray-200 text-textSecondary">
+              <span className="inline-flex items-center px-1.5 py-0.5 rounded-sm text-[10px] font-semibold bg-neutralBg text-inkMuted">
                 Non-AC
               </span>
             )}
             {props.room.hasTv && (
-              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-sm text-[10px] font-semibold bg-brand-soft text-brand-dark">
+              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-sm text-[10px] font-semibold bg-brand-soft text-brand-deep">
                 <Tv className="w-2.5 h-2.5" /> TV
               </span>
             )}
@@ -2722,7 +2800,7 @@ function RoomRow(props: {
           </div>
         )}
         {props.room.reletPending && (
-          <div className="mt-2 inline-flex items-start gap-1.5 px-2 py-1 rounded-sm bg-warning/10 border border-warning/40 text-[10px] text-warning leading-snug max-w-full">
+          <div className="mt-2 inline-flex items-start gap-1.5 px-2 py-1 rounded-[8px] bg-warnBg border border-warnBorder text-[10px] text-warnFg leading-snug max-w-full">
             <AlertTriangle className="w-3 h-3 shrink-0 mt-0.5" />
             <span>
               <strong>Re-let pending</strong> ·{" "}
@@ -2749,7 +2827,7 @@ function RoomRow(props: {
           // row visible (for billing transparency) but render it
           // read-only.
           <span
-            className="text-[10px] font-mono text-textSecondary px-1.5 py-0.5 rounded bg-textSecondary/10 border border-textSecondary/20"
+            className="text-[10px] font-mono text-inkMuted px-1.5 py-0.5 rounded-full bg-neutralBg border border-neutralBorder"
             title={`Vacated on ${format(new Date(segTo), "dd MMM yyyy")} - guest moved to Room ${props.swapSiblingNumber}`}
           >
             closed
@@ -2812,7 +2890,7 @@ function RoomRow(props: {
                   still driven from the checkout flow below. */}
               {props.room.roomInvoiceId && (
                 <span
-                  className="text-[10px] font-mono text-success px-1.5 py-0.5 rounded bg-success/10 border border-success/30"
+                  className="text-[10px] font-mono text-success px-1.5 py-0.5 rounded-full bg-successBg border border-successBorder"
                   title="A per-room invoice exists for this room - see Invoices section"
                 >
                   invoiced
@@ -3174,8 +3252,8 @@ function SwapRoomModal(props: {
                 key={s}
                 className={`px-3 h-9 inline-flex items-center gap-2 rounded-sm border cursor-pointer text-sm capitalize ${
                   markOldRoomStatus === s
-                    ? "border-brand-dark bg-brand-soft text-brand-dark font-semibold"
-                    : "border-borderc text-textSecondary hover:border-brand-dark/40"
+                    ? "border-brand bg-brand-soft text-brand-deep font-semibold"
+                    : "border-borderControl text-textSecondary hover:border-brand"
                 }`}
               >
                 <input
@@ -3195,8 +3273,8 @@ function SwapRoomModal(props: {
             the issue lands on the Maintenance page immediately. Hidden
             for dirty / available because those don't open a ticket. */}
         {markOldRoomStatus === "maintenance" && (
-          <div className="rounded-sm border-2 border-warning/30 bg-warning/5 p-3 space-y-3">
-            <div className="text-xs font-semibold uppercase tracking-wider text-[#B45309]">
+          <div className="rounded-sm border border-warnBorder bg-warnBg p-3 space-y-3">
+            <div className="text-xs font-semibold uppercase tracking-wider text-warning">
               Issue details for Room {props.fromRoomNumber}
             </div>
             <div className="grid grid-cols-2 gap-3">
@@ -3299,7 +3377,7 @@ function SwapRoomModal(props: {
           )}
           {grouped.map(([floor, rooms]) => (
             <div key={String(floor)} className="mt-3">
-              <div className="text-base font-bold text-brand-dark tracking-wide mb-2 pb-1 border-b border-borderc/60">
+              <div className="text-base font-bold text-ink tracking-wide mb-2 pb-1 border-b border-divider">
                 {floor === "?" ? "Other" : `Floor ${floor}`}
                 <span className="ml-2 text-xs font-semibold text-textSecondary uppercase tracking-wider">
                   · {rooms.length} room{rooms.length === 1 ? "" : "s"}
@@ -3323,10 +3401,10 @@ function SwapRoomModal(props: {
                       key={rm.id}
                       className={`p-2.5 rounded-sm border-2 text-left transition-colors ${
                         active
-                          ? "border-brand-dark bg-brand-soft"
+                          ? "border-brand bg-brand-soft"
                           : isDirty
                             ? "border-warning/50 bg-warning/5"
-                            : "border-borderc hover:border-brand-dark hover:bg-bg"
+                            : "border-borderControl hover:border-brand hover:bg-surfaceAlt"
                       }`}
                     >
                       <button
@@ -3342,7 +3420,7 @@ function SwapRoomModal(props: {
                         aria-disabled={isDirty && !active}
                       >
                         <div className="flex items-center gap-1.5 flex-wrap">
-                          <span className="font-mono font-bold text-brand-dark text-sm leading-tight">
+                          <span className="font-mono font-bold text-ink text-sm leading-tight">
                             {rm.roomNumber}
                           </span>
                           {isDirty && (
@@ -3396,7 +3474,7 @@ function SwapRoomModal(props: {
               </div>
               <div className="flex items-center gap-3">
                 <div className="flex-1 min-w-0">
-                  <div className="font-mono font-bold text-brand-dark text-sm">
+                  <div className="font-mono font-bold text-ink text-sm">
                     {picked.roomNumber}
                   </div>
                   <div className="text-[11px] text-textSecondary capitalize truncate">
@@ -3697,12 +3775,26 @@ function PaymentRow(props: {
 
   return (
     <tr>
-      <td>{format(new Date(props.payment.paymentDate), "dd MMM yyyy HH:mm")}</td>
+      <td>
+        {/* Green check tile — received payments read as settled at a glance
+            (Warm Concierge); pending rows get an amber clock instead. */}
+        <div className="flex items-center gap-2.5">
+          <span
+            className={`w-8 h-8 shrink-0 rounded-[9px] grid place-items-center ${
+              isPending ? "bg-warnBg text-warnFg" : "bg-successBg text-success"
+            }`}
+            aria-hidden="true"
+          >
+            {isPending ? <Clock className="w-4 h-4" /> : <CheckCircle2 className="w-4 h-4" />}
+          </span>
+          <span>{format(new Date(props.payment.paymentDate), "dd MMM yyyy HH:mm")}</span>
+        </div>
+      </td>
       <td className="capitalize">
         <div className="flex items-center gap-2">
           <span>{props.payment.paymentMethod.replace("_", " ")}</span>
           {isPending && (
-            <span className="text-[9px] uppercase tracking-wider px-1.5 py-0.5 rounded font-bold bg-warning/20 text-warning">
+            <span className="text-[9px] uppercase tracking-wider px-1.5 py-0.5 rounded-full font-bold bg-warnBg text-warnFg border border-warnBorder">
               Pending
             </span>
           )}
@@ -3721,7 +3813,7 @@ function PaymentRow(props: {
         <div className="inline-flex gap-1">
             {isPending && (
               <button
-                className="!h-7 !px-2 text-xs font-semibold rounded-sm bg-success text-white border-2 border-success hover:opacity-90 inline-flex items-center gap-1"
+                className="!h-7 !px-2 text-xs font-semibold rounded-sm bg-success text-white border border-success hover:opacity-90 inline-flex items-center gap-1"
                 onClick={async () => {
                   const chosen = await dialog.prompt({
                     title: "Mark payment received",
@@ -3989,7 +4081,7 @@ function AddRoomModal(props: {
                 <div className="space-y-3">
                   {floors.map((floor) => (
                     <div key={String(floor)}>
-                      <div className="text-base font-bold text-brand-dark tracking-wide mb-2 pb-1 border-b border-borderc/60">
+                      <div className="text-base font-bold text-ink tracking-wide mb-2 pb-1 border-b border-divider">
                         {floor === "?" ? "Other" : `Floor ${floor}`}
                         <span className="ml-2 text-xs font-semibold text-textSecondary uppercase tracking-wider">
                           · {byFloor.get(floor)!.length} room
@@ -4007,10 +4099,10 @@ function AddRoomModal(props: {
                               key={rm.id}
                               className={`p-2.5 rounded-sm border-2 text-left transition-colors ${
                                 active
-                                  ? "border-brand-dark bg-brand-soft"
+                                  ? "border-brand bg-brand-soft"
                                   : isDirty
                                     ? "border-warning/50 bg-warning/5"
-                                    : "border-borderc hover:border-brand-dark hover:bg-bg"
+                                    : "border-borderControl hover:border-brand hover:bg-surfaceAlt"
                               }`}
                             >
                               <button
@@ -4023,7 +4115,7 @@ function AddRoomModal(props: {
                                 aria-disabled={isDirty && !active}
                               >
                                 <div className="flex items-center gap-1.5 flex-wrap">
-                                  <span className="font-mono font-bold text-brand-dark text-sm leading-tight">
+                                  <span className="font-mono font-bold text-ink text-sm leading-tight">
                                     {rm.roomNumber}
                                   </span>
                                   {isDirty && (
@@ -4079,7 +4171,7 @@ function AddRoomModal(props: {
               return (
                 <div key={id} className="flex items-center gap-3">
                   <div className="flex-1 min-w-0">
-                    <div className="font-mono font-bold text-brand-dark text-sm">
+                    <div className="font-mono font-bold text-ink text-sm">
                       {rm.roomNumber}
                     </div>
                     <div className="text-[11px] text-textSecondary capitalize truncate">
@@ -4135,13 +4227,13 @@ function AddRoomModal(props: {
         )}
         <div className="flex justify-end gap-2 pt-1">
           <button
-            className="px-4 h-9 text-sm font-semibold rounded-sm border-2 border-borderc text-textSecondary hover:border-textSecondary hover:text-textPrimary transition-colors"
+            className="px-4 h-9 text-sm font-semibold rounded-sm border border-borderControl text-textSecondary hover:border-inkMuted hover:text-textPrimary transition-colors"
             onClick={props.onClose}
           >
             Cancel
           </button>
           <button
-            className="px-4 h-9 text-sm font-semibold rounded-sm bg-brand-dark text-cream border-2 border-brand-dark hover:opacity-90 transition-opacity disabled:opacity-40 disabled:cursor-not-allowed"
+            className="px-4 h-9 text-sm font-semibold rounded-sm bg-brand text-white border border-brand hover:bg-brand-deep transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
             disabled={
               pickedIds.length === 0 ||
               pickedIds.some((id) => (picked[id] ?? 0) <= 0) ||
@@ -4437,12 +4529,12 @@ function ExtendModal(props: {
                   >
                     <input
                       type="checkbox"
-                      className="accent-brand-dark"
+                      className="accent-brand"
                       checked={isOn}
                       disabled={disabled}
                       onChange={() => toggleRoom(rm.id)}
                     />
-                    <span className="font-mono font-semibold text-brand-dark">
+                    <span className="font-mono font-semibold text-ink">
                       Room {rm.roomNumber}
                     </span>
                     {reason && (
@@ -4486,7 +4578,7 @@ function ExtendModal(props: {
             {blockedRooms.map((b) => (
               <div key={b.roomId} className="space-y-1">
                 <div className="text-sm">
-                  <span className="font-mono font-semibold text-brand-dark">
+                  <span className="font-mono font-semibold text-ink">
                     Room {b.roomNumber}
                   </span>{" "}
                   <span className="text-xs text-textSecondary">
@@ -4705,7 +4797,7 @@ function CancelReservationModal(props: {
     <ModalShell title="Cancel reservation" onClose={props.onClose} size="md">
       <div className="space-y-4">
         <div className="text-sm text-textSecondary">
-          <strong className="text-brand-dark">{props.reservationNumber}</strong>{" "}
+          <strong className="text-ink">{props.reservationNumber}</strong>{" "}
           will be cancelled. This can't be undone.
         </div>
 
@@ -4771,8 +4863,8 @@ function CancelReservationModal(props: {
                       key={opt.v}
                       className={`px-3 h-9 inline-flex items-center gap-2 rounded-sm border cursor-pointer text-sm ${
                         refundMode === opt.v
-                          ? "border-brand-dark bg-brand-soft text-brand-dark font-semibold"
-                          : "border-borderc text-textSecondary hover:border-brand-dark/40"
+                          ? "border-brand bg-brand-soft text-brand-deep font-semibold"
+                          : "border-borderControl text-textSecondary hover:border-brand"
                       }`}
                     >
                       <input
@@ -5051,12 +5143,12 @@ function ChargeModal(props: {
                   >
                     <input
                       type="checkbox"
-                      className="accent-brand-dark"
+                      className="accent-brand"
                       checked={isOn}
                       disabled={rm.invoiced}
                       onChange={() => toggleRoom(rm.id)}
                     />
-                    <span className="font-mono font-semibold text-brand-dark">
+                    <span className="font-mono font-semibold text-ink">
                       Room {rm.roomNumber}
                     </span>
                     {rm.invoiced && (
@@ -5387,7 +5479,7 @@ function PerRoomCheckoutModal(props: {
                 : `This room is already billed on ${quoteQ.data.invoiceNumber ?? "an invoice"} with ${inr(quoteQ.data.balanceDue)} still owing. Confirming records the remaining payment and checks the room out.`
               : "Confirming will generate this room's tax invoice, record the payment, and check the room out. Other rooms on this reservation are unaffected."}
             {props.occupantName && (
-              <> Guest: <strong className="text-brand-dark">{props.occupantName}</strong>.</>
+              <> Guest: <strong className="text-ink">{props.occupantName}</strong>.</>
             )}
           </div>
           <div className="border border-borderc rounded p-3 space-y-1 bg-bg/40">
@@ -5720,7 +5812,7 @@ function CombinedInvoiceModal({
                 >
                   <input
                     type="checkbox"
-                    className="accent-brand-dark"
+                    className="accent-brand"
                     checked={isOn}
                     onChange={() => {
                       toggleRoom(rm.id);
@@ -5728,7 +5820,7 @@ function CombinedInvoiceModal({
                     }}
                   />
                   <div className="flex-1 min-w-0">
-                    <div className="font-mono font-semibold text-brand-dark text-sm">
+                    <div className="font-mono font-semibold text-ink text-sm">
                       {rm.roomNumber}
                     </div>
                     <div className="text-[11px] text-textSecondary capitalize truncate">
@@ -5774,7 +5866,7 @@ function CombinedInvoiceModal({
           <label className="flex items-center gap-2 cursor-pointer">
             <input
               type="checkbox"
-              className="accent-brand-dark"
+              className="accent-brand"
               checked={collectNow}
               onChange={(e) => setCollectNow(e.target.checked)}
             />
@@ -5873,7 +5965,7 @@ function InvoiceModeToggle({
           name="invoiceMode"
           checked={value}
           onChange={() => onChange(true)}
-          className="mt-1 accent-brand-dark"
+          className="mt-1 accent-brand"
         />
         <div className="flex-1 text-sm">
           <div className="font-medium text-textPrimary">
@@ -5892,7 +5984,7 @@ function InvoiceModeToggle({
           name="invoiceMode"
           checked={!value}
           onChange={() => onChange(false)}
-          className="mt-1 accent-brand-dark"
+          className="mt-1 accent-brand"
         />
         <div className="flex-1 text-sm">
           <div className="font-medium text-textPrimary">One tax invoice per room</div>
@@ -6273,7 +6365,7 @@ function CheckoutModal(props: {
                     onClick={() => setRefundMode(opt.v)}
                     className={`border rounded-sm px-3 py-2 text-sm transition-colors ${
                       refundMode === opt.v
-                        ? "border-brand bg-brand-soft text-brand-dark font-semibold"
+                        ? "border-brand bg-brand-soft text-brand-deep font-semibold"
                         : "border-borderc hover:border-brand/40"
                     }`}
                   >

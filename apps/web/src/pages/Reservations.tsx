@@ -145,11 +145,13 @@ export default function Reservations() {
   const hotelCheckOutTime = settingsQ.data?.checkOutTime ?? "11:00";
 
   return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between flex-wrap gap-3">
+    <div className="space-y-5">
+      <div className="flex items-end justify-between flex-wrap gap-3">
         <div>
-          <h1 className="text-2xl font-bold text-brand-dark">Reservations</h1>
-          <p className="text-xs text-textSecondary mt-0.5">
+          <h1 className="text-[clamp(22px,3vw,28px)] font-semibold tracking-[-0.5px] text-ink">
+            Reservations
+          </h1>
+          <p className="text-sm text-textSecondary mt-1">
             {data.length} reservation{data.length === 1 ? "" : "s"}
           </p>
         </div>
@@ -176,29 +178,46 @@ export default function Reservations() {
         <div className="w-full sm:flex-1 sm:min-w-[200px]">
           <label className="label block mb-1">Search</label>
           <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-textSecondary" />
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-inkFaint" />
             <input
-              className="input pl-9"
+              className="input pl-9 bg-surfaceSubtle border-borderControl focus:bg-surface"
               value={q}
               onChange={(e) => setQ(e.target.value)}
               placeholder="Search by name, phone number or RES-…"
             />
           </div>
         </div>
-        <div className="flex-1 min-w-[120px] sm:flex-none">
+        <div className="min-w-0">
           <label className="label block mb-1">Status</label>
-          <select
-            className="input sm:w-40"
-            value={status}
-            onChange={(e) => setStatus(e.target.value)}
-          >
-            <option value="">All</option>
+          {/* Segmented status control — active segment is a white pill with a
+              soft shadow inside the subtle track. */}
+          <div className="inline-flex flex-wrap items-center gap-0.5 bg-surfaceSubtle border border-borderControl rounded-[11px] p-[3px]">
+            <button
+              type="button"
+              onClick={() => setStatus("")}
+              className={`rounded-lg px-3 py-1.5 text-[13px] font-semibold transition-colors ${
+                status === ""
+                  ? "bg-surface text-ink shadow-sm"
+                  : "text-textSecondary hover:text-ink"
+              }`}
+            >
+              All
+            </button>
             {STATUS_OPTIONS.map((s) => (
-              <option key={s} value={s}>
+              <button
+                key={s}
+                type="button"
+                onClick={() => setStatus(s)}
+                className={`rounded-lg px-3 py-1.5 text-[13px] font-semibold capitalize transition-colors ${
+                  status === s
+                    ? "bg-surface text-ink shadow-sm"
+                    : "text-textSecondary hover:text-ink"
+                }`}
+              >
                 {s.replace("_", " ")}
-              </option>
+              </button>
             ))}
-          </select>
+          </div>
         </div>
         <div className="flex-1 min-w-[80px] sm:flex-none">
           <label className="label block mb-1">Floor</label>
@@ -252,7 +271,7 @@ export default function Reservations() {
               setDateFrom(r.from);
               setDateTo(r.to);
             }}
-            className="text-xs text-accentBlue hover:underline self-end pb-2"
+            className="text-xs font-semibold text-brand-deep hover:underline self-end pb-2"
           >
             Reset filters
           </button>
@@ -293,7 +312,7 @@ export default function Reservations() {
           {/* Column header (desktop only). Keeps the row layout legible
               at scale without the per-row "Check-in / Check-out / Nights"
               labels that bloated the old grid. */}
-          <div className="hidden md:grid grid-cols-[40px_minmax(180px,1fr)_140px_140px_60px_minmax(120px,1fr)_120px_120px_28px] gap-3 px-3 py-2 text-[10px] font-semibold uppercase tracking-wider text-textSecondary bg-bg/60 border-b border-borderc">
+          <div className="hidden md:grid grid-cols-[40px_minmax(180px,1fr)_140px_140px_60px_minmax(120px,1fr)_120px_120px_28px] gap-3 px-4 py-3 text-[10.5px] font-bold uppercase tracking-[.07em] text-inkMuted bg-surfaceAlt border-b border-divider">
             <div />
             <div>Guest</div>
             <div>Check-in</div>
@@ -304,7 +323,7 @@ export default function Reservations() {
             <div className="text-right">Balance</div>
             <div />
           </div>
-          <ul className="divide-y divide-borderc">
+          <ul className="divide-y divide-divider">
             {data.map((r) => (
               <ReservationRow
                 key={r.id}
@@ -329,21 +348,9 @@ function initialsOf(name: string): string {
   return (parts[0]![0]! + parts[parts.length - 1]![0]!).toUpperCase();
 }
 
-// Stable color tone hashed off the seed, so the same guest always gets the
-// same avatar shade across pages.
-function avatarTone(seed: string): string {
-  const tones = [
-    "bg-[#24b47e] text-white",
-    "bg-[#644fc1] text-white",
-    "bg-[#2563eb] text-white",
-    "bg-brand text-textPrimary",
-    "bg-[#e2005a] text-white",
-    "bg-[#157f5f] text-white",
-  ];
-  let h = 0;
-  for (let i = 0; i < seed.length; i++) h = (h * 31 + seed.charCodeAt(i)) >>> 0;
-  return tones[h % tones.length]!;
-}
+// Neutral warm avatar tile — the reservations table uses one calm shade
+// (per the Warm Concierge spec) rather than the rotating guest palette.
+const AVATAR_TONE = "bg-parchment text-inkBody";
 
 // Dense single-row layout. Desktop renders an 8-column grid that
 // matches the header strip; mobile falls back to a stacked card with
@@ -406,7 +413,7 @@ function ReservationRow({
           onOpen();
         }
       }}
-      className="group cursor-pointer transition-colors hover:bg-brand-soft/30 focus:outline-none focus:bg-brand-soft/30"
+      className="group cursor-pointer transition-colors hover:bg-surfaceAlt focus:outline-none focus:bg-surfaceAlt"
     >
       {/* DESKTOP — 8-column grid that mirrors the header. Compact, scannable. */}
       <div className="hidden md:grid grid-cols-[40px_minmax(180px,1fr)_140px_140px_60px_minmax(120px,1fr)_120px_120px_28px] gap-3 items-center px-3 py-2.5">
@@ -419,7 +426,7 @@ function ReservationRow({
           />
         ) : (
           <div
-            className={`w-9 h-9 rounded-full grid place-items-center font-semibold text-xs ${avatarTone(r.guestName)}`}
+            className={`w-9 h-9 rounded-full grid place-items-center font-bold text-xs ${AVATAR_TONE}`}
             aria-hidden="true"
           >
             {initialsOf(r.guestName)}
@@ -429,10 +436,10 @@ function ReservationRow({
         {/* Guest + reservation # + status */}
         <div className="min-w-0">
           <div className="flex items-center gap-1.5">
-            <span className="font-semibold text-brand-dark text-sm truncate">{r.guestName}</span>
+            <span className="font-semibold text-ink text-sm truncate">{r.guestName}</span>
             {isShort && (
               <span
-                className="inline-flex items-center gap-0.5 px-1 rounded-sm text-[9px] font-semibold bg-brand/10 text-brand-dark border border-brand/30 shrink-0"
+                className="inline-flex items-center gap-0.5 px-1.5 rounded-full text-[9px] font-semibold bg-brand-soft text-brand-deep border border-brand-tint shrink-0"
                 title={`Day use · ${dur}h`}
               >
                 <Clock className="w-2.5 h-2.5" /> {dur}h
@@ -440,32 +447,32 @@ function ReservationRow({
             )}
           </div>
           <div className="flex items-center gap-1.5 mt-0.5">
-            <span className="font-mono text-[10px] text-accentBlue">{r.reservationNumber}</span>
+            <span className="font-mono text-[10px] text-inkMuted">{r.reservationNumber}</span>
             <StatusBadge status={r.status} />
             {r.guestPhone && (
-              <span className="text-[10px] text-textSecondary font-mono truncate">{r.guestPhone}</span>
+              <span className="text-[10px] text-inkMuted font-mono truncate">{r.guestPhone}</span>
             )}
           </div>
         </div>
 
         {/* Check-in */}
         <div className="text-xs">
-          <div className="text-brand-dark font-medium">{format(new Date(r.checkInDate), "dd MMM")}</div>
-          <div className="text-[10px] text-textSecondary font-mono">
+          <div className="text-inkBody font-medium">{format(new Date(r.checkInDate), "dd MMM")}</div>
+          <div className="text-[10px] text-inkMuted font-mono">
             {r.checkedInAt ? checkInTimeLabel : `from ${checkInTimeLabel}`}
           </div>
         </div>
 
         {/* Check-out */}
         <div className="text-xs">
-          <div className="text-brand-dark font-medium">{format(new Date(r.checkOutDate), "dd MMM")}</div>
-          <div className="text-[10px] text-textSecondary font-mono">
+          <div className="text-inkBody font-medium">{format(new Date(r.checkOutDate), "dd MMM")}</div>
+          <div className="text-[10px] text-inkMuted font-mono">
             {r.checkedOutAt ? checkOutTimeLabel : `by ${checkOutTimeLabel}`}
           </div>
         </div>
 
         {/* Nights / duration */}
-        <div className="text-center text-sm font-medium text-brand-dark">
+        <div className="text-center text-sm text-inkBody tabular-nums">
           {isShort ? `${dur}h` : r.numNights}
         </div>
 
@@ -475,20 +482,20 @@ function ReservationRow({
             rooms.map((rm) => (
               <span
                 key={rm}
-                className="font-mono font-semibold text-brand-dark bg-bg px-1.5 py-0.5 rounded border border-borderc"
+                className="font-mono font-semibold text-inkBody bg-bg px-1.5 py-0.5 rounded-[6px]"
               >
                 {rm}
               </span>
             ))
           ) : (
-            <span className="text-textSecondary/60 inline-flex items-center gap-1">
+            <span className="text-inkFaint inline-flex items-center gap-1">
               <DoorOpen className="w-3 h-3" /> -
             </span>
           )}
         </div>
 
         {/* Total */}
-        <div className="text-right text-sm font-mono font-semibold text-brand-dark">
+        <div className="text-right text-sm font-mono font-semibold text-ink">
           {inr(r.grandTotal)}
         </div>
 
@@ -501,7 +508,7 @@ function ReservationRow({
           </div>
         </div>
 
-        <ChevronRight className="w-4 h-4 text-textSecondary/40 group-hover:text-brand justify-self-end" />
+        <ChevronRight className="w-4 h-4 text-inkFaint group-hover:text-brand justify-self-end" />
       </div>
 
       {/* MOBILE — stacked card. Same data, two-line layout for phones. */}
@@ -514,7 +521,7 @@ function ReservationRow({
           />
         ) : (
           <div
-            className={`w-9 h-9 rounded-full grid place-items-center font-semibold text-xs shrink-0 ${avatarTone(r.guestName)}`}
+            className={`w-9 h-9 rounded-full grid place-items-center font-bold text-xs shrink-0 ${AVATAR_TONE}`}
             aria-hidden="true"
           >
             {initialsOf(r.guestName)}
@@ -522,7 +529,7 @@ function ReservationRow({
         )}
         <div className="min-w-0 flex-1">
           <div className="flex items-center justify-between gap-2">
-            <span className="font-semibold text-brand-dark text-sm truncate">{r.guestName}</span>
+            <span className="font-semibold text-ink text-sm truncate">{r.guestName}</span>
             <div
               className={`text-sm font-mono font-semibold shrink-0 ${hasBalance ? "text-danger" : "text-success"}`}
             >
@@ -530,10 +537,10 @@ function ReservationRow({
             </div>
           </div>
           <div className="flex items-center gap-1.5 mt-0.5">
-            <span className="font-mono text-[10px] text-accentBlue">{r.reservationNumber}</span>
+            <span className="font-mono text-[10px] text-inkMuted">{r.reservationNumber}</span>
             <StatusBadge status={r.status} />
           </div>
-          <div className="mt-1 text-[11px] text-textSecondary font-mono">
+          <div className="mt-1 text-[11px] text-inkMuted font-mono">
             {format(new Date(r.checkInDate), "dd MMM")} → {format(new Date(r.checkOutDate), "dd MMM")}
             {" · "}
             {isShort ? `${dur}h day-use` : `${r.numNights}n`}

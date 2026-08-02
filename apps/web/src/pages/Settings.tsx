@@ -31,17 +31,22 @@ export default function Settings() {
   );
   const [tab, setTab] = useState<Tab>("my-profile");
   return (
-    <div className="space-y-4">
-      <h1 className="text-2xl font-bold text-navy">Settings</h1>
-      <div className="flex gap-1 flex-wrap border-b border-borderc">
+    <div className="max-w-[820px] mx-auto w-full space-y-4">
+      <div>
+        <h1 className="text-[clamp(22px,3vw,28px)] leading-tight font-semibold tracking-[-0.5px] text-ink">
+          Settings
+        </h1>
+        <p className="text-sm text-textSecondary mt-1.5">Your account and hotel-wide preferences.</p>
+      </div>
+      <div className="flex gap-0.5 flex-wrap border-b border-borderc">
         {tabs.map((t) => (
           <button
             key={t.id}
             onClick={() => setTab(t.id)}
-            className={`px-4 py-2 text-sm font-medium border-b-2 transition ${
+            className={`px-4 py-2.5 text-sm font-semibold border-b-2 -mb-px transition-colors ${
               tab === t.id
-                ? "border-gold text-navy"
-                : "border-transparent text-textSecondary hover:text-navy"
+                ? "border-gold text-ink"
+                : "border-transparent text-inkMuted hover:text-ink"
             }`}
           >
             {t.label}
@@ -120,7 +125,7 @@ function MyProfileTab() {
     <div className="space-y-4">
       <div className="card space-y-5">
         <div>
-          <h3 className="font-semibold text-brand-dark text-lg">My Profile</h3>
+          <h3 className="text-base font-semibold text-ink">My Profile</h3>
           <p className="text-xs text-textSecondary mt-1">
             Update your own account details. Only an administrator can change your role or
             permissions.
@@ -158,7 +163,7 @@ function MyProfileTab() {
           </Field>
           <Field label="Role">
             <input
-              className="input bg-bg cursor-not-allowed"
+              className="input bg-surfaceSubtle text-inkMuted cursor-not-allowed"
               value={authProfile?.rbacRoleKey ?? me.role}
               readOnly
               disabled
@@ -167,8 +172,8 @@ function MyProfileTab() {
         </div>
 
         {emailChanged && (
-          <div className="rounded-sm border border-warning/40 bg-warning/5 p-3 space-y-2">
-            <div className="text-xs text-textPrimary">
+          <div className="rounded-md border border-warnBorder bg-warnBg p-3 space-y-2">
+            <div className="text-xs text-warnDeep">
               You are changing the email you sign in with. Enter your current
               password to confirm it is you.
             </div>
@@ -186,7 +191,7 @@ function MyProfileTab() {
         )}
 
         {err && (
-          <div className="rounded-sm border border-danger/30 bg-danger/5 px-3 py-2 text-danger text-sm">
+          <div className="rounded-md border border-dangerBorder bg-dangerBg px-3 py-2 text-dangerFg text-sm">
             {err}
           </div>
         )}
@@ -290,7 +295,7 @@ function ChangePasswordCard({ phone }: { phone: string | null }) {
   return (
     <div className="card space-y-4">
       <div>
-        <h3 className="font-semibold text-brand-dark text-lg">Change Password</h3>
+        <h3 className="text-base font-semibold text-ink">Change Password</h3>
         <p className="text-xs text-textSecondary mt-1">
           Verify your current password, then enter the code we send to your WhatsApp or email.
         </p>
@@ -311,7 +316,7 @@ function ChangePasswordCard({ phone }: { phone: string | null }) {
               <button
                 type="button"
                 onClick={() => setShowOldPw((v) => !v)}
-                className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 text-textSecondary hover:text-navy"
+                className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 text-textSecondary hover:text-ink"
                 aria-label={showOldPw ? "Hide" : "Show"}
               >
                 {showOldPw ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
@@ -320,22 +325,22 @@ function ChangePasswordCard({ phone }: { phone: string | null }) {
           </Field>
 
           {err && (
-            <div className="rounded-sm border border-danger/30 bg-danger/5 px-3 py-2 text-danger text-sm">
+            <div className="rounded-md border border-dangerBorder bg-dangerBg px-3 py-2 text-dangerFg text-sm">
               {err}
             </div>
           )}
 
           <div>
             <label className="label block mb-1.5">Send the code to</label>
-            <div className="inline-flex rounded-sm border border-borderc overflow-hidden text-sm">
+            <div className="inline-flex rounded-[9px] border border-borderControl overflow-hidden text-[13px]">
               <button
                 type="button"
                 onClick={() => setChannel("whatsapp")}
                 disabled={!hasPhone}
-                className={`px-4 h-9 font-medium transition-colors disabled:opacity-40 ${
+                className={`px-4 h-9 font-semibold transition-colors disabled:opacity-40 ${
                   channel === "whatsapp"
-                    ? "bg-brand text-textPrimary"
-                    : "bg-surface text-textSecondary hover:bg-bg"
+                    ? "bg-brand text-white"
+                    : "bg-surface text-textSecondary hover:bg-surfaceAlt"
                 }`}
                 title={hasPhone ? undefined : "Add a phone number above to use WhatsApp"}
               >
@@ -344,17 +349,17 @@ function ChangePasswordCard({ phone }: { phone: string | null }) {
               <button
                 type="button"
                 onClick={() => setChannel("email")}
-                className={`px-4 h-9 font-medium border-l border-borderc transition-colors ${
+                className={`px-4 h-9 font-semibold border-l border-borderControl transition-colors ${
                   channel === "email"
-                    ? "bg-brand text-textPrimary"
-                    : "bg-surface text-textSecondary hover:bg-bg"
+                    ? "bg-brand text-white"
+                    : "bg-surface text-textSecondary hover:bg-surfaceAlt"
                 }`}
               >
                 Email
               </button>
             </div>
             {channel === "whatsapp" && !hasPhone && (
-              <p className="text-[11px] text-warning mt-1.5">
+              <p className="text-[11px] text-warnDeep mt-1.5">
                 No phone on file — add one above, or use Email.
               </p>
             )}
@@ -378,7 +383,7 @@ function ChangePasswordCard({ phone }: { phone: string | null }) {
 
       {step === 2 && (
         <>
-          <div className="rounded-sm bg-brand-soft/40 border border-borderc px-3 py-2 text-sm">
+          <div className="rounded-md bg-brand-soft/40 border border-brand-tint px-3 py-2 text-sm">
             <>
               Code sent to <span className="font-mono">{maskedTarget}</span> via {channel === "email" ? "email" : "WhatsApp"}.
             </>
@@ -390,7 +395,7 @@ function ChangePasswordCard({ phone }: { phone: string | null }) {
             {devCode && (
               <div className="mt-1 text-sm">
                 Your code:{" "}
-                <span className="font-mono font-bold text-brand-dark text-base">{devCode}</span>
+                <span className="font-mono font-bold text-brand-deep text-base">{devCode}</span>
               </div>
             )}
           </div>
@@ -421,7 +426,7 @@ function ChangePasswordCard({ phone }: { phone: string | null }) {
                 <button
                   type="button"
                   onClick={() => setShowNewPw((v) => !v)}
-                  className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 text-textSecondary hover:text-navy"
+                  className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 text-textSecondary hover:text-ink"
                   aria-label={showNewPw ? "Hide" : "Show"}
                 >
                   {showNewPw ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
@@ -441,7 +446,7 @@ function ChangePasswordCard({ phone }: { phone: string | null }) {
           </div>
 
           {err && (
-            <div className="rounded-sm border border-danger/30 bg-danger/5 px-3 py-2 text-danger text-sm">
+            <div className="rounded-md border border-dangerBorder bg-dangerBg px-3 py-2 text-dangerFg text-sm">
               {err}
             </div>
           )}
@@ -449,7 +454,7 @@ function ChangePasswordCard({ phone }: { phone: string | null }) {
           <div className="flex justify-between items-center">
             <button
               type="button"
-              className="text-sm text-textSecondary hover:text-navy"
+              className="text-sm text-textSecondary hover:text-ink"
               onClick={reset}
             >
               Cancel
@@ -624,8 +629,8 @@ function TwoFactorCard() {
     <div className="card space-y-4">
       <div className="flex items-start justify-between gap-3">
         <div>
-          <h3 className="font-semibold text-brand-dark text-lg flex items-center gap-2">
-            <ShieldCheck className="w-5 h-5 text-brand" />
+          <h3 className="text-base font-semibold text-ink flex items-center gap-2">
+            <ShieldCheck className="w-5 h-5 text-brand-deep" />
             Two-Factor Authentication
           </h3>
           <p className="text-xs text-textSecondary mt-1">
@@ -634,7 +639,7 @@ function TwoFactorCard() {
           </p>
         </div>
         {hasVerified && !enroll && (
-          <span className="shrink-0 inline-flex items-center gap-1 rounded-full bg-success/10 text-success text-xs font-medium px-2.5 py-1">
+          <span className="shrink-0 inline-flex items-center gap-1 rounded-full bg-successBg text-success text-xs font-semibold px-2.5 py-1">
             <Check className="w-3 h-3" /> Enabled
           </span>
         )}
@@ -650,17 +655,17 @@ function TwoFactorCard() {
               {verified.map((f) => (
                 <div
                   key={f.id}
-                  className="flex items-center justify-between rounded-sm border border-borderc bg-bg px-3 py-2"
+                  className="flex items-center justify-between rounded-[11px] border border-divider bg-surfaceAlt px-3.5 py-2.5"
                 >
                   <div className="flex items-center gap-2 text-sm">
-                    <Smartphone className="w-4 h-4 text-textSecondary" />
-                    <span className="font-medium text-brand-dark">
+                    <Smartphone className="w-4 h-4 text-inkMuted" />
+                    <span className="font-medium text-ink">
                       {f.friendly_name || "Authenticator app"}
                     </span>
                   </div>
                   <button
                     type="button"
-                    className="text-xs text-danger hover:underline disabled:opacity-50"
+                    className="text-xs font-semibold text-dangerFg hover:underline disabled:opacity-50"
                     onClick={() => onRemove(f.id)}
                     disabled={removeFactor.isPending}
                   >
@@ -670,20 +675,20 @@ function TwoFactorCard() {
               ))}
             </div>
           ) : (
-            <div className="rounded-sm border border-warning/40 bg-warning/10 px-3 py-2 text-warning text-sm">
+            <div className="rounded-md border border-warnBorder bg-warnBg px-3 py-2 text-warnFg text-sm">
               Two-factor authentication is not enabled on your account.
             </div>
           )}
 
           {mfaUnavailable ? (
-            <div className="rounded-sm border border-borderc bg-bg px-3 py-2 text-textSecondary text-sm">
+            <div className="rounded-md border border-divider bg-surfaceAlt px-3 py-2 text-textSecondary text-sm">
               Two-factor authentication isn't available on this workspace yet.
               It needs to be enabled in the project's authentication settings
               (on hosted Supabase this requires the Pro plan).
             </div>
           ) : (
             err && (
-              <div className="rounded-sm border border-danger/30 bg-danger/5 px-3 py-2 text-danger text-sm">
+              <div className="rounded-md border border-dangerBorder bg-dangerBg px-3 py-2 text-dangerFg text-sm">
                 {err}
               </div>
             )
@@ -707,17 +712,17 @@ function TwoFactorCard() {
 
       {/* Enrollment in progress — a clean two-step panel */}
       {enroll && (
-        <div className="rounded-md border border-borderc bg-bg p-4 sm:p-5 space-y-5">
+        <div className="rounded-xl border border-divider bg-surfaceAlt p-4 sm:p-5 space-y-5">
           {/* Step 1 — scan / manual key */}
           <div className="flex gap-3">
             <StepDot n={1} />
             <div className="flex-1 min-w-0">
-              <div className="font-semibold text-brand-dark text-sm">Add the account</div>
+              <div className="font-semibold text-ink text-sm">Add the account</div>
               <p className="text-xs text-textSecondary mt-0.5">
                 Scan the QR with Google Authenticator, Authy or 1Password.
               </p>
               <div className="mt-3 flex flex-col sm:flex-row gap-4 items-start">
-                <div className="bg-white border border-borderc rounded-md p-2.5 shrink-0 mx-auto sm:mx-0">
+                <div className="bg-surface border border-borderc rounded-md p-2.5 shrink-0 mx-auto sm:mx-0">
                   <img
                     src={enroll.qr}
                     alt="Scan this QR code with your authenticator app"
@@ -729,13 +734,13 @@ function TwoFactorCard() {
                     Can't scan? Enter this key manually
                   </div>
                   <div className="flex items-center gap-2">
-                    <code className="flex-1 min-w-0 break-all rounded-sm bg-surface border border-borderc px-2.5 py-2 text-xs font-mono tracking-wide">
+                    <code className="flex-1 min-w-0 break-all rounded-sm bg-surface border border-borderControl px-2.5 py-2 text-xs font-mono tracking-wide">
                       {enroll.secret}
                     </code>
                     <button
                       type="button"
                       onClick={copySecret}
-                      className="shrink-0 h-9 w-9 grid place-items-center rounded-sm border border-borderc text-textSecondary hover:text-navy hover:border-brand transition"
+                      className="shrink-0 h-9 w-9 grid place-items-center rounded-sm border border-borderControl text-textSecondary hover:text-ink hover:border-brand transition"
                       aria-label="Copy setup key"
                       title="Copy setup key"
                     >
@@ -755,11 +760,11 @@ function TwoFactorCard() {
           <div className="flex gap-3">
             <StepDot n={2} />
             <div className="flex-1 min-w-0">
-              <div className="font-semibold text-brand-dark text-sm">
+              <div className="font-semibold text-ink text-sm">
                 Enter the 6-digit code from your app
               </div>
               <input
-                className="mt-3 w-full max-w-[16rem] h-14 rounded-md border border-borderc bg-surface text-center tracking-[0.5em] text-xl font-bold outline-none focus:border-brand focus:ring-2 focus:ring-brand/20 transition"
+                className="mt-3 w-full max-w-[16rem] h-14 rounded-md border border-borderControl bg-surface text-center tracking-[0.5em] text-xl font-bold outline-none focus:border-brand focus:ring-[3px] focus:ring-brand-soft transition"
                 inputMode="numeric"
                 maxLength={6}
                 value={code}
@@ -771,15 +776,15 @@ function TwoFactorCard() {
           </div>
 
           {err && (
-            <div className="rounded-sm border border-danger/30 bg-danger/5 px-3 py-2 text-danger text-sm">
+            <div className="rounded-md border border-dangerBorder bg-dangerBg px-3 py-2 text-dangerFg text-sm">
               {err}
             </div>
           )}
 
-          <div className="flex justify-between items-center pt-1 border-t border-borderc">
+          <div className="flex justify-between items-center pt-1 border-t border-divider">
             <button
               type="button"
-              className="text-sm text-textSecondary hover:text-navy py-2"
+              className="text-sm text-textSecondary hover:text-ink py-2"
               onClick={cancelEnroll}
             >
               Cancel
@@ -849,14 +854,14 @@ function QrCodesSection() {
   });
   if (!property) return null;
   return (
-    <div className="border-t border-borderc pt-4 mt-2">
-      <h3 className="font-semibold text-brand-dark">QR codes</h3>
-      <div className="mt-3 rounded-md border border-borderc bg-bg p-4 flex items-center gap-4 flex-wrap">
-        <div className="w-11 h-11 rounded-md bg-brand-soft text-brand-deep grid place-items-center shrink-0">
+    <div className="border-t border-divider pt-4 mt-2">
+      <h3 className="text-[15px] font-semibold text-ink">QR codes</h3>
+      <div className="mt-3 rounded-xl border border-divider bg-surfaceAlt p-4 flex items-center gap-4 flex-wrap">
+        <div className="w-11 h-11 rounded-[11px] bg-brand-soft text-brand-deep grid place-items-center shrink-0">
           <QrCode className="w-5 h-5" />
         </div>
         <div className="flex-1 min-w-[200px]">
-          <div className="font-medium text-brand-dark text-sm">Hotel front-desk QR</div>
+          <div className="font-semibold text-ink text-sm">Hotel front-desk QR</div>
           <p className="text-xs text-textSecondary mt-0.5">
             Walk-ins scan it to browse tonight's rooms and send a booking request you
             confirm. Per-room WiFi/request stickers print from the Rooms page.
@@ -880,7 +885,7 @@ function QrCodesSection() {
 // Numbered step badge for the 2FA enrollment panel.
 function StepDot({ n }: { n: number }) {
   return (
-    <span className="shrink-0 w-6 h-6 rounded-full bg-brand text-textPrimary text-xs font-bold grid place-items-center">
+    <span className="shrink-0 w-6 h-6 rounded-full bg-brand text-white text-xs font-bold grid place-items-center">
       {n}
     </span>
   );
@@ -1051,12 +1056,12 @@ function HotelTab() {
   }
 
   return (
-    <div className="card space-y-3">
+    <div className="card space-y-4">
       <div className="flex items-center gap-4">
         <img
           src={form.hotelLogoUrl || "/logo.png"}
           alt="Hotel logo"
-          className="w-16 h-16 rounded-md object-contain border border-borderc bg-bg p-1 shrink-0"
+          className="w-[60px] h-[60px] rounded-[13px] object-contain border border-borderControl bg-surfaceAlt p-1 shrink-0"
         />
         <div className="min-w-0">
           <div className="label">Hotel logo</div>
@@ -1093,7 +1098,7 @@ function HotelTab() {
         </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
         <Field label="Hotel Name">
           <input className="input" value={form.hotelName} onChange={(e) => set("hotelName", e.target.value)} />
         </Field>
@@ -1206,10 +1211,10 @@ function HotelTab() {
         <button
           type="button"
           onClick={useMyLocation}
-          className="px-3 py-2 text-sm border border-borderc rounded-sm bg-surface hover:bg-bg inline-flex items-center gap-1.5 whitespace-nowrap"
+          className="px-3 py-2 text-sm font-semibold text-inkBody border border-borderControl rounded-md bg-surface hover:bg-surfaceAlt inline-flex items-center gap-1.5 whitespace-nowrap transition-colors"
           title="Capture from this device"
         >
-          <MapPin className="w-4 h-4 text-brand-dark" />
+          <MapPin className="w-4 h-4 text-textSecondary" />
           Use my location
         </button>
         <a
@@ -1217,10 +1222,10 @@ function HotelTab() {
           target="_blank"
           rel="noopener noreferrer"
           aria-disabled={!mapsHref}
-          className={`px-3 py-2 text-sm border rounded-sm inline-flex items-center gap-1.5 whitespace-nowrap ${
+          className={`px-3 py-2 text-sm font-semibold border rounded-md inline-flex items-center gap-1.5 whitespace-nowrap transition-colors ${
             mapsHref
-              ? "border-brand-dark bg-brand-dark text-cream hover:opacity-90"
-              : "border-borderc bg-bg text-textSecondary pointer-events-none opacity-60"
+              ? "border-brand bg-brand text-white shadow-primary hover:bg-brand-deep"
+              : "border-borderControl bg-surfaceAlt text-inkMuted pointer-events-none opacity-60"
           }`}
           title={hasPin ? "Open pin in Google Maps" : "Open address in Google Maps"}
         >
@@ -1233,12 +1238,12 @@ function HotelTab() {
         paste here. Or click <em>Use my location</em> while standing at the hotel.
       </p>
 
-      <div className="border-t border-borderc pt-4 mt-2 space-y-3">
-        <h3 className="font-semibold text-brand-dark">Owner Notifications</h3>
+      <div className="border-t border-divider pt-4 mt-2 space-y-3">
+        <h3 className="text-[15px] font-semibold text-ink">Owner Notifications</h3>
         <p className="text-xs text-textSecondary -mt-2">
           Owner gets an SMS on every new booking, check-in and check-out.
         </p>
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
           <Field label="Owner Phone (with country code)">
             <input
               className="input"
@@ -1248,7 +1253,7 @@ function HotelTab() {
             />
           </Field>
           <Field label="Send owner alerts">
-            <div className="flex items-center justify-between px-3 py-2.5 border border-borderc rounded-sm bg-surface select-none">
+            <div className="flex items-center justify-between px-3.5 py-2.5 border border-borderControl rounded-md bg-surface select-none">
               <span className="text-sm font-medium text-textPrimary">
                 Owner alerts
                 <span className="ml-2 text-xs font-normal text-textSecondary">
@@ -1276,15 +1281,15 @@ function HotelTab() {
         </div>
       </div>
 
-      <div className="border-t border-borderc pt-4 mt-2 space-y-3">
-        <h3 className="font-semibold text-brand-dark">Guest Check-in</h3>
+      <div className="border-t border-divider pt-4 mt-2 space-y-3">
+        <h3 className="text-[15px] font-semibold text-ink">Guest Check-in</h3>
         <p className="text-xs text-textSecondary -mt-2">
           When OTP verification is on, every new booking sends a code to the
           guest that must be entered before check-in is completed. Turn it off
           if guests can't reliably receive a code - bookings will be created
           without OTP.
         </p>
-        <div className="flex items-center justify-between px-3 py-2.5 border border-borderc rounded-sm bg-surface select-none">
+        <div className="flex items-center justify-between px-3.5 py-2.5 border border-borderControl rounded-md bg-surface select-none">
           <span className="text-sm font-medium text-textPrimary">
             Require OTP verification
             <span className="ml-2 text-xs font-normal text-textSecondary">
@@ -1310,8 +1315,8 @@ function HotelTab() {
         </div>
       </div>
 
-      <div className="border-t border-borderc pt-4 mt-2 space-y-3">
-        <h3 className="font-semibold text-brand-dark">Complimentary Bookings</h3>
+      <div className="border-t border-divider pt-4 mt-2 space-y-3">
+        <h3 className="text-[15px] font-semibold text-ink">Complimentary Bookings</h3>
         <p className="text-xs text-textSecondary -mt-2">
           On = the discreet complimentary flow is active: comp bookings stay
           out of the calendar, reservations list, activity, invoices and
@@ -1321,7 +1326,7 @@ function HotelTab() {
           any existing comp bookings show like normal ones. Their money is
           never counted as revenue either way.
         </p>
-        <div className="flex items-center justify-between px-3 py-2.5 border border-borderc rounded-sm bg-surface select-none">
+        <div className="flex items-center justify-between px-3.5 py-2.5 border border-borderControl rounded-md bg-surface select-none">
           <span className="text-sm font-medium text-textPrimary">
             Hide complimentary bookings
             <span className="ml-2 text-xs font-normal text-textSecondary">
@@ -1399,12 +1404,12 @@ function HotelTab() {
         {codeErr && <p className="text-danger text-xs">{codeErr}</p>}
       </div>
 
-      <div className="border-t border-borderc pt-4 mt-2 space-y-3">
-        <h3 className="font-semibold text-brand-dark">Guest Wi-Fi</h3>
+      <div className="border-t border-divider pt-4 mt-2 space-y-3">
+        <h3 className="text-[15px] font-semibold text-ink">Guest Wi-Fi</h3>
         <p className="text-xs text-textSecondary -mt-2">
           Shown in the check-in WhatsApp message so guests don't have to ask the front desk.
         </p>
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
           <Field label="Network name (SSID)">
             <input
               className="input"

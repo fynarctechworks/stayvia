@@ -29,11 +29,11 @@ interface BillingData {
 }
 
 const STATUS_CHIP: Record<BillingStatus, { label: string; cls: string }> = {
-  trialing: { label: "Trial", cls: "bg-info/15 text-info" },
-  active: { label: "Active", cls: "bg-success/15 text-success" },
-  past_due: { label: "Past due", cls: "bg-warning/15 text-warning" },
-  cancelled: { label: "Cancelled", cls: "bg-danger/15 text-danger" },
-  expired: { label: "Expired", cls: "bg-danger/15 text-danger" },
+  trialing: { label: "Trial", cls: "bg-infoBg text-info" },
+  active: { label: "Active", cls: "bg-successBg text-success" },
+  past_due: { label: "Past due", cls: "bg-warnBg text-warnFg" },
+  cancelled: { label: "Cancelled", cls: "bg-dangerBg text-dangerFg" },
+  expired: { label: "Expired", cls: "bg-dangerBg text-dangerFg" },
 };
 
 // Minimal typing for the Razorpay Checkout script we inject below.
@@ -141,9 +141,11 @@ export default function Billing() {
 
   if (error || !data) {
     return (
-      <div className="space-y-4">
-        <h1 className="text-2xl font-bold text-navy">Billing</h1>
-        <div className="card flex items-start gap-2 text-danger">
+      <div className="max-w-[640px] mx-auto w-full space-y-4">
+        <h1 className="text-[clamp(22px,3vw,28px)] leading-tight font-semibold tracking-[-0.5px] text-ink">
+          Billing
+        </h1>
+        <div className="card flex items-start gap-2 text-dangerFg">
           <AlertCircle className="w-4 h-4 mt-0.5 shrink-0" />
           <span className="text-sm">
             {error instanceof Error ? error.message : "Could not load billing details."}
@@ -157,13 +159,18 @@ export default function Billing() {
   const showSubscribe = data.status !== "active";
 
   return (
-    <div className="space-y-4 max-w-2xl">
-      <h1 className="text-2xl font-bold text-navy">Billing</h1>
+    <div className="max-w-[640px] mx-auto w-full space-y-4">
+      <div>
+        <h1 className="text-[clamp(22px,3vw,28px)] leading-tight font-semibold tracking-[-0.5px] text-ink">
+          Billing
+        </h1>
+        <p className="text-sm text-textSecondary mt-1.5">Your plan, trial status and subscription.</p>
+      </div>
 
       {notConfigured && (
         <div
           role="status"
-          className="flex items-start gap-2 rounded-sm border border-info/30 bg-info/5 px-3 py-2 text-info text-sm"
+          className="flex items-start gap-2 rounded-md border border-infoBorder bg-infoBg px-3 py-2.5 text-info text-sm"
         >
           <Info className="w-4 h-4 mt-0.5 shrink-0" />
           <span>
@@ -178,42 +185,42 @@ export default function Billing() {
         <div className="flex items-start justify-between gap-3 flex-wrap">
           <div>
             <div className="flex items-center gap-2">
-              <h2 className="font-semibold text-brand-dark text-lg">Standard plan</h2>
+              <h2 className="font-semibold text-ink text-lg">Standard plan</h2>
               <span
                 className={cn(
-                  "inline-flex items-center px-2 py-0.5 text-xs font-medium uppercase tracking-wide rounded-sm",
+                  "inline-flex items-center px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.05em] rounded-[6px]",
                   chip.cls,
                 )}
               >
                 {chip.label}
               </span>
             </div>
-            <p className="text-xs text-textSecondary mt-1">
+            <p className="text-[13px] text-inkMuted mt-1.5 max-w-[400px]">
               Everything in Stayvia - reservations, housekeeping, invoices, reports and staff
               accounts.
             </p>
           </div>
-          <CreditCard className="w-5 h-5 text-textSecondary shrink-0" />
+          <CreditCard className="w-5 h-5 text-inkFaint shrink-0" />
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
+        <div className="text-sm space-y-2.5">
           {data.status === "trialing" && (
-            <div className="flex items-center gap-2">
-              <CalendarClock className="w-4 h-4 text-textSecondary shrink-0" />
-              <span>
-                <span className="font-semibold text-brand-dark">{data.daysLeft}</span>{" "}
+            <div className="flex items-center gap-2.5 px-3.5 py-3 rounded-[11px] bg-surfaceAlt border border-divider">
+              <CalendarClock className="w-[19px] h-[19px] text-warnFg shrink-0" />
+              <span className="text-[13.5px]">
+                <span className="font-bold text-ink">{data.daysLeft}</span>{" "}
                 {data.daysLeft === 1 ? "day" : "days"} left in trial
-                <span className="text-textSecondary"> (ends {fmtDate(data.trialEndsAt)})</span>
+                <span className="text-inkMuted"> (ends {fmtDate(data.trialEndsAt)})</span>
               </span>
             </div>
           )}
           {data.status === "active" && (
-            <div className="flex items-center gap-2">
-              <CalendarClock className="w-4 h-4 text-textSecondary shrink-0" />
-              <span>
+            <div className="flex items-center gap-2.5 px-3.5 py-3 rounded-[11px] bg-surfaceAlt border border-divider">
+              <CalendarClock className="w-[19px] h-[19px] text-textSecondary shrink-0" />
+              <span className="text-[13.5px]">
                 Current period ends{" "}
-                <span className="font-semibold text-brand-dark">{fmtDate(data.currentPeriodEnd)}</span>
-                <span className="text-textSecondary">
+                <span className="font-semibold text-ink">{fmtDate(data.currentPeriodEnd)}</span>
+                <span className="text-inkMuted">
                   {" "}
                   ({data.daysLeft} {data.daysLeft === 1 ? "day" : "days"} left)
                 </span>
@@ -221,11 +228,11 @@ export default function Billing() {
             </div>
           )}
           {data.status === "cancelled" && data.currentPeriodEnd && (
-            <div className="flex items-center gap-2">
-              <CalendarClock className="w-4 h-4 text-textSecondary shrink-0" />
-              <span>
+            <div className="flex items-center gap-2.5 px-3.5 py-3 rounded-[11px] bg-surfaceAlt border border-divider">
+              <CalendarClock className="w-[19px] h-[19px] text-textSecondary shrink-0" />
+              <span className="text-[13.5px]">
                 Access until{" "}
-                <span className="font-semibold text-brand-dark">{fmtDate(data.currentPeriodEnd)}</span>
+                <span className="font-semibold text-ink">{fmtDate(data.currentPeriodEnd)}</span>
               </span>
             </div>
           )}
@@ -261,12 +268,12 @@ export default function Billing() {
 
       {/* State explanation */}
       {data.locked ? (
-        <div className="card border-danger/30 space-y-2">
+        <div className="card border-dangerBorder space-y-2">
           <div className="flex items-center gap-2">
-            <AlertCircle className="w-4 h-4 text-danger shrink-0" />
-            <h3 className="font-semibold text-brand-dark">Your workspace is locked</h3>
+            <AlertCircle className="w-4 h-4 text-dangerFg shrink-0" />
+            <h3 className="text-[15px] font-semibold text-ink">Your workspace is locked</h3>
           </div>
-          <p className="text-sm text-textSecondary">
+          <p className="text-[13.5px] text-textSecondary leading-relaxed">
             {data.status === "trialing" || data.status === "expired"
               ? "Your free trial has ended."
               : "Your subscription has lapsed."}{" "}
@@ -278,10 +285,10 @@ export default function Billing() {
       ) : data.status === "trialing" ? (
         <div className="card space-y-2">
           <div className="flex items-center gap-2">
-            <ShieldCheck className="w-4 h-4 text-success shrink-0" />
-            <h3 className="font-semibold text-brand-dark">You're on the free trial</h3>
+            <ShieldCheck className="w-[19px] h-[19px] text-success shrink-0" />
+            <h3 className="text-[15px] font-semibold text-ink">You're on the free trial</h3>
           </div>
-          <p className="text-sm text-textSecondary">
+          <p className="text-[13.5px] text-textSecondary leading-relaxed">
             Full access until {fmtDate(data.trialEndsAt)}. Subscribe any time before then and
             billing simply starts when you pay - no interruption for your front desk.
           </p>

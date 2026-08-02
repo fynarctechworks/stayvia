@@ -101,10 +101,10 @@ export default function Activity() {
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between flex-wrap gap-3">
-        <h1 className="text-2xl font-bold text-navy flex items-center gap-2">
-          <ActivityIcon className="w-5 h-5" /> Recent Activity
+        <h1 className="text-[clamp(22px,3vw,28px)] font-semibold tracking-[-0.5px] text-ink flex items-center gap-2.5">
+          <ActivityIcon className="w-6 h-6 text-brand-deep" /> Recent activity
         </h1>
-        <div className="text-xs text-textSecondary">
+        <div className="text-xs text-inkMuted">
           {timeFiltered.length === data.length
             ? `${data.length} entr${data.length === 1 ? "y" : "ies"}`
             : `${timeFiltered.length} of ${data.length} entries`}
@@ -112,16 +112,16 @@ export default function Activity() {
       </div>
 
       <StickyBar>
-      <div className="card !p-3 flex flex-wrap items-center gap-3">
-        <div className="inline-flex items-center bg-bg border border-borderc rounded-md p-1 gap-1">
+      <div className="card !p-3 !rounded-[14px] flex flex-wrap items-center gap-3">
+        <div className="inline-flex items-center bg-bg border border-borderControl rounded-[10px] p-[3px] gap-0.5">
           {(["today", "week", "month", "year", "custom"] as RangeKey[]).map((k) => (
             <button
               key={k}
               onClick={() => setRange(k)}
-              className={`text-xs font-semibold px-3 py-1.5 rounded-sm transition-colors capitalize ${
+              className={`text-xs font-semibold px-3 py-1.5 rounded-[7px] transition-colors capitalize ${
                 range === k
-                  ? "bg-brand-dark text-cream"
-                  : "text-textSecondary hover:text-brand-dark hover:bg-white"
+                  ? "bg-inkDark text-cream"
+                  : "text-textSecondary hover:text-ink hover:bg-surface"
               }`}
             >
               {k === "today"
@@ -140,7 +140,7 @@ export default function Activity() {
         {range === "custom" && (
           <div className="flex items-end gap-2">
             <div>
-              <label className="block text-[10px] uppercase tracking-wide text-textSecondary mb-1">
+              <label className="block text-[10px] font-bold uppercase tracking-wide text-inkMuted mb-1">
                 From
               </label>
               <input
@@ -152,7 +152,7 @@ export default function Activity() {
               />
             </div>
             <div>
-              <label className="block text-[10px] uppercase tracking-wide text-textSecondary mb-1">
+              <label className="block text-[10px] font-bold uppercase tracking-wide text-inkMuted mb-1">
                 To
               </label>
               <input
@@ -167,15 +167,15 @@ export default function Activity() {
           </div>
         )}
 
-        <div className="flex items-end gap-2 border-l border-borderc pl-3">
+        <div className="flex items-end gap-2 border-l border-divider pl-3">
           <div>
-            <label className="block text-[10px] uppercase tracking-wide text-textSecondary mb-1">
+            <label className="block text-[10px] font-bold uppercase tracking-wide text-inkMuted mb-1">
               Time from
             </label>
             <TimePicker12h value={timeFrom} onChange={setTimeFrom} />
           </div>
           <div>
-            <label className="block text-[10px] uppercase tracking-wide text-textSecondary mb-1">
+            <label className="block text-[10px] font-bold uppercase tracking-wide text-inkMuted mb-1">
               Time to
             </label>
             <TimePicker12h value={timeTo} onChange={setTimeTo} />
@@ -186,7 +186,7 @@ export default function Activity() {
                 setTimeFrom("");
                 setTimeTo("");
               }}
-              className="h-8 px-2 text-xs text-textSecondary hover:text-brand-dark"
+              className="h-8 px-2 text-xs text-textSecondary hover:text-ink"
               title="Clear time filter"
             >
               Clear
@@ -194,7 +194,7 @@ export default function Activity() {
           )}
         </div>
 
-        <div className="ml-auto text-[11px] text-textSecondary flex items-center gap-1.5">
+        <div className="ml-auto text-[11px] text-inkMuted flex items-center gap-1.5">
           <Calendar className="w-3.5 h-3.5" />
           {from === to ? from : `${from} → ${to}`}
           {(timeFrom || timeTo) && (
@@ -219,34 +219,35 @@ export default function Activity() {
             const d = new Date(day);
             return (
               <section key={day} className="card">
-                <header className="flex items-baseline gap-3 border-b border-borderc pb-2 mb-3">
-                  <h2 className="font-semibold text-brand-dark">{dayLabel(d)}</h2>
-                  <span className="text-[11px] tracking-wider uppercase text-textSecondary">
+                <header className="flex items-baseline gap-3 border-b border-divider pb-2.5 mb-3.5">
+                  <h2 className="text-[15px] font-semibold text-ink">{dayLabel(d)}</h2>
+                  <span className="font-mono text-[11px] text-inkMuted">
                     {format(d, "yyyy-MM-dd")}
                   </span>
-                  <span className="ml-auto text-xs text-textSecondary">
+                  <span className="ml-auto text-xs text-inkMuted">
                     {rows.length} entr{rows.length === 1 ? "y" : "ies"}
                   </span>
                 </header>
-                <ul className="space-y-3 text-sm">
+                <ul className="space-y-3.5 text-sm">
                   {rows.map((a) => {
                     const ts = new Date(a.createdAt);
                     return (
-                      <li
-                        key={a.id}
-                        className="flex gap-3 border-b border-borderc/60 last:border-b-0 pb-3 last:pb-0"
-                      >
-                        <div className="shrink-0 w-16 text-right font-mono text-xs text-textSecondary pt-0.5">
+                      <li key={a.id} className="flex gap-3.5">
+                        <div className="shrink-0 w-16 text-right font-mono text-xs text-inkMuted pt-px">
                           {format(ts, "HH:mm")}
                         </div>
-                        <div className="flex-1 min-w-0">
-                          <div className="text-xs text-textSecondary">
+                        <div className="relative flex-1 min-w-0 pl-[18px] border-l-2 border-divider">
+                          <span
+                            aria-hidden
+                            className="absolute -left-[5px] top-1 w-2 h-2 rounded-full bg-brand"
+                          />
+                          <div className="text-xs text-inkMuted">
                             {a.performedBy} ·{" "}
                             <span title={format(ts, "EEE, d MMM yyyy 'at' h:mm a")}>
                               {formatDistanceToNow(ts, { addSuffix: true })}
                             </span>
                           </div>
-                          <div className="mt-0.5 break-words">{a.description}</div>
+                          <div className="mt-0.5 leading-normal break-words">{a.description}</div>
                         </div>
                       </li>
                     );

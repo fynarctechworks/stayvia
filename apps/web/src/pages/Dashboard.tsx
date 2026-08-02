@@ -2,7 +2,6 @@ import { useQuery } from "@tanstack/react-query";
 import {
   ArrowRight,
   BedDouble,
-  CalendarClock,
   CalendarPlus,
   CheckCircle2,
   LogIn,
@@ -105,18 +104,37 @@ interface DashboardData {
 
 export default function Dashboard() {
   const navigate = useNavigate();
+  const { profile } = useAuth();
   const { data, isLoading } = useQuery({
     queryKey: ["dashboard"],
     queryFn: () => api.get<DashboardData>("/dashboard"),
     refetchInterval: 30_000,
   });
 
+  // Warm Concierge greeting header ("Good morning, <name>") — pure
+  // presentation, derived from the clock + the signed-in profile.
+  const hour = new Date().getHours();
+  const greeting =
+    hour < 12 ? "Good morning" : hour < 17 ? "Good afternoon" : "Good evening";
+  const firstName = profile?.fullName?.trim().split(/\s+/)[0];
+
+  const headerBlock = (
+    <div>
+      <h1 className="text-[clamp(22px,3vw,28px)] font-semibold tracking-[-0.5px] text-ink leading-tight">
+        {greeting}
+        {firstName ? `, ${firstName}` : ""}
+      </h1>
+      <div className="text-sm text-textSecondary mt-1.5">
+        {format(new Date(), "EEEE, d MMM yyyy")} · Here's how the property looks
+        today.
+      </div>
+    </div>
+  );
+
   if (isLoading || !data) {
     return (
-      <div className="space-y-4">
-        <div className="flex items-center justify-between">
-          <h1 className="text-2xl font-bold text-brand-dark">Dashboard</h1>
-        </div>
+      <div className="space-y-[22px]">
+        <div className="flex items-center justify-between">{headerBlock}</div>
         <KpiSkeletonRow />
         <KpiSkeletonRow />
       </div>
@@ -124,15 +142,10 @@ export default function Dashboard() {
   }
 
   return (
-    <div className="space-y-4">
-      <div className="flex items-end justify-between flex-wrap gap-3">
-        <div>
-          <h1 className="text-2xl font-bold text-brand-dark">Dashboard</h1>
-          <div className="text-sm text-textSecondary mt-0.5">
-            {format(new Date(), "EEEE, d MMM yyyy")}
-          </div>
-        </div>
-        <div className="flex items-center gap-2">
+    <div className="space-y-[22px]">
+      <div className="flex items-end justify-between flex-wrap gap-4">
+        {headerBlock}
+        <div className="flex items-center gap-2.5">
           <button
             onClick={() => navigate("/reservations/new?mode=booking")}
             className="btn-secondary inline-flex items-center gap-2"
@@ -143,7 +156,7 @@ export default function Dashboard() {
             onClick={() => navigate("/reservations/new?mode=walkin")}
             className="btn-primary inline-flex items-center gap-2"
           >
-            <UserPlus className="w-4 h-4" /> Walk-in
+            <UserPlus className="w-4 h-4" /> New walk-in
           </button>
         </div>
       </div>
@@ -164,13 +177,25 @@ export default function Dashboard() {
           featured
           icon={<BedDouble className="w-4 h-4" />}
           label="Occupancy"
-          value={`${data.occupancy.occupied} / ${data.occupancy.total} rooms`}
-          sub={`${data.occupancy.percentage}% occupied`}
+          value={`${data.occupancy.occupied} / ${data.occupancy.total}`}
+          sub={
+            <>
+              {data.occupancy.percentage}% occupied tonight
+              <span className="block h-[5px] mt-1.5 rounded-full bg-parchment overflow-hidden">
+                <span
+                  className="block h-full rounded-full bg-brand"
+                  style={{
+                    width: `${Math.min(100, Math.max(0, data.occupancy.percentage))}%`,
+                  }}
+                />
+              </span>
+            </>
+          }
           to="/rooms"
         />
         <KpiCard
           icon={<LogIn className="w-4 h-4" />}
-          label="Today's Check-ins"
+          label="Arrivals today"
           value={String(data.today_checkins.count)}
           sub={`${
             data.today_checkins.reservations.filter((r) => r.status === "confirmed").length
@@ -178,7 +203,7 @@ export default function Dashboard() {
         />
         <KpiCard
           icon={<LogOut className="w-4 h-4" />}
-          label="Today's Check-outs"
+          label="Departures today"
           value={String(data.today_checkouts.count)}
           sub={`${
             data.today_checkouts.reservations.filter((r) => r.status === "checked_in").length
@@ -187,7 +212,7 @@ export default function Dashboard() {
         <Can any={["view_revenue", "view_daily_collections"]}>
           <KpiCard
             icon={<Wallet className="w-4 h-4" />}
-            label="Revenue Today"
+            label="Revenue today"
             value={inr(data.revenue_today?.total_collected ?? 0)}
             to="/collections"
             // Net can go negative when a refund lands today for a booking
@@ -267,139 +292,114 @@ export default function Dashboard() {
         )}
       </Can>
 
-      {/* Reference-style availability block: one proportion bar for the
-          whole property + a count per state. Same data as the floor grid
-          below, rolled up — answers "what's the house like right now?"
-          before staff scan individual rooms. */}
+      {/* "Rooms right now" — one card per the Warm Concierge reference:
+          headline + rolled-up proportion bar with legend, then per-floor
+          tile grids. Rooms inside a floor are sorted by room number
+          (201, 202, 203…) regardless of type, so the layout mirrors how
+          staff walks the property. */}
       {data.room_grid.length > 0 && (() => {
         const s = rollupFloorStats(data.room_grid);
         return (
-          <div className="card !py-3 flex items-center gap-4 flex-wrap">
-            <h2 className="font-semibold text-brand-dark text-sm shrink-0">Room Availability</h2>
-            <div className="flex-1 min-w-[220px]">
-              <StackedAvailability
-                segments={[
-                  { label: "Occupied", count: s.occupied, barClass: "bg-brand-dark" },
-                  { label: "Reserved", count: s.reserved + s.held, barClass: "bg-info" },
-                  { label: "Available", count: s.available, barClass: "bg-brand" },
-                  { label: "Not Ready", count: s.dirty + s.maintenance, barClass: "bg-warning" },
-                ]}
-              />
+          <div className="card">
+            <div className="flex items-start justify-between gap-3.5 flex-wrap mb-4">
+              <div>
+                <h2 className="text-[17px] font-semibold tracking-[-0.2px] text-ink">
+                  Rooms right now
+                </h2>
+                <p className="text-[13px] text-textSecondary mt-1">
+                  {s.available} room{s.available === 1 ? "" : "s"} free to sell
+                  tonight
+                  {s.held > 0 && <> · {s.held} held for a later stay</>}.
+                </p>
+              </div>
             </div>
+
+            {/* Whole-property proportion bar + legend. Held rooms roll into
+                the Reserved segment: they're empty now but locked for an
+                upcoming stay. */}
+            <StackedAvailability
+              segments={[
+                { label: "Occupied", count: s.occupied, barClass: "bg-inkDark" },
+                { label: "Reserved", count: s.reserved + s.held, barClass: "bg-reserved" },
+                { label: "Available", count: s.available, barClass: "bg-brand" },
+                { label: "Not ready", count: s.dirty + s.maintenance, barClass: "bg-notReady" },
+              ]}
+            />
+
+            {groupByFloor(data.room_grid).map((floorGroup, floorIdx) => {
+              const floorStats = rollupFloorStats(floorGroup.rooms);
+              // "Sellable" = free to let for TONIGHT. Held rooms count: they
+              // are empty now and only locked from a later date, which is why
+              // the headline separates them out rather than hiding them.
+              const sellable = floorStats.available + floorStats.held;
+
+              return (
+                <div
+                  key={`floor-${floorGroup.floor}`}
+                  className={
+                    floorIdx === 0 ? "mt-5" : "mt-5 pt-[18px] border-t border-divider"
+                  }
+                >
+                  <div className="flex items-baseline justify-between gap-3 flex-wrap mb-3">
+                    <div className="flex items-baseline gap-2">
+                      <span className="text-[15px] font-semibold text-ink">
+                        Floor {floorGroup.floor}
+                      </span>
+                      <span className="text-[12.5px] text-inkMuted">
+                        {floorStats.total} room{floorStats.total === 1 ? "" : "s"}
+                      </span>
+                    </div>
+                    {/* Headline answers the one question the desk asks at a
+                        glance: how many rooms can I still sell tonight? */}
+                    <span
+                      className="text-[12.5px] font-semibold text-brand-deep"
+                      title={
+                        floorStats.held > 0
+                          ? `${sellable} of ${floorStats.total} rooms are free tonight — ${floorStats.held} of them is booked from a later date`
+                          : `${sellable} of ${floorStats.total} rooms are free to sell tonight`
+                      }
+                    >
+                      {sellable} free tonight
+                      {floorStats.held > 0 && (
+                        <span className="text-warnFg"> · {floorStats.held} booked later</span>
+                      )}
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-[repeat(auto-fill,minmax(118px,1fr))] gap-[11px]">
+                    {floorGroup.rooms.map((r) => (
+                      <RoomTile
+                        key={r.id}
+                        room={r}
+                        onWalkIn={() =>
+                          navigate(`/reservations/new?mode=walkin&room=${r.id}`)
+                        }
+                        onOpenReservation={() => {
+                          const handle = r.reservation_number ?? r.reservation_id;
+                          if (handle) navigate(`/reservations/${handle}`);
+                        }}
+                        onOpenRoom={() => navigate(`/rooms/${r.room_number}`)}
+                      />
+                    ))}
+                  </div>
+                </div>
+              );
+            })}
           </div>
         );
       })()}
 
-
-      <div className="card">
-        <h2 className="font-semibold text-brand-dark mb-3">Availability by Floor</h2>
-        {/* Floor → number-sorted tile grid. One row per floor; rooms
-            inside a floor are sorted by room number (201, 202, 203…)
-            regardless of type, so the layout mirrors how staff walks
-            the property. The floor-level headline rolls up the same
-            status chips that used to live on per-type strips. */}
-        {groupByFloor(data.room_grid).map((floorGroup, floorIdx) => {
-          const floorStats = rollupFloorStats(floorGroup.rooms);
-          // "Sellable" = free to let for TONIGHT. Held rooms count: they are
-          // empty now and only locked from a later date, which is why the
-          // headline separates them out rather than hiding them.
-          const sellable = floorStats.available + floorStats.held;
-          const chips: { label: string; count: number; dot: string }[] = [];
-          if (floorStats.available > 0) chips.push({ label: "Available", count: floorStats.available, dot: "bg-[#ffdb13]" });
-          if (floorStats.held > 0) chips.push({ label: "Held", count: floorStats.held, dot: "bg-warning" });
-          if (floorStats.occupied > 0) chips.push({ label: "Occupied", count: floorStats.occupied, dot: "bg-navy" });
-          if (floorStats.reserved > 0) chips.push({ label: "Reserved", count: floorStats.reserved, dot: "bg-[#644fc1]" });
-          if (floorStats.dirty > 0) chips.push({ label: "Needs Cleaning", count: floorStats.dirty, dot: "bg-warning" });
-          if (floorStats.maintenance > 0) chips.push({ label: "Maintenance", count: floorStats.maintenance, dot: "bg-danger" });
-
-          return (
-            <div
-              key={`floor-${floorGroup.floor}`}
-              className={floorIdx === 0 ? "pb-2" : "mt-5 pt-4 border-t-2 border-brand-dark/15 pb-2"}
-            >
-              <div className="flex items-center justify-between gap-3 flex-wrap mb-2">
-                {/* Headline answers the one question the desk asks at a
-                    glance: how many rooms can I still sell tonight?
-                    Deliberately NOT a percentage — the Occupancy card above
-                    already shows "50% occupied", and a second percentage
-                    measuring the inverse of the same rooms (25% sellable)
-                    read as a contradiction. "N of M" carries the same
-                    proportion without competing with it. */}
-                <div>
-                  <div className="font-semibold text-brand-dark">
-                    Floor {floorGroup.floor}
-                  </div>
-                  <div
-                    className="flex items-baseline gap-1.5 mt-0.5"
-                    title={
-                      floorStats.held > 0
-                        ? `${sellable} of ${floorStats.total} rooms are free tonight — ${floorStats.held} of them is booked from a later date`
-                        : `${sellable} of ${floorStats.total} rooms are free to sell tonight`
-                    }
-                  >
-                    <span className="text-xl font-bold text-brand leading-none">
-                      {sellable}
-                    </span>
-                    <span className="text-[11px] text-textSecondary">
-                      of {floorStats.total} free tonight
-                    </span>
-                    {floorStats.held > 0 && (
-                      <span className="text-[11px] text-warning font-semibold">
-                        · {floorStats.held} booked later
-                      </span>
-                    )}
-                  </div>
-                </div>
-                <div className="flex items-center gap-1.5 flex-wrap">
-                  {chips.map((c) => (
-                    <span
-                      key={c.label}
-                      className="inline-flex items-center gap-1 text-[11px] text-textSecondary"
-                      title={`${c.label} ${c.count}`}
-                    >
-                      <span className={`w-1.5 h-1.5 rounded-full ${c.dot}`} />
-                      <span className="font-semibold text-brand-dark">{c.count}</span>
-                      <span>{c.label}</span>
-                    </span>
-                  ))}
-                  <span className="text-[11px] text-textSecondary/70 ml-1">
-                    · {floorStats.total} total
-                  </span>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-7 gap-2.5 mt-3">
-                {floorGroup.rooms.map((r) => (
-                  <RoomTile
-                    key={r.id}
-                    room={r}
-                    onWalkIn={() =>
-                      navigate(`/reservations/new?mode=walkin&room=${r.id}`)
-                    }
-                    onOpenReservation={() => {
-                      const handle = r.reservation_number ?? r.reservation_id;
-                      if (handle) navigate(`/reservations/${handle}`);
-                    }}
-                    onOpenRoom={() => navigate(`/rooms/${r.room_number}`)}
-                  />
-                ))}
-              </div>
-            </div>
-          );
-        })}
-      </div>
-
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <TodayPanel
           kind="arrivals"
-          title="Today's Check-ins"
+          title="Today's arrivals"
           rows={data.today_checkins.reservations}
           emptyMessage="No arrivals today."
           onOpen={(id) => navigate(`/reservations/${id}`)}
         />
         <TodayPanel
           kind="departures"
-          title="Today's Check-outs"
+          title="Today's departures"
           rows={data.today_checkouts.reservations}
           emptyMessage="No departures today."
           onOpen={(id) => navigate(`/reservations/${id}`)}
@@ -411,6 +411,19 @@ export default function Dashboard() {
 }
 
 type TodayKind = "arrivals" | "departures";
+
+// Two-letter initials for the avatar tile ("Ananya Rao" → "AR").
+function initialsOf(name: string): string {
+  return (
+    name
+      .trim()
+      .split(/\s+/)
+      .filter(Boolean)
+      .slice(0, 2)
+      .map((w) => w[0]!.toUpperCase())
+      .join("") || "?"
+  );
+}
 
 function TodayPanel({
   kind,
@@ -431,36 +444,47 @@ function TodayPanel({
   const pending = rows.filter((r) => r.status === pendingStatus);
   const done = rows.filter((r) => r.status !== pendingStatus);
 
-  const HeaderIcon = kind === "arrivals" ? LogIn : LogOut;
+  const isArrivals = kind === "arrivals";
+  const HeaderIcon = isArrivals ? LogIn : LogOut;
 
   return (
     <div className="card !p-0 overflow-hidden">
-      <div className="px-4 py-3 border-b border-borderc flex items-center justify-between gap-2">
+      <div className="px-[18px] py-4 border-b border-divider flex items-center justify-between gap-2.5">
         <div className="flex items-center gap-2">
-          <HeaderIcon className="w-4 h-4 text-brand" />
-          <strong className="text-brand-dark">{title}</strong>
+          <span
+            className={`w-[30px] h-[30px] rounded-[9px] grid place-items-center ${
+              isArrivals ? "bg-infoBg text-info" : "bg-warnBg text-warnDeep"
+            }`}
+          >
+            <HeaderIcon className="w-[18px] h-[18px]" />
+          </span>
+          <strong className="text-[15px] text-ink">{title}</strong>
         </div>
-        <div className="flex items-center gap-1.5 text-[11px] font-semibold">
+        <div className="flex items-center gap-1.5 text-xs font-semibold">
           {pending.length > 0 && (
-            <span className="px-2 py-0.5 rounded-sm bg-warning/15 text-warning">
+            <span
+              className={`px-2 py-0.5 rounded-full ${
+                isArrivals ? "bg-warnBg text-warnFg" : "bg-dangerBg text-dangerFg"
+              }`}
+            >
               {pending.length} pending
             </span>
           )}
           {done.length > 0 && (
-            <span className="px-2 py-0.5 rounded-sm bg-success/15 text-success">
+            <span className="px-2 py-0.5 rounded-full bg-neutralBg text-inkMuted">
               {done.length} done
             </span>
           )}
           {rows.length === 0 && (
-            <span className="text-textSecondary">0 today</span>
+            <span className="text-textSecondary font-normal">0 today</span>
           )}
         </div>
       </div>
 
       {rows.length === 0 ? (
-        <div className="px-4 py-6 text-textSecondary text-sm">{emptyMessage}</div>
+        <div className="px-[18px] py-6 text-textSecondary text-sm">{emptyMessage}</div>
       ) : (
-        <ul className="divide-y divide-borderc">
+        <ul className="divide-y divide-divider">
           {/* Pending first so they're visually prioritised, then the done rows. */}
           {[...pending, ...done].map((r) => (
             <TodayRowItem key={r.id} kind={kind} row={r} onOpen={onOpen} />
@@ -492,11 +516,11 @@ function TodayRowItem({
   let ActionIcon = ArrowRight;
   let actionTone: "primary" | "secondary" = "secondary";
   if (isArrivalPending) {
-    actionLabel = "Start check-in";
+    actionLabel = "Check in";
     ActionIcon = LogIn;
     actionTone = "primary";
   } else if (isDeparturePending) {
-    actionLabel = "Start check-out";
+    actionLabel = "Check out";
     ActionIcon = LogOut;
     actionTone = "primary";
   } else if (isDepartureDone || isArrivalDone) {
@@ -508,46 +532,43 @@ function TodayRowItem({
   // Status pill colouring — derive from the row's literal status.
   const statusPill = (() => {
     if (row.status === "confirmed") {
-      return { label: "Confirmed", cls: "bg-brand-soft text-brand-dark" };
+      return { label: "Confirmed", cls: "bg-infoBg text-info" };
     }
     if (row.status === "checked_in") {
-      return { label: "Checked in", cls: "bg-success/15 text-success" };
+      return { label: "Checked in", cls: "bg-successBg text-success" };
     }
     if (row.status === "checked_out") {
-      return { label: "Checked out", cls: "bg-textSecondary/15 text-textSecondary" };
+      return { label: "Checked out", cls: "bg-neutralBg text-inkMuted" };
     }
-    return { label: row.status, cls: "bg-bg text-textSecondary" };
+    return { label: row.status, cls: "bg-neutralBg text-inkMuted" };
   })();
-
-  const PillIcon =
-    row.status === "checked_in" || row.status === "checked_out"
-      ? CheckCircle2
-      : Receipt;
 
   const rooms = row.roomNumbers
     ? row.roomNumbers.split(",").filter(Boolean)
     : [];
 
   return (
-    <li className="flex items-center gap-3 px-4 py-3 hover:bg-brand-soft/30 transition-colors">
+    <li className="flex items-center gap-3 px-[18px] py-3 hover:bg-surfaceAlt transition-colors">
+      <span className="w-9 h-9 shrink-0 rounded-full bg-parchment text-inkBody grid place-items-center font-bold text-xs">
+        {initialsOf(row.guestName)}
+      </span>
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-2 flex-wrap">
-          <span className="font-semibold text-brand-dark truncate">{row.guestName}</span>
+          <span className="font-semibold text-sm text-ink truncate">{row.guestName}</span>
           {rooms.map((rm) => (
             <span
               key={rm}
-              className="font-mono text-[11px] font-bold px-1.5 py-0.5 rounded-sm bg-bg border border-borderc text-brand-dark"
+              className="font-mono text-[10.5px] font-semibold px-1.5 py-px rounded-[6px] bg-bg text-inkBody"
             >
               Room {rm}
             </span>
           ))}
         </div>
-        <div className="flex items-center gap-2 mt-0.5">
-          <span className="font-mono text-[11px] text-accentBlue">{row.reservationNumber}</span>
+        <div className="flex items-center gap-2 mt-1">
+          <span className="font-mono text-[11px] text-inkMuted">{row.reservationNumber}</span>
           <span
-            className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-sm text-[10px] font-semibold ${statusPill.cls}`}
+            className={`px-[7px] py-px rounded-full text-[10.5px] font-semibold ${statusPill.cls}`}
           >
-            <PillIcon className="w-2.5 h-2.5" />
             {statusPill.label}
           </span>
         </div>
@@ -555,13 +576,13 @@ function TodayRowItem({
 
       <button
         onClick={() => onOpen(row.reservationNumber || row.id)}
-        className={`inline-flex items-center gap-1.5 px-2.5 h-8 text-xs font-semibold rounded-sm border transition-colors shrink-0 ${
+        className={`inline-flex items-center gap-1.5 h-[34px] px-3 text-[12.5px] font-semibold rounded-sm border transition-colors shrink-0 ${
           actionTone === "primary"
-            ? "bg-brand text-textPrimary border-brand hover:bg-brand-deep"
-            : "bg-surface text-textSecondary border-borderc hover:border-brand hover:text-brand"
+            ? "bg-brand text-white border-brand hover:bg-brand-deep"
+            : "bg-surface text-inkBody border-borderControl hover:bg-surfaceAlt"
         }`}
       >
-        <ActionIcon className="w-3.5 h-3.5" />
+        <ActionIcon className="w-4 h-4" />
         {actionLabel}
       </button>
     </li>
@@ -639,10 +660,10 @@ function GetStartedCard() {
     <div className="card">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <h2 className="font-semibold text-brand-dark">Welcome to Stayvia - set up your hotel</h2>
+          <h2 className="font-semibold text-ink">Welcome to Stayvia - set up your hotel</h2>
           <p className="text-xs text-textSecondary mt-0.5">
             Four quick steps and your front desk is ready.
-            <span className="ml-1 font-semibold text-brand-dark">{doneCount} of 4 done.</span>
+            <span className="ml-1 font-semibold text-ink">{doneCount} of 4 done.</span>
           </p>
           <div className="flex flex-wrap gap-2 mt-3">
             {steps.map((s) => (
@@ -651,8 +672,8 @@ function GetStartedCard() {
                 to={s.to}
                 className={`inline-flex items-center gap-1.5 border rounded-sm px-3 py-1.5 text-sm font-medium transition-colors ${
                   s.done
-                    ? "border-success/40 bg-success/10 text-success"
-                    : "border-borderc bg-surface text-brand-dark hover:bg-brand-soft"
+                    ? "border-successBorder bg-successBg text-success"
+                    : "border-borderControl bg-surface text-ink hover:bg-surfaceAlt"
                 }`}
               >
                 {s.done ? <CheckCircle2 className="w-4 h-4" /> : s.icon}
@@ -667,7 +688,7 @@ function GetStartedCard() {
             localStorage.setItem(ONBOARD_DISMISSED_KEY, "1");
             setDismissed(true);
           }}
-          className="p-1.5 -m-1 rounded text-textSecondary hover:text-navy hover:bg-bg shrink-0"
+          className="p-1.5 -m-1 rounded text-textSecondary hover:text-ink hover:bg-surfaceSubtle shrink-0"
           aria-label="Dismiss setup guide"
         >
           <X className="w-4 h-4" />
@@ -729,12 +750,12 @@ function TodaysCollections({
     <div className="card">
       <div className="flex items-center justify-between mb-3">
         <div>
-          <h2 className="font-semibold text-brand-dark">Today's Collections by Method</h2>
+          <h2 className="text-[16px] font-semibold text-ink">Today's Collections by Method</h2>
           <p className="text-xs text-textSecondary mt-0.5">
             Money received today, split by payment mode - for the daily cash-up.
           </p>
         </div>
-        <Wallet className="w-5 h-5 text-accentBlue" />
+        <Wallet className="w-5 h-5 text-inkMuted" />
       </div>
 
       {rows.length === 0 ? (
@@ -746,14 +767,14 @@ function TodaysCollections({
           {rows.map((m) => (
             <div
               key={m.method}
-              className="rounded-sm border border-borderc bg-bg p-3"
+              className="rounded-md border border-divider bg-surfaceAlt p-3"
             >
-              <div className="text-xs uppercase tracking-wide text-textSecondary">
+              <div className="text-[10.5px] font-bold uppercase tracking-[.07em] text-inkMuted">
                 {methodLabel(m.method)}
               </div>
               <div
-                className={`text-lg font-bold mt-1 font-mono ${
-                  m.total < 0 ? "text-danger" : "text-navy"
+                className={`text-lg font-bold mt-1 font-mono tabular-nums ${
+                  m.total < 0 ? "text-danger" : "text-ink"
                 }`}
               >
                 {inr(m.total)}
@@ -778,7 +799,7 @@ function TodaysCollections({
       {refunded > 0 && (
         <div className="flex items-center justify-between mt-3 text-sm">
           <span className="text-textSecondary">Collected</span>
-          <span className="font-mono text-brand-dark">
+          <span className="font-mono text-ink">
             {inr(data.gross_collected ?? 0)}
           </span>
         </div>
@@ -790,8 +811,8 @@ function TodaysCollections({
         </div>
       )}
 
-      <div className="flex items-center justify-between mt-3 pt-3 border-t border-borderc">
-        <span className="text-sm font-semibold text-brand-dark">
+      <div className="flex items-center justify-between mt-3 pt-3 border-t border-divider">
+        <span className="text-sm font-semibold text-ink">
           {refunded > 0 ? "Net movement today" : "Total collected today"}
           {totalTxns > 0 && (
             <span className="text-textSecondary font-normal">
@@ -800,8 +821,8 @@ function TodaysCollections({
           )}
         </span>
         <span
-          className={`text-lg font-bold font-mono ${
-            data.total_collected < 0 ? "text-danger" : "text-brand-dark"
+          className={`text-lg font-bold font-mono tabular-nums ${
+            data.total_collected < 0 ? "text-danger" : "text-ink"
           }`}
         >
           {inr(data.total_collected)}
@@ -814,7 +835,7 @@ function TodaysCollections({
 // Single-source tile component. Handles every room status with a
 // consistent card frame so available/occupied/reserved/housekeeping
 // rooms all use the same visual language. Held-tonight rooms get an
-// extra footer band so the desk sees at a glance that the room is
+// extra footer ribbon so the desk sees at a glance that the room is
 // free now but locked for an upcoming arrival.
 function RoomTile({
   room,
@@ -856,74 +877,67 @@ function RoomTile({
   // Visual tokens per status. Keeping this in one map (rather than the
   // utility-class soup we had before) makes the colour story easy to
   // see at a glance.
-  // typeText controls the small "AC SINGLE ROOM" strapline. On dark-
-  // card statuses (occupied) it needs a light tint to stay readable;
-  // on light cards the muted brand colour matches the headline.
+  // typeText controls the small "AC SINGLE ROOM" strapline. On the dark
+  // occupied tile it needs a light tint to stay readable; light tiles
+  // use a muted shade of their own hue.
   const STYLES: Record<
     string,
     {
       card: string;
-      statusText: string;
       statusDot: string;
       typeText: string;
       label: string;
     }
   > = {
-    // Available is the ONLY outlined tile — it's the "blank canvas" /
-    // "ready to sell" state. Every other status is a solid fill with
-    // cream text so it pops against the row of available tiles, and
-    // each status uses a distinct hue so they can't be confused at a
-    // glance.
+    // Warm Concierge tiles: available/held are the only white "blank
+    // canvas" tiles; occupied is the one dark tile; the rest are soft
+    // semantic tints so states can't be confused at a glance.
     available: {
-      card: "bg-surface border-success/40 text-success",
-      statusText: "text-success",
-      statusDot: "bg-success",
-      typeText: "text-textSecondary",
+      card: "bg-surface border-successBorder text-ink",
+      statusDot: "bg-brand",
+      typeText: "text-inkMuted",
       label: "Available",
     },
+    // Free tonight but booked from a later date — white tile with a gold
+    // hold story (dot + footer ribbon below).
+    held: {
+      card: "bg-surface border-warnBorder text-ink",
+      statusDot: "bg-gold",
+      typeText: "text-inkMuted",
+      label: "Held",
+    },
     occupied: {
-      // Solid near-black — the "in use" tile, reads like the dark
-      // featured tier in the Supabase system.
-      card: "bg-brand-dark text-cream border-brand-dark",
-      statusText: "text-cream/90",
-      statusDot: "bg-cream",
-      typeText: "text-cream/80",
+      // The single dark tile — "in use", per the reference.
+      card: "bg-inkDark border-inkDark text-cream",
+      statusDot: "bg-brand-tint",
+      typeText: "text-cream/60",
       label: "Occupied",
     },
     reserved: {
-      // Solid violet — distinct from the emerald "available" outline,
-      // the dark "occupied" tile, and the maintenance red.
-      card: "bg-[#644fc1] text-cream border-[#644fc1]",
-      statusText: "text-cream/90",
-      statusDot: "bg-cream",
-      typeText: "text-cream/80",
+      card: "bg-infoBg border-infoBorder text-info",
+      statusDot: "bg-reserved",
+      typeText: "text-info/70",
       label: "Reserved",
     },
     dirty: {
-      // Solid amber-brown — the universal "needs attention" colour,
-      // clearly different from reserved-violet.
-      card: "bg-warning text-cream border-warning",
-      statusText: "text-cream/90",
-      statusDot: "bg-cream",
-      typeText: "text-cream/80",
-      label: "Needs Cleaning",
+      card: "bg-warnBg border-warnBorder text-warnFg",
+      statusDot: "bg-notReady",
+      typeText: "text-warnFg/70",
+      label: "Needs cleaning",
     },
     maintenance: {
-      // Solid red — near-black now belongs to "occupied", so out-of-service
-      // moves to the danger hue. Pairs with the Rooms-page maintenance
-      // colour so the two views agree.
-      card: "bg-danger text-cream border-danger",
-      statusText: "text-cream/90",
-      statusDot: "bg-cream",
-      typeText: "text-cream/80",
+      card: "bg-dangerBg border-dangerBorder text-dangerFg",
+      statusDot: "bg-danger",
+      typeText: "text-dangerFg/70",
       label: "Maintenance",
     },
   };
-  const style = STYLES[room.status] ?? STYLES.available!;
+  const style =
+    (showHoldHint ? STYLES.held : STYLES[room.status]) ?? STYLES.available!;
 
   const tile = (
     <div
-      className={`relative w-full rounded-lg border-2 overflow-hidden shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all cursor-pointer ${style.card}`}
+      className={`relative w-full min-h-[104px] rounded-[13px] border overflow-hidden px-2 pt-3.5 pb-3 flex flex-col items-center justify-center gap-1.5 cursor-pointer transition-all hover:-translate-y-0.5 hover:shadow-lift ${style.card}`}
       title={
         room.relet_pending
           ? `Same-day re-let: walk-in checks out today, ${room.relet_pending.nextGuestName} arrives ${room.relet_pending.nextCheckIn}`
@@ -938,30 +952,28 @@ function RoomTile({
     >
       {room.relet_pending && (
         <span
-          className="absolute top-1.5 right-1.5 w-2.5 h-2.5 rounded-full bg-info ring-2 ring-cream animate-pulse"
+          className="absolute top-1.5 right-1.5 w-2.5 h-2.5 rounded-full bg-info ring-2 ring-surface animate-pulse"
           aria-label="Same-day re-let"
         />
       )}
-      <div className="px-3 py-3.5 flex flex-col items-center gap-1.5">
-        {/* Room number — largest element, anchors the tile visually. */}
-        <span className="font-mono text-3xl font-bold tracking-wide leading-none">
-          {room.room_number}
-        </span>
-        {/* Type label — strapline between room number and status pill.
-            Wide tracking + semibold reads cleanly on coloured fills. */}
-        <span className={`text-xs uppercase tracking-wider font-semibold truncate max-w-full ${style.typeText}`}>
-          {room.room_type.replace(/_/g, " ")}
-        </span>
-        <span className={`inline-flex items-center gap-1.5 text-xs uppercase tracking-wider font-bold ${style.statusText}`}>
-          <span className={`w-2 h-2 rounded-full ${style.statusDot}`} />
-          {style.label}
-        </span>
-      </div>
+      {/* Room number — largest element, anchors the tile visually. */}
+      <span className="font-mono text-[22px] font-semibold tracking-[.5px] leading-none">
+        {room.room_number}
+      </span>
+      {/* Type label — overline between room number and status row. */}
+      <span
+        className={`text-[10px] uppercase tracking-[.06em] font-semibold truncate max-w-full ${style.typeText}`}
+      >
+        {room.room_type.replace(/_/g, " ")}
+      </span>
+      <span className="inline-flex items-center gap-[5px] text-[11px] font-semibold">
+        <span className={`w-[7px] h-[7px] rounded-full ${style.statusDot}`} />
+        {style.label}
+      </span>
       {showHoldHint && heldRange && (
-        <div className="flex items-center justify-center gap-1 px-2 py-1 bg-warning text-cream text-[11px] uppercase tracking-wider font-bold">
-          <CalendarClock className="w-3 h-3" />
-          Held {heldRange}
-        </div>
+        <span className="absolute inset-x-0 bottom-0 py-[3px] text-center text-[9.5px] font-bold tracking-[.04em] bg-gold text-white">
+          HELD {heldRange}
+        </span>
       )}
     </div>
   );
@@ -1034,9 +1046,9 @@ function groupByFloor(rooms: RoomGridRow[]) {
     .sort((a, b) => a.floor - b.floor);
 }
 
-// Roll status counts up to floor level so the floor headline can show
-// the same Available/Held/Occupied/etc. chips that used to sit on the
-// per-type strip. Mirrors the per-type bucket logic exactly.
+// Roll status counts up to floor level so the floor headline and the
+// card-level proportion bar share one source. Held = available tonight
+// but locked from a later date.
 function rollupFloorStats(rooms: RoomGridRow[]) {
   const s = {
     total: 0,
@@ -1058,4 +1070,3 @@ function rollupFloorStats(rooms: RoomGridRow[]) {
   }
   return s;
 }
-

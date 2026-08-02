@@ -120,11 +120,11 @@ export function OtpModal({ reservationId, guestId, phone, email, open, onClose, 
   const secs = String(secondsLeft % 60).padStart(2, "0");
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center sm:grid sm:place-items-center bg-brand-dark/40 sm:p-4">
-      <div ref={dialogRef} className="w-full sm:max-w-md bg-surface rounded-t-2xl sm:rounded-md shadow-xl border border-borderc max-h-[92vh] overflow-y-auto pb-safe sm:pb-0">
-        <div className="flex items-center justify-between px-5 py-3 border-b border-borderc">
-          <div className="flex items-center gap-2 font-semibold text-textPrimary">
-            <ShieldCheck className="w-5 h-5 text-brand" />
+    <div className="fixed inset-0 z-50 flex items-end justify-center sm:grid sm:place-items-center bg-inkDark/50 backdrop-blur-[3px] sm:p-4">
+      <div ref={dialogRef} className="w-full sm:max-w-[400px] bg-surface rounded-t-2xl sm:rounded-2xl shadow-modal max-h-[92vh] overflow-y-auto pb-safe sm:pb-0">
+        <div className="flex items-center justify-between px-5 py-3.5 border-b border-divider">
+          <div className="flex items-center gap-2 text-[15px] font-semibold text-textPrimary">
+            <ShieldCheck className="w-5 h-5 text-brand-deep" />
             Verify guest
           </div>
           <button onClick={onClose} className="text-textSecondary hover:text-textPrimary">
@@ -142,8 +142,8 @@ export function OtpModal({ reservationId, guestId, phone, email, open, onClose, 
                 <button
                   type="button"
                   onClick={() => setChannel("sms")}
-                  className={`flex items-center gap-2 justify-center py-3 rounded-md border-2 transition-colors ${
-                    channel === "sms" ? "border-brand bg-brand-soft text-brand-dark" : "border-borderc text-textSecondary hover:border-brand/40"
+                  className={`flex items-center gap-2 justify-center h-12 rounded-[11px] border-2 text-sm font-semibold transition-colors ${
+                    channel === "sms" ? "border-brand bg-brand-soft text-brand-deep" : "border-borderControl bg-surface text-textSecondary hover:border-brand/40"
                   }`}
                 >
                   <Phone className="w-4 h-4" /> SMS
@@ -155,8 +155,8 @@ export function OtpModal({ reservationId, guestId, phone, email, open, onClose, 
                   type="button"
                   disabled={!!phone && !email}
                   onClick={() => setChannel("email")}
-                  className={`flex items-center gap-2 justify-center py-3 rounded-md border-2 transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${
-                    channel === "email" ? "border-brand bg-brand-soft text-brand-dark" : "border-borderc text-textSecondary hover:border-brand/40"
+                  className={`flex items-center gap-2 justify-center h-12 rounded-[11px] border-2 text-sm font-semibold transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${
+                    channel === "email" ? "border-brand bg-brand-soft text-brand-deep" : "border-borderControl bg-surface text-textSecondary hover:border-brand/40"
                   }`}
                 >
                   <Mail className="w-4 h-4" /> Email
@@ -183,11 +183,11 @@ export function OtpModal({ reservationId, guestId, phone, email, open, onClose, 
 
           {step === "verify" && send && (
             <>
-              <p className="text-sm text-textSecondary">
-                Code sent to <strong className="text-textPrimary">{send.target}</strong>. Ask the guest to read it back.
+              <p className="px-3.5 py-3 rounded-[11px] border border-divider bg-surfaceAlt text-[12.5px] text-textSecondary">
+                Code sent to <strong className="text-textPrimary font-mono">{send.target}</strong>. Ask the guest to read it back.
               </p>
               {send.devCode && (
-                <div className="rounded-md border border-warning/40 bg-warning/10 px-3 py-2 text-sm text-warning">
+                <div className="rounded-sm border border-warnBorder bg-warnBg px-3 py-2 text-sm text-warnFg">
                   Dev mode: code is <strong className="font-mono">{send.devCode}</strong>
                 </div>
               )}
@@ -195,7 +195,7 @@ export function OtpModal({ reservationId, guestId, phone, email, open, onClose, 
                 autoFocus
                 value={code}
                 onChange={(e) => setCode(e.target.value.replace(/\D/g, "").slice(0, 8))}
-                className="input text-center text-2xl tracking-[0.5em] font-mono"
+                className="input h-14 rounded-md text-center text-[22px] font-bold tracking-[0.4em] font-mono"
                 placeholder="000000"
                 inputMode="numeric"
               />
@@ -207,7 +207,7 @@ export function OtpModal({ reservationId, guestId, phone, email, open, onClose, 
                     setStep("choose");
                     setCode("");
                   }}
-                  className="text-brand hover:underline"
+                  className="text-brand-deep font-semibold hover:underline"
                 >
                   Resend / change channel
                 </button>

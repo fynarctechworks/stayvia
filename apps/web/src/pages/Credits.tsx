@@ -85,11 +85,11 @@ export default function Credits() {
     <div className="space-y-4">
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
-          <h1 className="text-2xl font-bold text-brand-dark flex items-center gap-2">
-            <Wallet className="w-6 h-6 text-brand" />
+          <h1 className="text-2xl font-semibold tracking-tight text-ink flex items-center gap-2">
+            <Wallet className="w-6 h-6 text-brand-deep" />
             Wallet Credits
           </h1>
-          <div className="text-xs text-textSecondary mt-0.5">
+          <div className="text-sm text-textSecondary mt-1">
             {data
               ? `${data.guestCount} guest${data.guestCount === 1 ? "" : "s"} with positive balance · ${inr(data.totalCredit)} total outstanding`
               : "Loading…"}
@@ -135,7 +135,7 @@ export default function Credits() {
           <div className="p-8 text-center text-textSecondary">
             {data && data.guestCount === 0 ? (
               <>
-                <Wallet className="w-10 h-10 mx-auto text-textSecondary/40 mb-2" />
+                <Wallet className="w-10 h-10 mx-auto text-inkFaint mb-2" />
                 No guests have wallet credit at the moment. Credits are issued automatically when
                 guests overpay at checkout (with refund mode = credit), or manually by an admin.
               </>
@@ -149,7 +149,7 @@ export default function Credits() {
               <tr>
                 <th>Guest</th>
                 <th>Phone</th>
-                <th className="tabular-nums">Balance</th>
+                <th className="tabular-nums text-right">Balance</th>
                 <th>Last activity</th>
                 <th className="text-right"></th>
               </tr>
@@ -162,16 +162,16 @@ export default function Credits() {
                   onClick={() => navigate(`/guests/${g.phone}`)}
                 >
                   <td>
-                    <div className="font-semibold text-brand-dark">{g.fullName}</div>
+                    <div className="font-semibold text-ink">{g.fullName}</div>
                     {g.email && (
-                      <div className="text-[10px] text-textSecondary">{g.email}</div>
+                      <div className="text-[10px] text-inkMuted">{g.email}</div>
                     )}
                   </td>
-                  <td className="font-mono">{g.phone}</td>
-                  <td className="font-mono tabular-nums font-bold text-brand-dark">
+                  <td className="font-mono text-xs text-textSecondary">{g.phone}</td>
+                  <td className="font-mono tabular-nums font-bold text-ink text-right">
                     {inr(g.balance)}
                   </td>
-                  <td className="text-textSecondary text-xs">
+                  <td className="text-inkMuted text-xs">
                     {g.lastActivityAt
                       ? formatDistanceToNow(new Date(g.lastActivityAt), { addSuffix: true })
                       : "-"}
@@ -311,16 +311,16 @@ function AddCreditModal({
     !selected || amount <= 0.009 || note.trim().length === 0 || add.isPending;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-brand-dark/40 p-4">
+    <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-ink/50 backdrop-blur-[3px] p-4">
       <div
-        className="my-auto w-full max-w-md bg-white rounded-md shadow-xl border border-borderc"
+        className="my-auto w-full max-w-md bg-surface rounded-2xl shadow-modal border border-borderc overflow-hidden"
         role="dialog"
         aria-modal="true"
       >
-        <div className="flex items-center justify-between px-5 py-3 border-b border-borderc bg-brand-soft">
+        <div className="flex items-center justify-between px-5 py-3 border-b border-divider bg-brand-soft">
           <div className="flex items-center gap-2">
             <Plus className="w-4 h-4 text-brand" />
-            <div className="font-semibold text-brand-dark">Add wallet credit</div>
+            <div className="font-semibold text-ink">Add wallet credit</div>
           </div>
           <button onClick={onClose} className="text-textSecondary hover:text-textPrimary">
             <X className="w-5 h-5" />
@@ -332,9 +332,9 @@ function AddCreditModal({
           <div>
             <label className="label block mb-1">Guest</label>
             {selected ? (
-              <div className="flex items-center justify-between border border-borderc rounded-sm bg-cream/40 px-3 py-2">
+              <div className="flex items-center justify-between border border-divider rounded-sm bg-surfaceSubtle px-3 py-2">
                 <div>
-                  <div className="font-semibold text-brand-dark">{selected.fullName}</div>
+                  <div className="font-semibold text-ink">{selected.fullName}</div>
                   <div className="font-mono text-xs text-textSecondary">
                     {selected.phone}
                     {selected.email ? ` · ${selected.email}` : ""}
@@ -377,9 +377,9 @@ function AddCreditModal({
                           key={g.id}
                           type="button"
                           onClick={() => setSelected(g)}
-                          className="w-full text-left px-3 py-2 hover:bg-brand-soft border-b border-borderc/60 last:border-b-0"
+                          className="w-full text-left px-3 py-2 hover:bg-surfaceAlt border-b border-divider last:border-b-0"
                         >
-                          <div className="font-semibold text-brand-dark text-xs">
+                          <div className="font-semibold text-ink text-xs">
                             {g.fullName}
                           </div>
                           <div className="font-mono text-[11px] text-textSecondary">
@@ -428,11 +428,11 @@ function AddCreditModal({
           </div>
 
           {error && (
-            <div className="p-2 rounded-sm bg-danger/10 text-danger text-[12px]">{error}</div>
+            <div className="p-2 rounded-sm bg-dangerBg text-dangerFg border border-dangerBorder text-[12px]">{error}</div>
           )}
         </div>
 
-        <div className="flex justify-end gap-2 px-5 py-3 border-t border-borderc bg-bg">
+        <div className="flex justify-end gap-2 px-5 py-3 border-t border-divider bg-surfaceAlt">
           <button onClick={onClose} className="btn-secondary">
             Cancel
           </button>
@@ -466,16 +466,16 @@ function CashoutModal({
   const invalid = amount <= 0.009 || overMax;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-brand-dark/40 p-4">
+    <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-ink/50 backdrop-blur-[3px] p-4">
       <div
-        className="my-auto w-full max-w-md bg-white rounded-md shadow-xl border border-borderc"
+        className="my-auto w-full max-w-md bg-surface rounded-2xl shadow-modal border border-borderc overflow-hidden"
         role="dialog"
         aria-modal="true"
       >
-        <div className="flex items-center justify-between px-5 py-3 border-b border-borderc bg-brand-soft">
+        <div className="flex items-center justify-between px-5 py-3 border-b border-divider bg-brand-soft">
           <div className="flex items-center gap-2">
             <Wallet className="w-4 h-4 text-brand" />
-            <div className="font-semibold text-brand-dark">Cashout wallet credit</div>
+            <div className="font-semibold text-ink">Cashout wallet credit</div>
           </div>
           <button onClick={onClose} className="text-textSecondary hover:text-textPrimary">
             <X className="w-5 h-5" />
@@ -484,15 +484,15 @@ function CashoutModal({
 
         <div className="px-5 py-4 text-[13px] text-textPrimary space-y-3">
           <div>
-            <div className="font-semibold text-brand-dark">{guest.fullName}</div>
-            <div className="font-mono text-xs">{guest.phone}</div>
+            <div className="font-semibold text-ink">{guest.fullName}</div>
+            <div className="font-mono text-xs text-textSecondary">{guest.phone}</div>
           </div>
 
-          <div className="border border-borderc rounded-sm p-3">
-            <div className="text-[10px] uppercase tracking-wider text-textSecondary font-semibold">
+          <div className="border border-divider bg-surfaceSubtle rounded-md p-3">
+            <div className="label">
               Available balance
             </div>
-            <div className="font-mono text-lg font-bold text-brand-dark mt-0.5">
+            <div className="font-mono text-lg font-bold text-ink mt-0.5">
               {inr(guest.balance)}
             </div>
           </div>
@@ -536,13 +536,13 @@ function CashoutModal({
           </div>
 
           <div className="text-[11px] text-textSecondary">
-            This creates a <code className="font-mono bg-bg px-1 rounded">cashout</code> ledger
+            This creates a <code className="font-mono bg-surfaceSubtle px-1 rounded">cashout</code> ledger
             entry. The guest's wallet balance drops by this amount. Hand the cash over to the
             guest after confirming.
           </div>
         </div>
 
-        <div className="flex justify-end gap-2 px-5 py-3 border-t border-borderc bg-bg">
+        <div className="flex justify-end gap-2 px-5 py-3 border-t border-divider bg-surfaceAlt">
           <button onClick={onClose} className="btn-secondary">
             Cancel
           </button>

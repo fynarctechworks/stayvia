@@ -97,8 +97,8 @@ export default function ResetPassword() {
   }
 
   return (
-    <div className="min-h-screen grid place-items-center bg-ivory p-4">
-      <div className="w-full max-w-md bg-surface border border-borderc rounded-md shadow-sm p-6 sm:p-8">
+    <div className="min-h-screen grid place-items-center bg-bg p-4">
+      <div className="w-full max-w-md bg-surface border border-borderc rounded-[20px] shadow-modal p-7 sm:p-9">
         <div className="flex items-center gap-3 mb-6">
           <img
             src="/logo.png"
@@ -106,8 +106,8 @@ export default function ResetPassword() {
             className="w-12 h-12 rounded-lg object-contain"
           />
           <div className="leading-tight">
-            <div className="font-semibold text-brand-dark">Stayvia</div>
-            <div className="text-[11px] text-[#157f5f] tracking-wide">HOTEL OS</div>
+            <div className="font-bold text-ink">Stayvia</div>
+            <div className="text-[10px] font-bold uppercase text-inkMuted tracking-[0.16em] mt-0.5">Hotel OS</div>
           </div>
         </div>
 
@@ -120,10 +120,10 @@ export default function ResetPassword() {
 
         {phase === "invalid" && (
           <div className="text-center py-6">
-            <div className="mx-auto w-14 h-14 rounded-full bg-danger/10 grid place-items-center mb-3">
-              <ShieldAlert className="w-7 h-7 text-danger" />
+            <div className="mx-auto w-14 h-14 rounded-full bg-dangerBg grid place-items-center mb-3">
+              <ShieldAlert className="w-7 h-7 text-dangerFg" />
             </div>
-            <h1 className="text-lg font-bold text-brand-dark">Link expired or invalid</h1>
+            <h1 className="text-lg font-semibold text-ink">Link expired or invalid</h1>
             <p className="text-sm text-textSecondary mt-2">
               This password-reset link is no longer valid. Reset links expire after 1 hour and
               can only be used once. Please request a new one from the login page.
@@ -136,10 +136,10 @@ export default function ResetPassword() {
 
         {phase === "done" && (
           <div className="text-center py-6">
-            <div className="mx-auto w-14 h-14 rounded-full bg-success/10 grid place-items-center mb-3">
+            <div className="mx-auto w-14 h-14 rounded-full bg-successBg grid place-items-center mb-3">
               <CheckCircle2 className="w-7 h-7 text-success" />
             </div>
-            <h1 className="text-lg font-bold text-brand-dark">Password updated</h1>
+            <h1 className="text-lg font-semibold text-ink">Password updated</h1>
             <p className="text-sm text-textSecondary mt-2">
               Your password has been changed. Sign in with your new password to continue.
             </p>
@@ -152,7 +152,7 @@ export default function ResetPassword() {
         {phase === "ready" && (
           <form onSubmit={onSubmit} className="space-y-4">
             <div>
-              <h1 className="text-xl font-bold text-brand-dark">Set a new password</h1>
+              <h1 className="text-[22px] font-semibold text-ink tracking-[-0.3px]">Set a new password</h1>
               <p className="text-sm text-textSecondary mt-1">
                 Choose a new password for your account. Minimum 6 characters.
               </p>
@@ -175,7 +175,7 @@ export default function ResetPassword() {
                 <button
                   type="button"
                   onClick={() => setShowPw((s) => !s)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-textSecondary hover:text-brand-dark"
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-textSecondary hover:text-navy"
                   aria-label={showPw ? "Hide password" : "Show password"}
                 >
                   {showPw ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
@@ -202,13 +202,17 @@ export default function ResetPassword() {
               )}
             </div>
 
-            {error && <div className="text-sm text-danger">{error}</div>}
+            {error && (
+              <div className="rounded-sm border border-dangerBorder bg-dangerBg px-3 py-2 text-sm text-dangerFg">
+                {error}
+              </div>
+            )}
 
             <button type="submit" disabled={!canSubmit} className="btn-primary w-full">
               {busy ? "Updating…" : "Update password"}
             </button>
             <div className="text-center">
-              <Link to="/login" className="text-xs text-accentBlue hover:underline">
+              <Link to="/login" className="text-xs font-semibold text-brand-deep hover:underline">
                 Back to login
               </Link>
             </div>

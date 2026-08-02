@@ -176,8 +176,8 @@ function AccessCodePrompt({
         if (e.target === e.currentTarget) onClose();
       }}
     >
-      <div className="w-full max-w-sm bg-surface rounded-md shadow-2xl border border-borderc overflow-hidden">
-        <div className="px-5 py-3 border-b border-borderc bg-bg/50 font-semibold text-brand-dark">
+      <div className="w-full max-w-sm bg-surface rounded-2xl shadow-modal border border-borderc overflow-hidden">
+        <div className="px-5 py-3 border-b border-divider bg-surfaceAlt font-semibold text-ink">
           Authorisation required
         </div>
         <div className="p-5 space-y-3">
@@ -292,9 +292,11 @@ export default function Reports() {
     <div className="space-y-4">
       <div className="flex items-end justify-between gap-3 flex-wrap">
         <div>
-          <h1 className="text-2xl font-bold text-navy">Reports</h1>
-          <p className="text-xs text-textSecondary mt-0.5">
-            {activeTab.caption} · <span className="font-medium">{rangeLabel}</span>
+          <h1 className="text-[clamp(22px,3vw,28px)] font-semibold tracking-[-0.5px] text-ink">
+            Reports
+          </h1>
+          <p className="text-sm text-textSecondary mt-1">
+            {activeTab.caption} · <span className="font-semibold text-inkBody">{rangeLabel}</span>
           </p>
         </div>
       </div>
@@ -397,20 +399,20 @@ function DateToolbar({
   onToChange: (v: string) => void;
 }) {
   return (
-    <div className="card !p-3">
-      <div className="flex items-center gap-2 flex-wrap">
-        <CalendarDays className="w-4 h-4 text-brand shrink-0" />
-        <div className="flex items-center gap-1 flex-wrap">
+    <div className="card !p-3 !rounded-[14px]">
+      <div className="flex items-center gap-2.5 flex-wrap">
+        <CalendarDays className="w-4 h-4 text-brand-deep shrink-0" />
+        <div className="flex items-center gap-1.5 flex-wrap">
           {PRESETS.map((p) => {
             const active = preset === p.key;
             return (
               <button
                 key={p.key}
                 onClick={() => onPreset(p)}
-                className={`px-3 h-8 text-xs font-semibold rounded-sm border transition-colors ${
+                className={`px-3.5 h-[34px] text-xs font-semibold rounded-[8px] border transition-colors ${
                   active
-                    ? "bg-brand text-textPrimary border-brand"
-                    : "bg-surface text-textSecondary border-borderc hover:border-brand hover:text-brand"
+                    ? "bg-brand text-white border-brand"
+                    : "bg-surface text-textSecondary border-borderControl hover:border-brand hover:text-brand"
                 }`}
               >
                 {p.label}
@@ -419,10 +421,10 @@ function DateToolbar({
           })}
           <button
             onClick={onCustom}
-            className={`px-3 h-8 text-xs font-semibold rounded-sm border transition-colors inline-flex items-center gap-1 ${
+            className={`px-3.5 h-[34px] text-xs font-semibold rounded-[8px] border transition-colors inline-flex items-center gap-1 ${
               preset === "custom"
-                ? "bg-brand text-textPrimary border-brand"
-                : "bg-surface text-textSecondary border-borderc hover:border-brand hover:text-brand"
+                ? "bg-brand text-white border-brand"
+                : "bg-surface text-textSecondary border-borderControl hover:border-brand hover:text-brand"
             }`}
           >
             Custom
@@ -434,7 +436,7 @@ function DateToolbar({
       </div>
 
       {showCustom && (
-        <div className="flex flex-wrap items-end gap-3 mt-3 pt-3 border-t border-borderc">
+        <div className="flex flex-wrap items-end gap-3 mt-3 pt-3 border-t border-divider">
           <div>
             <label className="label block mb-1">From</label>
             <input
@@ -491,7 +493,7 @@ function TabBar({
   }
 
   return (
-    <div className="flex gap-1.5 flex-wrap items-center">
+    <div className="flex gap-2 flex-wrap items-center">
       {primary.map((t) => {
         const on = t.id === active;
         return (
@@ -499,13 +501,13 @@ function TabBar({
             key={t.id}
             onClick={() => onChange(t.id)}
             title={t.caption}
-            className={`inline-flex items-center gap-1.5 px-3 h-9 text-sm font-medium rounded-sm border transition-colors ${
+            className={`inline-flex items-center gap-1.5 px-3 h-[38px] text-[13px] font-semibold rounded-[9px] border transition-colors ${
               on
-                ? "bg-brand text-textPrimary border-brand"
-                : "bg-surface text-textSecondary border-borderc hover:border-brand hover:text-brand"
+                ? "bg-brand text-white border-brand"
+                : "bg-surface text-textSecondary border-borderControl hover:border-brand hover:text-brand"
             }`}
           >
-            <t.Icon className="w-3.5 h-3.5" />
+            <t.Icon className="w-4 h-4" />
             {t.label}
           </button>
         );
@@ -523,13 +525,13 @@ function TabBar({
               : "Show more reports (Complimentary, etc.)"
           }
           aria-pressed={secondaryVisible}
-          className={`inline-flex items-center gap-1.5 px-3 h-9 text-sm font-medium rounded-sm border transition-colors ${
+          className={`inline-flex items-center gap-1.5 px-3 h-[38px] text-[13px] font-semibold rounded-[9px] border transition-colors ${
             secondaryVisible
-              ? "bg-bg text-brand-dark border-brand-dark/30"
-              : "bg-surface text-textSecondary border-borderc hover:border-brand hover:text-brand"
+              ? "bg-parchment text-inkDark border-borderControl"
+              : "bg-surface text-textSecondary border-borderControl hover:border-brand hover:text-brand"
           }`}
         >
-          <MoreHorizontal className="w-3.5 h-3.5" />
+          <MoreHorizontal className="w-4 h-4" />
           {secondaryVisible ? "Hide" : "More"}
         </button>
       )}
@@ -544,13 +546,13 @@ function TabBar({
               key={t.id}
               onClick={() => onChange(t.id)}
               title={t.caption}
-              className={`inline-flex items-center gap-1.5 px-3 h-9 text-sm font-medium rounded-sm border transition-colors ${
+              className={`inline-flex items-center gap-1.5 px-3 h-[38px] text-[13px] font-semibold rounded-[9px] border transition-colors ${
                 on
-                  ? "bg-brand text-textPrimary border-brand"
-                  : "bg-surface text-textSecondary border-borderc hover:border-brand hover:text-brand"
+                  ? "bg-brand text-white border-brand"
+                  : "bg-surface text-textSecondary border-borderControl hover:border-brand hover:text-brand"
               }`}
             >
-              <t.Icon className="w-3.5 h-3.5" />
+              <t.Icon className="w-4 h-4" />
               {t.label}
             </button>
           );
@@ -577,20 +579,20 @@ function Kpi({
   hint?: string;
 }) {
   const toneClasses: Record<typeof tone, string> = {
-    default: "text-brand-dark",
-    danger: "text-danger",
-    warning: "text-warning",
+    default: "text-ink",
+    danger: "text-dangerFg",
+    warning: "text-warnFg",
     success: "text-success",
   };
   const iconBg: Record<typeof tone, string> = {
-    default: "bg-brand-soft text-brand",
-    danger: "bg-danger/10 text-danger",
-    warning: "bg-warning/10 text-warning",
-    success: "bg-success/10 text-success",
+    default: "bg-brand-soft text-brand-deep",
+    danger: "bg-dangerBg text-dangerFg",
+    warning: "bg-warnBg text-warnFg",
+    success: "bg-successBg text-success",
   };
   return (
-    <div className="card flex items-start gap-3 !p-4">
-      <div className={`w-10 h-10 rounded-sm grid place-items-center shrink-0 ${iconBg[tone]}`}>
+    <div className="card flex items-start gap-3 !p-4 !rounded-[14px]">
+      <div className={`w-10 h-10 rounded-[9px] grid place-items-center shrink-0 ${iconBg[tone]}`}>
         <Icon className="w-5 h-5" />
       </div>
       <div className="min-w-0 flex-1">
@@ -598,7 +600,7 @@ function Kpi({
         <div className={`text-2xl font-bold font-mono tabular-nums mt-0.5 ${toneClasses[tone]}`}>
           {value}
         </div>
-        {hint && <div className="text-[11px] text-textSecondary mt-0.5">{hint}</div>}
+        {hint && <div className="text-[11px] text-inkMuted mt-0.5">{hint}</div>}
       </div>
     </div>
   );
@@ -616,10 +618,10 @@ function SectionHeader({
   return (
     <div className="flex items-end justify-between gap-3 mb-2">
       <div>
-        <div className="text-xs uppercase tracking-[0.12em] text-textSecondary font-semibold">
+        <div className="text-[11px] uppercase tracking-[0.1em] text-inkMuted font-bold">
           {title}
         </div>
-        {subtitle && <div className="text-[11px] text-textSecondary mt-0.5">{subtitle}</div>}
+        {subtitle && <div className="text-[11px] text-inkMuted mt-0.5">{subtitle}</div>}
       </div>
       {right}
     </div>
@@ -648,7 +650,7 @@ function ExportBtn({
 }) {
   return (
     <button
-      className="inline-flex items-center gap-1.5 px-3 h-8 text-xs font-semibold rounded-sm border border-borderc bg-surface text-textSecondary hover:border-brand hover:text-brand transition-colors disabled:opacity-40 disabled:hover:border-borderc disabled:hover:text-textSecondary"
+      className="inline-flex items-center gap-1.5 px-3.5 h-[34px] text-xs font-semibold rounded-[9px] border border-borderControl bg-surface text-textSecondary hover:border-brand hover:text-brand transition-colors disabled:opacity-40 disabled:hover:border-borderControl disabled:hover:text-textSecondary"
       onClick={onClick}
       disabled={disabled}
     >
@@ -671,7 +673,7 @@ function EmptyState({
       <div className="w-12 h-12 mx-auto rounded-full bg-brand-soft/60 grid place-items-center mb-3">
         <Icon className="w-5 h-5 text-brand" />
       </div>
-      <div className="text-sm font-semibold text-brand-dark">{title}</div>
+      <div className="text-sm font-semibold text-ink">{title}</div>
       {hint && <div className="text-xs text-textSecondary mt-1">{hint}</div>}
     </div>
   );
@@ -748,19 +750,19 @@ function OccupancyTab({ from, to }: { from: string; to: string }) {
       >
         <ResponsiveContainer>
           <LineChart data={data.daily}>
-            <CartesianGrid strokeDasharray="3 3" stroke="#ededed" />
-            <XAxis dataKey="day" fontSize={11} stroke="#707070" />
-            <YAxis domain={[0, 100]} fontSize={11} stroke="#707070" unit="%" />
+            <CartesianGrid strokeDasharray="3 3" stroke="#EFEDE7" />
+            <XAxis dataKey="day" fontSize={11} stroke="#8A9088" />
+            <YAxis domain={[0, 100]} fontSize={11} stroke="#8A9088" unit="%" />
             <Tooltip
               formatter={(v: number) => [`${v}%`, "Occupancy"]}
-              contentStyle={{ borderRadius: 4, border: "1px solid #dfdfdf", fontSize: 12 }}
+              contentStyle={{ borderRadius: 10, border: "1px solid #E9E6DE", fontSize: 12 }}
             />
             <Line
               type="monotone"
               dataKey="percentage"
-              stroke="#3ecf8e"
-              strokeWidth={2}
-              dot={false}
+              stroke="#0F6E52"
+              strokeWidth={2.5}
+              dot={{ r: 3.5, fill: "#fff", stroke: "#0F6E52", strokeWidth: 2 }}
             />
           </LineChart>
         </ResponsiveContainer>
@@ -853,28 +855,28 @@ function RevenueTab({ from, to }: { from: string; to: string }) {
         <ChartCard title="Daily revenue" subtitle="Earnings per day in the selected range">
           <ResponsiveContainer>
             <BarChart data={dailyChart}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#ededed" />
-              <XAxis dataKey="day" fontSize={11} stroke="#707070" />
-              <YAxis fontSize={11} stroke="#707070" />
+              <CartesianGrid strokeDasharray="3 3" stroke="#EFEDE7" />
+              <XAxis dataKey="day" fontSize={11} stroke="#8A9088" />
+              <YAxis fontSize={11} stroke="#8A9088" />
               <Tooltip
                 formatter={(v: number) => [inr(v), "Revenue"]}
-                contentStyle={{ borderRadius: 4, border: "1px solid #dfdfdf", fontSize: 12 }}
+                contentStyle={{ borderRadius: 10, border: "1px solid #E9E6DE", fontSize: 12 }}
               />
-              <Bar dataKey="total" fill="#3ecf8e" radius={[2, 2, 0, 0]} />
+              <Bar dataKey="total" fill="#0F6E52" radius={[7, 7, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>
         </ChartCard>
         <ChartCard title="By room type" subtitle="Which categories are pulling the weight">
           <ResponsiveContainer>
             <BarChart data={typeChart}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#ededed" />
-              <XAxis dataKey="roomType" fontSize={11} stroke="#707070" />
-              <YAxis fontSize={11} stroke="#707070" />
+              <CartesianGrid strokeDasharray="3 3" stroke="#EFEDE7" />
+              <XAxis dataKey="roomType" fontSize={11} stroke="#8A9088" />
+              <YAxis fontSize={11} stroke="#8A9088" />
               <Tooltip
                 formatter={(v: number) => [inr(v), "Revenue"]}
-                contentStyle={{ borderRadius: 4, border: "1px solid #dfdfdf", fontSize: 12 }}
+                contentStyle={{ borderRadius: 10, border: "1px solid #E9E6DE", fontSize: 12 }}
               />
-              <Bar dataKey="total" fill="#24b47e" radius={[2, 2, 0, 0]} />
+              <Bar dataKey="total" fill="#0F6E52" radius={[7, 7, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>
         </ChartCard>
@@ -882,17 +884,17 @@ function RevenueTab({ from, to }: { from: string; to: string }) {
 
       {stayTypeRows.length > 0 && (
         <div className="card">
-          <div className="text-sm font-semibold text-navy mb-2">Booking types</div>
+          <div className="text-sm font-semibold text-ink mb-2">Booking types</div>
           <table className="w-full text-sm">
             <thead>
-              <tr className="text-left text-textSecondary border-b border-borderc">
-                <th className="py-2 font-medium">Type</th>
-                <th className="py-2 font-medium text-right">Bookings</th>
-                <th className="py-2 font-medium text-right">Revenue</th>
+              <tr className="text-left text-[10.5px] uppercase tracking-[0.05em] text-inkMuted border-b border-divider">
+                <th className="py-2 font-bold">Type</th>
+                <th className="py-2 font-bold text-right">Bookings</th>
+                <th className="py-2 font-bold text-right">Revenue</th>
               </tr>
             </thead>
             <tbody>
-              <tr className="border-b border-borderc/60">
+              <tr className="border-b border-divider">
                 <td className="py-2">Full Day</td>
                 <td className="py-2 text-right font-mono tabular-nums">
                   {overnight?.bookings ?? 0}
@@ -919,7 +921,7 @@ function RevenueTab({ from, to }: { from: string; to: string }) {
           was actually received. Mirrors the Collections tab so the owner
           sees the money split right here on the Revenue page. */}
       <div className="card">
-        <div className="text-sm font-semibold text-navy mb-2">
+        <div className="text-sm font-semibold text-ink mb-2">
           Collections by payment method
         </div>
         {byMethod.length === 0 ? (
@@ -929,21 +931,21 @@ function RevenueTab({ from, to }: { from: string; to: string }) {
         ) : (
           <table className="w-full text-sm">
             <thead>
-              <tr className="text-left text-textSecondary border-b border-borderc">
-                <th className="py-2 font-medium">Method</th>
-                <th className="py-2 font-medium text-right">Payments</th>
-                <th className="py-2 font-medium text-right">Amount</th>
+              <tr className="text-left text-[10.5px] uppercase tracking-[0.05em] text-inkMuted border-b border-divider">
+                <th className="py-2 font-bold">Method</th>
+                <th className="py-2 font-bold text-right">Payments</th>
+                <th className="py-2 font-bold text-right">Amount</th>
               </tr>
             </thead>
             <tbody>
               {byMethod.map((m) => (
-                <tr key={m.method} className="border-b border-borderc/60">
+                <tr key={m.method} className="border-b border-divider">
                   <td className="py-2">{methodLabels[m.method] ?? m.method}</td>
                   <td className="py-2 text-right font-mono tabular-nums">{m.count}</td>
                   <td className="py-2 text-right font-mono tabular-nums">{inr(m.total)}</td>
                 </tr>
               ))}
-              <tr className="font-semibold text-brand-dark">
+              <tr className="font-semibold text-ink">
                 <td className="py-2">Total</td>
                 <td className="py-2 text-right font-mono tabular-nums">
                   {byMethod.reduce((s, m) => s + m.count, 0)}
@@ -1114,15 +1116,15 @@ function InvoicesTab({ from, to }: { from: string; to: string }) {
               onClick={() => setStatus(s)}
               className={`px-2.5 h-8 text-xs font-semibold rounded-sm border transition-colors capitalize ${
                 status === s
-                  ? "bg-brand-dark text-cream border-brand-dark"
-                  : "border-borderc text-textSecondary hover:border-brand hover:text-brand"
+                  ? "bg-inkDark text-cream border-inkDark"
+                  : "bg-surface border-borderControl text-textSecondary hover:border-brand hover:text-brand"
               }`}
             >
               {s}
             </button>
           ))}
         </div>
-        <div className="h-6 w-px bg-borderc mx-1" />
+        <div className="h-6 w-px bg-borderControl mx-1" />
         <div className="flex flex-wrap gap-1">
           {(
             [
@@ -1137,8 +1139,8 @@ function InvoicesTab({ from, to }: { from: string; to: string }) {
               onClick={() => setScope(s.id)}
               className={`px-2.5 h-8 text-xs font-semibold rounded-sm border transition-colors ${
                 scope === s.id
-                  ? "bg-brand-dark text-cream border-brand-dark"
-                  : "border-borderc text-textSecondary hover:border-brand hover:text-brand"
+                  ? "bg-inkDark text-cream border-inkDark"
+                  : "bg-surface border-borderControl text-textSecondary hover:border-brand hover:text-brand"
               }`}
             >
               {s.label}
@@ -1196,7 +1198,7 @@ function InvoicesTab({ from, to }: { from: string; to: string }) {
                       )
                     }
                   >
-                    <td className="font-mono font-semibold text-brand-dark">
+                    <td className="font-mono font-semibold text-ink">
                       {inv.invoiceNumber}
                     </td>
                     <td className="text-xs text-textSecondary">
@@ -1206,18 +1208,18 @@ function InvoicesTab({ from, to }: { from: string; to: string }) {
                       <div className="font-mono text-xs text-textSecondary">
                         {inv.reservationNumber ?? "-"}
                       </div>
-                      <div className="text-sm font-medium text-brand-dark truncate max-w-[18ch]">
+                      <div className="text-sm font-medium text-ink truncate max-w-[18ch]">
                         {inv.guestName}
                       </div>
                     </td>
                     <td>
                       <span
-                        className={`text-[10px] uppercase tracking-wider font-semibold px-1.5 py-0.5 rounded border ${
+                        className={`text-[10px] uppercase tracking-wider font-semibold px-2 py-0.5 rounded-full border ${
                           inv.scope === "room"
-                            ? "bg-brand-soft text-brand-dark border-brand-dark/30"
+                            ? "bg-brand-soft text-brand-deep border-brand-tint"
                             : inv.scope === "combined"
-                              ? "bg-accentBlue/10 text-accentBlue border-accentBlue/30"
-                              : "bg-bg text-textSecondary border-borderc"
+                              ? "bg-infoBg text-info border-infoBorder"
+                              : "bg-neutralBg text-inkMuted border-neutralBorder"
                         }`}
                       >
                         {inv.scope === "room" ? "Per room" : inv.scope}
@@ -1225,14 +1227,14 @@ function InvoicesTab({ from, to }: { from: string; to: string }) {
                     </td>
                     <td>
                       <span
-                        className={`text-[10px] uppercase tracking-wider font-semibold px-1.5 py-0.5 rounded ${
+                        className={`text-[10px] uppercase tracking-wider font-semibold px-2 py-0.5 rounded-full border ${
                           inv.status === "paid"
-                            ? "bg-success/10 text-success"
+                            ? "bg-successBg text-success border-successBorder"
                             : inv.status === "partial"
-                              ? "bg-warning/10 text-warning"
+                              ? "bg-warnBg text-warnFg border-warnBorder"
                               : inv.status === "voided"
-                                ? "bg-textSecondary/15 text-textSecondary line-through"
-                                : "bg-danger/10 text-danger"
+                                ? "bg-neutralBg text-inkMuted border-neutralBorder line-through"
+                                : "bg-dangerBg text-dangerFg border-dangerBorder"
                         }`}
                       >
                         {inv.status}
@@ -1246,7 +1248,7 @@ function InvoicesTab({ from, to }: { from: string; to: string }) {
                     </td>
                     <td
                       className={`text-right font-mono tabular-nums ${
-                        balance > 0.009 ? "text-danger font-semibold" : "text-textSecondary"
+                        balance > 0.009 ? "text-dangerFg font-semibold" : "text-textSecondary"
                       }`}
                     >
                       {inr(balance)}
@@ -1266,14 +1268,14 @@ function InvoicesTab({ from, to }: { from: string; to: string }) {
           </span>
           <div className="flex gap-1">
             <button
-              className="px-2.5 h-7 rounded-sm border border-borderc disabled:opacity-40"
+              className="px-2.5 h-7 rounded-sm border border-borderControl bg-surface disabled:opacity-40"
               disabled={page === 1}
               onClick={() => setPage((p) => Math.max(1, p - 1))}
             >
               Prev
             </button>
             <button
-              className="px-2.5 h-7 rounded-sm border border-borderc disabled:opacity-40"
+              className="px-2.5 h-7 rounded-sm border border-borderControl bg-surface disabled:opacity-40"
               disabled={page >= totalPages}
               onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
             >
@@ -1340,14 +1342,14 @@ function CollectionsTab({ from, to }: { from: string; to: string }) {
                   const share = grand > 0 ? (Number(m.total) / grand) * 100 : 0;
                   return (
                     <tr key={m.method}>
-                      <td className="capitalize font-medium text-brand-dark">
+                      <td className="capitalize font-medium text-ink">
                         {m.method.replace(/_/g, " ")}
                       </td>
                       <td className="text-right tabular-nums">{m.count}</td>
                       <td className="text-right font-mono tabular-nums">{inr(m.total)}</td>
                       <td className="text-right">
                         <div className="inline-flex items-center gap-2">
-                          <div className="w-20 h-1.5 rounded-full bg-bg overflow-hidden">
+                          <div className="w-20 h-1.5 rounded-full bg-surfaceSubtle overflow-hidden">
                             <div
                               className="h-full bg-brand"
                               style={{ width: `${share}%` }}
@@ -1363,8 +1365,8 @@ function CollectionsTab({ from, to }: { from: string; to: string }) {
                 })}
               </tbody>
               <tfoot>
-                <tr className="bg-brand-soft/40">
-                  <td className="font-semibold text-brand-dark">Total</td>
+                <tr className="bg-surfaceAlt">
+                  <td className="font-semibold text-ink">Total</td>
                   <td className="text-right font-semibold tabular-nums">{txns}</td>
                   <td className="text-right font-mono font-bold tabular-nums">{inr(grand)}</td>
                   <td></td>
@@ -1478,7 +1480,7 @@ function GstTab({ from, to }: { from: string; to: string }) {
               <tbody>
                 {data.byStatus.map((r) => (
                   <tr key={r.status}>
-                    <td className="capitalize font-medium text-brand-dark">{r.status}</td>
+                    <td className="capitalize font-medium text-ink">{r.status}</td>
                     <td className="text-right tabular-nums">{r.count}</td>
                     <td className="text-right font-mono tabular-nums">{inr(r.subtotal)}</td>
                     <td className="text-right font-mono tabular-nums">{inr(r.cgst)}</td>
@@ -1487,7 +1489,7 @@ function GstTab({ from, to }: { from: string; to: string }) {
                   </tr>
                 ))}
                 {hasCreditNotes && (
-                  <tr className="text-danger">
+                  <tr className="text-dangerFg">
                     <td className="font-medium">Credit notes</td>
                     <td className="text-right tabular-nums">{cn!.count}</td>
                     <td className="text-right font-mono tabular-nums">{inr(cn!.subtotal)}</td>
@@ -1498,8 +1500,8 @@ function GstTab({ from, to }: { from: string; to: string }) {
                 )}
               </tbody>
               <tfoot>
-                <tr className="bg-brand-soft/40">
-                  <td className="font-semibold text-brand-dark">
+                <tr className="bg-surfaceAlt">
+                  <td className="font-semibold text-ink">
                     {hasCreditNotes ? "Net total" : "Total"}
                   </td>
                   <td className="text-right font-semibold tabular-nums">{totals.count}</td>
@@ -1570,12 +1572,12 @@ function daysSince(iso: string): number {
 function AgeBadge({ days }: { days: number }) {
   const tone =
     days >= 30
-      ? "bg-danger/10 text-danger"
+      ? "bg-dangerBg text-dangerFg"
       : days >= 14
-        ? "bg-warning/10 text-warning"
-        : "bg-bg text-textSecondary";
+        ? "bg-warnBg text-warnFg"
+        : "bg-neutralBg text-inkMuted";
   return (
-    <span className={`inline-block px-1.5 py-0.5 rounded-sm text-[10px] font-semibold ${tone}`}>
+    <span className={`inline-block px-1.5 py-0.5 rounded-[5px] text-[10px] font-bold ${tone}`}>
       {days}d
     </span>
   );
@@ -1651,7 +1653,7 @@ function OutstandingTab() {
                     className="cursor-pointer"
                     onClick={() => navigate(`/guests/${g.guestPhone}`)}
                   >
-                    <td className="font-medium text-brand-dark">{g.guestName}</td>
+                    <td className="font-medium text-ink">{g.guestName}</td>
                     <td className="font-mono text-textSecondary text-xs">{g.guestPhone}</td>
                     <td>
                       <div className="inline-flex items-center gap-2">
@@ -1659,7 +1661,7 @@ function OutstandingTab() {
                         <AgeBadge days={daysSince(g.oldest)} />
                       </div>
                     </td>
-                    <td className="text-right font-mono text-danger font-semibold tabular-nums">
+                    <td className="text-right font-mono text-dangerFg font-semibold tabular-nums">
                       {inr(g.balance)}
                     </td>
                   </tr>
@@ -1693,7 +1695,7 @@ function OutstandingTab() {
                   <tr key={p.paymentId}>
                     <td className="font-mono text-xs">{p.reservationNumber}</td>
                     <td>
-                      <div className="font-medium text-brand-dark">{p.guestName}</div>
+                      <div className="font-medium text-ink">{p.guestName}</div>
                       <div className="text-[11px] text-textSecondary font-mono">
                         {p.guestPhone}
                       </div>
@@ -1705,7 +1707,7 @@ function OutstandingTab() {
                         <AgeBadge days={daysSince(p.promisedAt)} />
                       </div>
                     </td>
-                    <td className="text-right font-mono text-danger font-semibold tabular-nums">
+                    <td className="text-right font-mono text-dangerFg font-semibold tabular-nums">
                       {inr(p.amount)}
                     </td>
                     <td className="text-right">
@@ -1784,7 +1786,7 @@ function OutstandingTab() {
                     <td className="font-mono text-textSecondary text-xs">
                       {r.reservationNumber}
                     </td>
-                    <td className="font-medium text-brand-dark">{r.guestName}</td>
+                    <td className="font-medium text-ink">{r.guestName}</td>
                     <td>
                       <div className="inline-flex items-center gap-2">
                         <span>{format(new Date(r.issuedAt), "dd MMM yyyy")}</span>
@@ -1793,7 +1795,7 @@ function OutstandingTab() {
                     </td>
                     <td className="capitalize">{r.status}</td>
                     <td className="text-right font-mono tabular-nums">{inr(r.grandTotal)}</td>
-                    <td className="text-right font-mono text-danger font-semibold tabular-nums">
+                    <td className="text-right font-mono text-dangerFg font-semibold tabular-nums">
                       {inr(r.balanceDue)}
                     </td>
                   </tr>
@@ -1948,10 +1950,10 @@ function DailyLedgerTab({ from, to }: { from: string; to: string }) {
                   return (
                     <Fragment key={d.day}>
                       <tr
-                        className={`cursor-pointer hover:bg-bg ${open ? "bg-brand-soft/30" : ""}`}
+                        className={`cursor-pointer hover:bg-surfaceAlt ${open ? "bg-brand-soft/30" : ""}`}
                         onClick={() => setExpanded(open ? null : d.day)}
                       >
-                        <td className="font-mono font-semibold text-brand-dark whitespace-nowrap">
+                        <td className="font-mono font-semibold text-ink whitespace-nowrap">
                           {format(new Date(d.day), "dd MMM yyyy")}
                           <span className="ml-1.5 text-[10px] font-sans font-normal text-textSecondary">
                             {format(new Date(d.day), "EEE")}
@@ -1965,12 +1967,12 @@ function DailyLedgerTab({ from, to }: { from: string; to: string }) {
                         <td className="text-right font-mono tabular-nums text-success">
                           {inr(d.collected)}
                         </td>
-                        <td className="text-right font-mono tabular-nums text-danger">
+                        <td className="text-right font-mono tabular-nums text-dangerFg">
                           {d.expenses > 0.009 ? `− ${inr(d.expenses)}` : inr(0)}
                         </td>
                         <td
                           className={`text-right font-mono font-semibold tabular-nums ${
-                            d.net >= 0 ? "text-brand-dark" : "text-danger"
+                            d.net >= 0 ? "text-ink" : "text-dangerFg"
                           }`}
                         >
                           {inr(d.net)}
@@ -1978,18 +1980,18 @@ function DailyLedgerTab({ from, to }: { from: string; to: string }) {
                       </tr>
                       {open && d.rooms.length > 0 && (
                         <tr>
-                          <td colSpan={7} className="!p-0 bg-bg/50">
+                          <td colSpan={7} className="!p-0 bg-surfaceAlt">
                             <table className="w-full text-xs">
                               <tbody>
                                 {d.rooms.map((r, i) => (
-                                  <tr key={`${d.day}-${r.roomNumber}-${i}`} className="border-b border-borderc/40 last:border-0">
-                                    <td className="pl-10 py-1.5 font-mono font-semibold text-brand-dark w-24">
+                                  <tr key={`${d.day}-${r.roomNumber}-${i}`} className="border-b border-divider last:border-0">
+                                    <td className="pl-10 py-1.5 font-mono font-semibold text-ink w-24">
                                       {r.roomNumber}
                                     </td>
                                     <td className="py-1.5">
                                       {r.guestName}
                                       {r.complimentary && (
-                                        <span className="ml-1.5 text-[10px] text-[#157f5f]">Comp</span>
+                                        <span className="ml-1.5 text-[10px] text-success">Comp</span>
                                       )}
                                     </td>
                                     <td className="py-1.5 font-mono text-textSecondary">
@@ -2010,8 +2012,8 @@ function DailyLedgerTab({ from, to }: { from: string; to: string }) {
                 })}
               </tbody>
               <tfoot>
-                <tr className="bg-brand-soft/40">
-                  <td className="font-semibold text-brand-dark">Total</td>
+                <tr className="bg-surfaceAlt">
+                  <td className="font-semibold text-ink">Total</td>
                   <td className="text-right font-semibold tabular-nums">
                     {totals?.roomNights ?? 0}
                   </td>
@@ -2022,7 +2024,7 @@ function DailyLedgerTab({ from, to }: { from: string; to: string }) {
                   <td className="text-right font-mono font-bold tabular-nums text-success">
                     {inr(totals?.collected ?? 0)}
                   </td>
-                  <td className="text-right font-mono font-bold tabular-nums text-danger">
+                  <td className="text-right font-mono font-bold tabular-nums text-dangerFg">
                     − {inr(totals?.expenses ?? 0)}
                   </td>
                   <td className="text-right font-mono font-bold tabular-nums">
@@ -2113,7 +2115,7 @@ function RoomsTab({ from, to }: { from: string; to: string }) {
                   const share = total > 0 ? (Number(r.revenue) / total) * 100 : 0;
                   return (
                     <tr key={r.roomId}>
-                      <td className="font-mono font-semibold text-brand-dark">{r.roomNumber}</td>
+                      <td className="font-mono font-semibold text-ink">{r.roomNumber}</td>
                       <td className="capitalize">{r.roomType}</td>
                       <td className="text-right font-mono tabular-nums">{inr(r.baseRate)}</td>
                       <td className="text-right tabular-nums">{r.bookings}</td>
@@ -2121,7 +2123,7 @@ function RoomsTab({ from, to }: { from: string; to: string }) {
                       <td className="text-right font-mono tabular-nums">{inr(r.revenue)}</td>
                       <td className="text-right">
                         <div className="inline-flex items-center gap-2">
-                          <div className="w-16 h-1.5 rounded-full bg-bg overflow-hidden">
+                          <div className="w-16 h-1.5 rounded-full bg-surfaceSubtle overflow-hidden">
                             <div
                               className="h-full bg-brand"
                               style={{ width: `${share}%` }}
@@ -2137,8 +2139,8 @@ function RoomsTab({ from, to }: { from: string; to: string }) {
                 })}
               </tbody>
               <tfoot>
-                <tr className="bg-brand-soft/40">
-                  <td className="font-semibold text-brand-dark" colSpan={3}>
+                <tr className="bg-surfaceAlt">
+                  <td className="font-semibold text-ink" colSpan={3}>
                     Total
                   </td>
                   <td className="text-right font-semibold tabular-nums">{totalBookings}</td>
@@ -2273,7 +2275,7 @@ function CreditTab({ from, to }: { from: string; to: string }) {
                   >
                     <td className="font-mono text-accentBlue text-xs">{r.reservationNumber}</td>
                     <td>
-                      <div className="font-medium text-brand-dark">{r.guestName}</div>
+                      <div className="font-medium text-ink">{r.guestName}</div>
                       <div className="text-[11px] text-textSecondary font-mono">
                         {r.guestPhone}
                       </div>
@@ -2290,7 +2292,7 @@ function CreditTab({ from, to }: { from: string; to: string }) {
                     <td className="text-right font-mono text-success tabular-nums">
                       {inr(r.totalPaid)}
                     </td>
-                    <td className="text-right font-mono text-danger tabular-nums">
+                    <td className="text-right font-mono text-dangerFg tabular-nums">
                       {inr(r.balanceDue)}
                     </td>
                     <td className="text-xs text-textSecondary">{r.creditNotes ?? "-"}</td>
@@ -2369,7 +2371,7 @@ function GuestsTab({ from, to }: { from: string; to: string }) {
                     className="cursor-pointer"
                     onClick={() => navigate(`/guests/${g.phone}`)}
                   >
-                    <td className="font-medium text-brand-dark">{g.fullName}</td>
+                    <td className="font-medium text-ink">{g.fullName}</td>
                     <td className="font-mono text-textSecondary text-xs">{g.phone}</td>
                     <td className="text-right tabular-nums">{g.stays}</td>
                     <td className="text-right font-mono tabular-nums">{inr(g.revenue)}</td>
