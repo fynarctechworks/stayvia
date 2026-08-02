@@ -68,7 +68,7 @@ export default function StaffPage() {
   });
 
   return (
-    <div className="max-w-[1080px] mx-auto w-full space-y-4">
+    <div className="w-full space-y-4">
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
           <h1 className="text-[clamp(22px,3vw,28px)] leading-tight font-semibold tracking-[-0.5px] text-ink">

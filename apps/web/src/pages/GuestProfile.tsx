@@ -176,7 +176,7 @@ export default function GuestProfile() {
   if (isLoading || !data) return <Loader size="lg" />;
 
   return (
-    <div className="space-y-5 max-w-4xl">
+    <div className="space-y-5 w-full">
       <div className="flex items-start justify-between gap-4 flex-wrap">
         <div className="flex items-start gap-4">
           {data.photoUrl ? (

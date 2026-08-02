@@ -106,7 +106,7 @@ export default function MaintenanceDetail() {
     issue.status === "resolved" || issue.status === "cancelled";
 
   return (
-    <div className="space-y-4 max-w-[820px]">
+    <div className="space-y-4 w-full">
       <div className="flex items-center gap-3 flex-wrap">
         <button
           onClick={() => navigate(-1)}

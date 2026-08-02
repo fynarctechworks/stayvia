@@ -141,7 +141,7 @@ export default function Billing() {
 
   if (error || !data) {
     return (
-      <div className="max-w-[640px] mx-auto w-full space-y-4">
+      <div className="w-full space-y-4">
         <h1 className="text-[clamp(22px,3vw,28px)] leading-tight font-semibold tracking-[-0.5px] text-ink">
           Billing
         </h1>
@@ -159,7 +159,7 @@ export default function Billing() {
   const showSubscribe = data.status !== "active";
 
   return (
-    <div className="max-w-[640px] mx-auto w-full space-y-4">
+    <div className="w-full space-y-4">
       <div>
         <h1 className="text-[clamp(22px,3vw,28px)] leading-tight font-semibold tracking-[-0.5px] text-ink">
           Billing

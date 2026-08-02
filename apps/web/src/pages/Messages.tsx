@@ -165,7 +165,7 @@ export default function Messages() {
   return (
     // Phone: ONE pane at a time — list, or the open chat (driven by the
     // ?with= param). md+: the classic two-column split.
-    <div className="max-w-[1180px] mx-auto w-full grid grid-cols-1 md:grid-cols-[21rem_1fr] h-[calc(100vh-9.5rem)] md:h-[calc(100vh-6.5rem)] rounded-2xl overflow-hidden border border-borderc shadow-card">
+    <div className="w-full grid grid-cols-1 md:grid-cols-[21rem_1fr] h-[calc(100vh-9.5rem)] md:h-[calc(100vh-6.5rem)] rounded-2xl overflow-hidden border border-borderc shadow-card">
       {/* ============ LEFT: conversation list ============ */}
       <aside
         className={`bg-white border-r border-borderc flex-col min-w-0 ${

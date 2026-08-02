@@ -106,7 +106,7 @@ export default function Notifications() {
   }
 
   return (
-    <div className="max-w-[820px] mx-auto w-full space-y-4">
+    <div className="w-full space-y-4">
       <StickyBar>
       <div className="flex items-center justify-between">
         <div>

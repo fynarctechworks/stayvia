@@ -50,7 +50,7 @@ export default function RoomDetail() {
   if (isLoading || !room) return <Loader size="lg" />;
 
   return (
-    <div className="space-y-[22px] max-w-5xl">
+    <div className="space-y-[22px] w-full">
       {/* Header: back button + room number + quick metadata pills. */}
       <div className="flex items-start justify-between flex-wrap gap-3.5">
         <div className="flex items-center gap-3">
