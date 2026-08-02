@@ -183,7 +183,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         aria-hidden
       />
       <div
-        className={`md:hidden fixed top-0 left-0 z-50 h-full transition-transform duration-[250ms] ease-out ${
+        className={`md:hidden fixed top-0 left-0 z-50 h-full transition-transform [transition-duration:250ms] ease-out ${
           mobileOpen ? "translate-x-0" : "-translate-x-full"
         }`}
       >

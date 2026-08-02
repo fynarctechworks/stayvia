@@ -26,7 +26,15 @@ export default defineConfig({
     trace: "on-first-retry",
     screenshot: "only-on-failure",
   },
-  projects: [{ name: "chromium", use: { ...devices["Desktop Chrome"] } }],
+  projects: [
+    { name: "chromium", use: { ...devices["Desktop Chrome"] } },
+    // Phone viewport (412x915, touch, mobile UA) — regression coverage for
+    // the mobile-first layouts: bottom nav, drawer, stacked cards. Pixel 7
+    // runs on chromium so no extra browser install. Same specs run against
+    // both projects; assertions already use .filter({ visible: true }) so
+    // desktop/mobile duplicates resolve.
+    { name: "mobile", use: { ...devices["Pixel 7"] } },
+  ],
   webServer: {
     command: `npm run dev --workspace @stayvia/web -- --port ${E2E_WEB_PORT} --strictPort`,
     url: `http://127.0.0.1:${E2E_WEB_PORT}`,
