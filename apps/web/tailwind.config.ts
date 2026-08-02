@@ -70,7 +70,7 @@ export default {
         neutralBorder: "#E1DED6",
       },
       fontFamily: {
-        sans: ["Hanken Grotesk", "system-ui", "sans-serif"],
+        sans: ["DM Sans", "system-ui", "sans-serif"],
         mono: ["JetBrains Mono", "ui-monospace", "monospace"],
       },
       borderRadius: {
