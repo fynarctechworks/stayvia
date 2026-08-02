@@ -33,6 +33,9 @@ interface Props {
   className?: string;
   required?: boolean;
   id?: string;
+  // Mirrors the native attribute so callers with their own validation
+  // can flag the field red without wrapping it.
+  ariaInvalid?: boolean;
 }
 
 export function EmailInput({
@@ -43,6 +46,7 @@ export function EmailInput({
   className,
   required,
   id: propsId,
+  ariaInvalid,
 }: Props) {
   const generatedId = useId();
   const id = propsId ?? generatedId;
@@ -150,6 +154,7 @@ export function EmailInput({
         placeholder={placeholder}
         value={value}
         required={required}
+        aria-invalid={ariaInvalid}
         onChange={(e) => {
           onChange(e.target.value);
           if (!open && e.target.value.trim()) setOpen(true);

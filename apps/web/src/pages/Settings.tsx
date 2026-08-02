@@ -11,6 +11,7 @@ import {
 } from "@/lib/micons";
 import { useEffect, useMemo, useState } from "react";
 import { useAuth } from "@/auth/AuthContext";
+import { EmailInput } from "@/components/EmailInput";
 import { useDialog } from "@/components/Dialog";
 import QrCodeModal from "@/components/QrCodeModal";
 import { TimePicker12h } from "@/components/TimePicker12h";
@@ -141,11 +142,9 @@ function MyProfileTab() {
             />
           </Field>
           <Field label="Email">
-            <input
-              className="input"
-              type="email"
+            <EmailInput
               value={form.email}
-              onChange={(e) => setForm({ ...form, email: e.target.value })}
+              onChange={(v) => setForm({ ...form, email: v })}
             />
           </Field>
           <Field label="Phone">

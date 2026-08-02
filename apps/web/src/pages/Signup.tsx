@@ -20,6 +20,7 @@ import {
 } from "@/lib/micons";
 import { signupFormSchema, type SignupOtpChannel } from "@stayvia/shared";
 import { useAuth } from "@/auth/AuthContext";
+import { EmailInput } from "@/components/EmailInput";
 import { ApiError, api } from "@/lib/api";
 
 // Warm Concierge auth brand pane (same as Login): forest base + radial
@@ -401,17 +402,14 @@ export default function Signup() {
                 Email
               </label>
               <div className="relative">
-                <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-textSecondary pointer-events-none" />
-                <input
+                <Mail className="absolute left-3 top-[21px] -translate-y-1/2 w-4 h-4 text-textSecondary pointer-events-none z-10" />
+                <EmailInput
                   id={`${uid}-email`}
                   className={inputCls("email")}
-                  type="email"
-                  inputMode="email"
                   value={form.email}
-                  onChange={(e) => set("email", e.target.value)}
+                  onChange={(v) => set("email", v)}
                   placeholder="you@yourhotel.com"
-                  autoComplete="email"
-                  aria-invalid={!!fieldErrors.email}
+                  ariaInvalid={!!fieldErrors.email}
                 />
               </div>
               {fieldErrors.email && (

@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Check, Copy, Eye, EyeOff, Pencil, Trash2, UserPlus } from "@/lib/micons";
 import { useEffect, useState } from "react";
 import { useAuth } from "@/auth/AuthContext";
+import { EmailInput } from "@/components/EmailInput";
 import { useDialog } from "@/components/Dialog";
 import { RolesManager } from "@/components/RolesManager";
 import { useToast } from "@/components/Toast";
@@ -403,11 +404,9 @@ function EditStaffModal({ staff, onClose }: { staff: Staff; onClose: () => void 
             />
           </Field>
           <Field label="Email">
-            <input
-              className="input"
-              type="email"
+            <EmailInput
               value={form.email}
-              onChange={(e) => setForm({ ...form, email: e.target.value })}
+              onChange={(v) => setForm({ ...form, email: v })}
             />
           </Field>
           <Field label="Phone (optional)">
@@ -719,11 +718,9 @@ function AddStaffModal({ onClose }: { onClose: () => void }) {
           />
         </Field>
         <Field label="Email">
-          <input
-            className="input"
-            type="email"
+          <EmailInput
             value={form.email}
-            onChange={(e) => setForm({ ...form, email: e.target.value })}
+            onChange={(v) => setForm({ ...form, email: v })}
           />
         </Field>
         <Field label="Password">

@@ -43,6 +43,7 @@ import {
   qrInputClass,
 } from "@/components/qrKit";
 import { INDIAN_STATES, INDIAN_UNION_TERRITORIES } from "@/lib/indianStates";
+import { EmailInput } from "@/components/EmailInput";
 import { ID_PROOF_SPECS, inr, inr0, sanitizeIdProofNumber } from "@/lib/utils";
 import {
   publicQr,
@@ -393,12 +394,11 @@ export default function HotelQr() {
               </p>
             </QrField>
             <QrField label="Email (optional)">
-              <input
+              <EmailInput
                 className={qrInputClass}
-                type="email"
                 placeholder="guest@example.com"
                 value={email}
-                onChange={(e) => setEmail(e.target.value)}
+                onChange={setEmail}
               />
             </QrField>
             <div className="grid grid-cols-2 gap-3">
