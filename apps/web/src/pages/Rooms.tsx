@@ -77,12 +77,29 @@ export default function Rooms() {
     queryFn: () => api.get<Room[]>("/rooms", {}),
   });
 
-  // Pre-filter to the user-selected floor/status/type. byFloor feeds the
-  // "N rooms across M floors" subtitle; statusCounts feeds the stat cards
-  // and filter-chip counts.
+  // `rooms` is the SERVER-filtered list (floor/status/type), so it only
+  // describes the current view — totalRooms and byFloor feed the subtitle
+  // and the table. Anything that claims to describe the property (the stat
+  // cards) or how many rooms a chip would reveal (the chip badges) is
+  // derived from the unfiltered `allRooms` instead.
   const totalRooms = rooms.length;
-  const statusCounts: Record<string, number> = {};
-  for (const r of rooms) statusCounts[r.status] = (statusCounts[r.status] ?? 0) + 1;
+  const hasFilter = Boolean(floor || status || type);
+  // Fall back to `rooms` only until the unfiltered query resolves, so the
+  // summary doesn't flash zeros on first paint.
+  const summaryRooms = allRooms.length > 0 ? allRooms : rooms;
+
+  const propertyCounts: Record<string, number> = {};
+  for (const r of summaryRooms)
+    propertyCounts[r.status] = (propertyCounts[r.status] ?? 0) + 1;
+
+  // Chip badges keep the floor/type filters applied so they agree with the
+  // grid, but never the status filter — otherwise every inactive chip reads 0
+  // the moment one status is selected.
+  const chipBase = summaryRooms.filter(
+    (r) => (!floor || String(r.floor) === floor) && (!type || r.roomType === type),
+  );
+  const chipCounts: Record<string, number> = {};
+  for (const r of chipBase) chipCounts[r.status] = (chipCounts[r.status] ?? 0) + 1;
 
   const STATUS_CHIPS: { key: string; label: string }[] = [
     { key: "", label: "All" },
@@ -114,11 +131,15 @@ export default function Rooms() {
           </h1>
           {view === "rooms" && (
             <div className="text-sm text-textSecondary mt-1.5">
-              {totalRooms === 0
+              {summaryRooms.length === 0
                 ? "No rooms yet - add your first one to get started."
-                : `${totalRooms} room${totalRooms === 1 ? "" : "s"} across ${byFloor.size} floor${
-                    byFloor.size === 1 ? "" : "s"
-                  }.`}
+                : hasFilter
+                  ? `Showing ${totalRooms} of ${summaryRooms.length} room${
+                      summaryRooms.length === 1 ? "" : "s"
+                    }.`
+                  : `${totalRooms} room${totalRooms === 1 ? "" : "s"} across ${byFloor.size} floor${
+                      byFloor.size === 1 ? "" : "s"
+                    }.`}
             </div>
           )}
         </div>
@@ -155,24 +176,25 @@ export default function Rooms() {
         <RoomTypesManager />
       ) : (
       <>
-      {/* 4 stat cards — the at-a-glance shape of the property. */}
+      {/* 4 stat cards — the at-a-glance shape of the whole property, so they
+          stay on the unfiltered counts even while a filter is active. */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3.5">
         {(
           [
-            { label: "Total rooms", value: totalRooms, tone: "text-ink" },
+            { label: "Total rooms", value: summaryRooms.length, tone: "text-ink" },
             {
               label: "Occupied",
-              value: statusCounts["occupied"] ?? 0,
+              value: propertyCounts["occupied"] ?? 0,
               tone: "text-inkDark",
             },
             {
               label: "Available",
-              value: statusCounts["available"] ?? 0,
+              value: propertyCounts["available"] ?? 0,
               tone: "text-brand-deep",
             },
             {
               label: "Out of service",
-              value: statusCounts["maintenance"] ?? 0,
+              value: propertyCounts["maintenance"] ?? 0,
               tone: "text-danger",
             },
           ] as const
@@ -195,7 +217,7 @@ export default function Rooms() {
         <div className="flex flex-wrap items-center gap-2">
           {STATUS_CHIPS.map((c) => {
             const isActive = status === c.key;
-            const count = c.key === "" ? totalRooms : statusCounts[c.key] ?? 0;
+            const count = c.key === "" ? chipBase.length : chipCounts[c.key] ?? 0;
             return (
               <button
                 key={c.key || "all"}
@@ -274,7 +296,11 @@ export default function Rooms() {
       {isLoading ? (
         <Loader />
       ) : rooms.length === 0 ? (
-        <div className="card p-6 text-textSecondary">No rooms match these filters.</div>
+        <div className="card p-6 text-textSecondary">
+          {hasFilter
+            ? "No rooms match these filters."
+            : "No rooms yet - use Add Room to create your first one."}
+        </div>
       ) : (
         <div className="card !p-0 overflow-hidden">
           <table className="table-base min-w-[640px]">
@@ -713,7 +739,7 @@ function RoomModal({ room, onClose }: { room: Room | null; onClose: () => void }
           <Field label="Type">
             {roomTypes.length === 0 ? (
               <div className="text-xs text-danger">
-                No room types defined. Add some in the Room Types tab first.
+                No room types defined. Add some with the Room Types button first.
               </div>
             ) : (
               <select

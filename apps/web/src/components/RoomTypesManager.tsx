@@ -6,7 +6,8 @@ import { api } from "@/lib/api";
 import { invalidateRoomData } from "@/lib/invalidate";
 import { inr } from "@/lib/utils";
 
-// Room-type management (list + add/edit modal + archive/restore/delete).
+// Room-type management (list + add/edit modal + restore/delete). Archiving is
+// done by unchecking "Active" in the edit modal — there is no separate action.
 // Lived as a Settings tab originally; now rendered as the "Room Types" tab
 // on the Rooms page, since that's where staff looks for it.
 
@@ -80,7 +81,7 @@ export function RoomTypesManager() {
     const confirmed = await dialog.confirm({
       title: `Delete "${t.label}"?`,
       message:
-        "This permanently removes the room type. Use Archive instead if you want existing rooms to keep the label.",
+        'This permanently removes the room type. To keep the label on existing rooms, choose Edit and uncheck "Active" instead.',
       okLabel: "Delete",
       tone: "danger",
     });

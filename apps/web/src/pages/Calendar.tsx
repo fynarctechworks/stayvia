@@ -13,6 +13,7 @@ import {
   startOfWeek,
   subMonths,
 } from "date-fns";
+import { RESERVATION_STATUSES, type ReservationStatus } from "@stayvia/shared";
 import { CalendarDays, ChevronLeft, ChevronRight, Gift, X } from "@/lib/micons";
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
@@ -22,12 +23,7 @@ import { api } from "@/lib/api";
 interface CalendarBooking {
   id: string;
   reservationNumber: string;
-  status:
-    | "confirmed"
-    | "checked_in"
-    | "checked_out"
-    | "cancelled"
-    | "no_show";
+  status: ReservationStatus;
   bookingSource: string | null;
   stayType: "overnight" | "short_stay" | null;
   durationHours: string | null;
@@ -39,7 +35,10 @@ interface CalendarBooking {
 
 // Status → chip colour. Warm Concierge semantic triads; checked-in is the
 // one legitimate dark chip (matches the prototype's calendar).
-const STATUS_STYLES: Record<CalendarBooking["status"], string> = {
+const STATUS_STYLES: Record<ReservationStatus, string> = {
+  inquiry: "bg-neutralBg text-inkMuted border-neutralBorder",
+  hold: "bg-infoBg text-info border-infoBorder",
+  pending_payment: "bg-warnBg text-warnDeep border-warnBorder",
   confirmed: "bg-gold/20 text-warnFg border-gold/40",
   checked_in: "bg-inkDark text-cream border-inkDark",
   checked_out: "bg-neutralBg text-inkMuted border-neutralBorder",
@@ -47,13 +46,38 @@ const STATUS_STYLES: Record<CalendarBooking["status"], string> = {
   no_show: "bg-warnBg text-warnDeep border-warnBorder",
 };
 
-const STATUS_LABELS: Record<CalendarBooking["status"], string> = {
+const STATUS_LABELS: Record<ReservationStatus, string> = {
+  inquiry: "Enquiry",
+  hold: "Held",
+  pending_payment: "Payment due",
   confirmed: "Confirmed",
   checked_in: "Checked-in",
   checked_out: "Checked-out",
   cancelled: "Cancelled",
   no_show: "No-show",
 };
+
+// The bundled client can be older than the API, so never trust the map to
+// have the value — fall back to a neutral chip and a readable label.
+const FALLBACK_STYLE = "bg-neutralBg text-inkMuted border-neutralBorder";
+const statusStyle = (s: ReservationStatus) => STATUS_STYLES[s] ?? FALLBACK_STYLE;
+const statusLabel = (s: ReservationStatus) => {
+  const known = STATUS_LABELS[s];
+  if (known) return known;
+  const words = String(s).replace(/_/g, " ");
+  return words.charAt(0).toUpperCase() + words.slice(1);
+};
+
+// Legend rows: the five everyday statuses always, plus any other status that
+// actually occurs this month — so the swatches always account for the
+// "N bookings in <month>" total in the header.
+const CORE_STATUSES: readonly ReservationStatus[] = [
+  "confirmed",
+  "checked_in",
+  "checked_out",
+  "cancelled",
+  "no_show",
+];
 
 // Day-use bookings store the same date in checkInDate and checkOutDate; we
 // still need them to render on that single day, so we accept inclusive
@@ -122,6 +146,14 @@ export default function CalendarPage() {
     return { total: bookings.length, byStatus };
   }, [bookings]);
 
+  const legendStatuses = useMemo(
+    () =>
+      RESERVATION_STATUSES.filter(
+        (s) => CORE_STATUSES.includes(s) || (totals.byStatus[s] ?? 0) > 0,
+      ),
+    [totals.byStatus],
+  );
+
   const selectedKey = selectedDay ? format(selectedDay, "yyyy-MM-dd") : null;
   const selectedBookings = selectedKey ? byDay.get(selectedKey) ?? [] : [];
 
@@ -177,11 +209,11 @@ export default function CalendarPage() {
         </div>
       </div>
       <div className="flex flex-wrap items-center gap-4">
-        {(["confirmed", "checked_in", "checked_out", "cancelled", "no_show"] as const).map((s) => (
+        {legendStatuses.map((s) => (
           <span key={s} className="inline-flex items-center gap-1.5 text-xs text-inkBody">
-            <span className={`inline-block w-3 h-3 rounded-[4px] border ${STATUS_STYLES[s]}`} />
+            <span className={`inline-block w-3 h-3 rounded-[4px] border ${statusStyle(s)}`} />
             <span>
-              {STATUS_LABELS[s]}
+              {statusLabel(s)}
               {totals.byStatus[s] ? (
                 <span className="text-inkMuted"> · {totals.byStatus[s]}</span>
               ) : null}
@@ -244,7 +276,7 @@ export default function CalendarPage() {
                     {visible.map((b) => (
                       <span
                         key={b.id}
-                        className={`text-[10px] leading-tight px-1.5 py-0.5 rounded-[6px] border truncate ${STATUS_STYLES[b.status]}`}
+                        className={`text-[10px] leading-tight px-1.5 py-0.5 rounded-[6px] border truncate ${statusStyle(b.status)}`}
                         title={`${b.reservationNumber} · ${b.guestName}${b.roomNumbers ? ` · Room ${b.roomNumbers}` : ""}`}
                       >
                         {b.bookingSource === "complimentary" && (
@@ -329,9 +361,9 @@ export default function CalendarPage() {
                         className="group py-3.5 flex items-center gap-4 cursor-pointer hover:bg-surfaceAlt -mx-3 px-3 rounded-sm transition-colors"
                       >
                         <span
-                          className={`w-24 text-center text-[10px] font-semibold px-2 py-1 rounded-full border shrink-0 ${STATUS_STYLES[b.status]}`}
+                          className={`w-24 text-center text-[10px] font-semibold px-2 py-1 rounded-full border shrink-0 ${statusStyle(b.status)}`}
                         >
-                          {STATUS_LABELS[b.status]}
+                          {statusLabel(b.status)}
                         </span>
                         <div className="flex-1 min-w-0">
                           <div className="text-sm font-semibold text-ink flex items-center gap-1.5 truncate">

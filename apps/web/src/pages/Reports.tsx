@@ -727,7 +727,7 @@ function OccupancyTab({ from, to }: { from: string; to: string }) {
           label="Average occupancy"
           value={`${data.avgOccupancy}%`}
           Icon={Percent}
-          hint={`${data.totalRooms} rooms total`}
+          hint={`${data.totalRooms} room${data.totalRooms === 1 ? "" : "s"} total`}
         />
         <Kpi
           label="Peak day"
@@ -2335,7 +2335,7 @@ function GuestsTab({ from, to }: { from: string; to: string }) {
           value={top?.fullName ?? "-"}
           Icon={TrendingUp}
           tone="success"
-          hint={top ? `${top.stays} stays · ${inr(top.revenue)}` : undefined}
+          hint={top ? `${top.stays} stay${top.stays === 1 ? "" : "s"} · ${inr(top.revenue)}` : undefined}
         />
         <Kpi label="Revenue from list" value={inr(totalRevenue)} Icon={Wallet} />
       </div>

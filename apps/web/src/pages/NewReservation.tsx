@@ -400,6 +400,10 @@ export default function NewReservation() {
     return diff > 0 ? +diff.toFixed(2) : 0;
   }, [isShortStay, checkInTime, checkOutTime]);
 
+  // "1 hr" / "2 hrs" — derived from the number so a one-hour day-use booking
+  // never reads "1 hrs".
+  const hrsLabel = `${shortStayDurationHours} hr${shortStayDurationHours === 1 ? "" : "s"}`;
+
   // Pricing unit: same-day is a single flat block; multi-day uses nights.
   const canPriceStay = isShortStay ? shortStayDurationHours > 0 : nights > 0;
 
@@ -1263,6 +1267,12 @@ export default function NewReservation() {
 
   // Rooms with a future reservation we'd be re-letting tonight.
   const reletRooms = selectedRooms.filter((r) => r.nextReservation);
+  // Earliest arrival across those rooms. The next reservation can be days or
+  // months out, so the banner must state the real date instead of assuming
+  // "tomorrow". ISO date strings sort chronologically.
+  const reletSoonest = reletRooms
+    .map((r) => r.nextReservation!.checkInDate)
+    .sort()[0];
   // Drop the confirmation when there's nothing to confirm anymore —
   // prevents stale state if staff removes the only re-let room.
   useEffect(() => {
@@ -2143,7 +2153,7 @@ export default function NewReservation() {
         {!canPriceStay ? (
           <div className="text-textSecondary text-sm">
             {isShortStay
-              ? "Pick a duration to see available rooms."
+              ? "Set a check-out time later than the check-in time to see available rooms."
               : "Select valid dates to see available rooms."}
           </div>
         ) : availRooms.isLoading ? (
@@ -2457,7 +2467,7 @@ export default function NewReservation() {
                       </div>
                       <div>
                         <label className="label block mb-1 !text-white/70">
-                          {isShortStay ? `Rate for ${shortStayDurationHours} hrs` : "Rate/night"}
+                          {isShortStay ? `Rate for ${hrsLabel}` : "Rate/night"}
                         </label>
                         <input
                           className="input !min-h-[34px] !h-[34px] !py-0 text-sm font-mono"
@@ -2749,7 +2759,7 @@ export default function NewReservation() {
             <span className="text-textSecondary">
               Quoted rate (
               {isShortStay
-                ? `${shortStayDurationHours} hrs × ${selectedRooms.length}`
+                ? `${hrsLabel} × ${selectedRooms.length}`
                 : `${nights} × ${selectedRooms.length}`}{" "}
               room{selectedRooms.length === 1 ? "" : "s"}) - GST included
             </span>
@@ -2763,7 +2773,7 @@ export default function NewReservation() {
             <span>
               Extra persons (
               {selectedRooms.reduce((a, r) => a + r.extraBeds, 0)} ×{" "}
-              {isShortStay ? `${shortStayDurationHours} hrs` : `${nights} night${nights === 1 ? "" : "s"}`})
+              {isShortStay ? hrsLabel : `${nights} night${nights === 1 ? "" : "s"}`})
             </span>
             <span className="font-mono">{inr(extraBedAmount)}</span>
           </div>
@@ -2771,7 +2781,7 @@ export default function NewReservation() {
         <div className="flex justify-between gap-3 text-[13.5px] py-1.5 text-inkBody">
           <span>
             {isShortStay
-              ? `Subtotal (${shortStayDurationHours} hrs × ${selectedRooms.length} room${selectedRooms.length === 1 ? "" : "s"})`
+              ? `Subtotal (${hrsLabel} × ${selectedRooms.length} room${selectedRooms.length === 1 ? "" : "s"})`
               : `Subtotal (${nights} × ${selectedRooms.length} room${selectedRooms.length === 1 ? "" : "s"})`}
             {gstMode === "inclusive" && (
               <span className="text-[10px] text-inkMuted"> · net, after GST extracted</span>
@@ -2815,7 +2825,7 @@ export default function NewReservation() {
             )}
             <div className="text-[11px] text-inkMuted mt-2 leading-snug">
               GST {gstRate}% applied via slab (avg rate ₹{avgRatePerNight.toFixed(2)}
-              {isShortStay ? `/${shortStayDurationHours} hrs` : "/night"}
+              {isShortStay ? `/${hrsLabel}` : "/night"}
               {gstMode === "inclusive" ? ", GST-inclusive" : ", GST extra"}). Final tax
               recomputed at check-out if charges change.
             </div>
@@ -2872,25 +2882,28 @@ export default function NewReservation() {
             </div>
           </div>
         )}
-        {/* Same-day re-let acknowledgement. Required when one or more
-            picked rooms have a confirmed reservation that arrives AFTER
-            the walk-in vacates. Staff must explicitly confirm they'll
-            free the room in time. */}
+        {/* Re-let acknowledgement. Required when one or more picked rooms
+            have a confirmed reservation arriving on or after this stay's
+            check-out. Staff must explicitly confirm they'll free the room
+            in time. */}
         {reletRooms.length > 0 && (
           <div className="mt-4 rounded-xl border border-warnBorder bg-warnBg p-3">
             <div className="flex items-start gap-2">
               <AlertTriangle className="w-4 h-4 text-warnFg shrink-0 mt-0.5" />
               <div className="flex-1 text-xs leading-snug text-inkBody">
                 <div className="font-semibold text-warnFg mb-1.5">
-                  Same-day re-let - {reletRooms.length} room
-                  {reletRooms.length === 1 ? "" : "s"} reserved for tomorrow
+                  Upcoming reservation - {reletRooms.length} room
+                  {reletRooms.length === 1 ? "" : "s"} booked from{" "}
+                  {reletSoonest ? format(new Date(reletSoonest), "dd MMM yyyy") : ""}
                 </div>
                 <ul className="space-y-1 mb-2">
                   {reletRooms.map((r) => (
                     <li key={r.roomId}>
                       Room <span className="font-mono font-bold">{r.roomNumber}</span> →{" "}
                       {r.nextReservation?.guestName} arrives on{" "}
-                      <strong className="font-mono">{r.nextReservation?.checkInDate}</strong>{" "}
+                      <strong className="font-mono">
+                        {format(new Date(r.nextReservation!.checkInDate), "dd MMM yyyy")}
+                      </strong>{" "}
                       (<span className="font-mono">{r.nextReservation?.reservationNumber}</span>)
                     </li>
                   ))}
@@ -2903,8 +2916,8 @@ export default function NewReservation() {
                     onChange={(e) => setReletConfirmed(e.target.checked)}
                   />
                   <span>
-                    I confirm the walk-in guest will check out and the room will
-                    be ready before the next reservation arrives.
+                    I confirm this booking will check out and the room will be
+                    ready before the next reservation arrives.
                   </span>
                 </label>
               </div>
@@ -3329,7 +3342,7 @@ function CoGuestCard(props: {
         <h2 className="text-base font-semibold text-ink leading-snug">
           Guest {guestNumber}{" "}
           <span className="text-[13px] font-medium text-inkMuted">
-            (optional - skip to book without this guest's KYC)
+            (optional - you can book without this guest)
           </span>
         </h2>
         <div className="flex items-center gap-2">
@@ -3376,7 +3389,8 @@ function CoGuestCard(props: {
         </div>
       </div>
       <div className="text-[13px] text-textSecondary -mt-2">
-        With 2 or more adults, each additional guest's KYC is required by law.
+        KYC for each additional adult is required by law before check-in -
+        capture it now or at check-in.
       </div>
 
       {props.mode === "existing" ? (
@@ -3607,20 +3621,19 @@ function CoGuestCard(props: {
 
           <div className="pt-3 border-t border-divider">
             <div className="label mb-2">
-              ID &amp; KYC · Guest {guestNumber} (optional)
+              ID &amp; KYC · Guest {guestNumber} (optional now - required before
+              check-in)
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <KycFilePicker
                 label="Customer Photo"
                 file={props.kycPhoto}
                 onChange={props.setKycPhoto}
-                required
               />
               <KycFilePicker
                 label="ID Front"
                 file={props.kycFront}
                 onChange={props.setKycFront}
-                required
               />
               <KycFilePicker
                 label="ID Back"

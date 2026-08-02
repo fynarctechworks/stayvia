@@ -10,10 +10,11 @@ import {
   type LucideIcon,
 } from "@/lib/micons";
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
-import { useAuth } from "@/auth/AuthContext";
+import { Link, useNavigate } from "react-router-dom";
+import { useAuth, usePermission } from "@/auth/AuthContext";
 import { ListSkeleton } from "@/components/kit";
 import { NewIssueModal } from "@/components/NewIssueModal";
+import { useRoomTypes, labelForRoomType } from "@/hooks/useRoomTypes";
 import { api } from "@/lib/api";
 import { invalidateRoomData } from "@/lib/invalidate";
 
@@ -70,6 +71,9 @@ export default function Housekeeping() {
   const qc = useQueryClient();
   const navigate = useNavigate();
   const { profile } = useAuth();
+  // Housekeeping staff can't open the Rooms page (no view_rooms), so the
+  // empty state only offers that shortcut to roles that have it.
+  const canViewRooms = usePermission("view_rooms");
   const [floor, setFloor] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [err, setErr] = useState<string | null>(null);
@@ -86,6 +90,10 @@ export default function Housekeeping() {
     queryFn: () => api.get<Room[]>("/housekeeping"),
     refetchInterval: 15_000,
   });
+
+  // includeArchived so rooms still pointing at a deactivated type keep a
+  // human label instead of falling back to the raw slug.
+  const { data: roomTypes = [] } = useRoomTypes({ includeArchived: true });
 
   // Room status changes affect: this board, the Rooms grid, the dashboard
   // room tiles, and any availability query already on screen. Centralised
@@ -112,23 +120,24 @@ export default function Housekeeping() {
     onError: (e: Error) => setErr(e.message),
   });
 
-  const counts = rooms.reduce<Record<string, number>>((acc, r) => {
-    acc[r.status] = (acc[r.status] ?? 0) + 1;
-    return acc;
-  }, {});
-
   // Full floor list, derived from the unfiltered rooms set (the API
   // returns every room now — see useQuery above).
   const allFloors = Array.from(new Set(rooms.map((r) => r.floor))).sort(
     (a, b) => a - b,
   );
-  // Apply both filters client-side. Floor is a numeric string from
-  // the <select>; empty string means "All floors".
-  const filtered = rooms.filter((r) => {
-    if (statusFilter !== "all" && r.status !== statusFilter) return false;
-    if (floor !== "" && r.floor !== Number(floor)) return false;
-    return true;
-  });
+  // Single source of truth for the floor predicate. Floor is a numeric
+  // string from the <select>; empty string means "All floors".
+  const floorScoped = rooms.filter((r) => floor === "" || r.floor === Number(floor));
+  // The chip badges must agree with the column badges below, which are
+  // floor-filtered. Scope by floor only — never by statusFilter, or every
+  // inactive chip would read 0.
+  const counts = floorScoped.reduce<Record<string, number>>((acc, r) => {
+    acc[r.status] = (acc[r.status] ?? 0) + 1;
+    return acc;
+  }, {});
+  const filtered = floorScoped.filter(
+    (r) => statusFilter === "all" || r.status === statusFilter,
+  );
   const sorted = [...filtered].sort((a, b) => {
     if (a.floor !== b.floor) return a.floor - b.floor;
     return a.roomNumber.localeCompare(b.roomNumber, undefined, { numeric: true });
@@ -172,7 +181,7 @@ export default function Housekeeping() {
 
       <div className="flex flex-wrap items-center gap-2">
         {STATUS_FILTERS.map((s) => {
-          const count = s === "all" ? rooms.length : counts[s] ?? 0;
+          const count = s === "all" ? floorScoped.length : counts[s] ?? 0;
           const active = statusFilter === s;
           return (
             <button
@@ -203,7 +212,22 @@ export default function Housekeeping() {
         <ListSkeleton rows={6} />
       ) : sorted.length === 0 ? (
         <div className="card flex flex-col items-center justify-center py-16 text-center text-textSecondary">
-          <div className="text-sm">No rooms match this filter.</div>
+          {rooms.length === 0 ? (
+            <>
+              <div className="text-sm">
+                {canViewRooms
+                  ? "No rooms set up yet — add rooms on the Rooms page."
+                  : "No rooms set up yet — ask an admin to add rooms."}
+              </div>
+              {canViewRooms && (
+                <Link to="/rooms" className="btn-primary mt-3">
+                  Add rooms
+                </Link>
+              )}
+            </>
+          ) : (
+            <div className="text-sm">No rooms match this filter.</div>
+          )}
         </div>
       ) : (
         // items-start keeps each column at its natural height instead of
@@ -270,7 +294,7 @@ export default function Housekeeping() {
                         </div>
                         <div>
                           <div className="text-xs font-semibold text-inkBody capitalize">
-                            {r.roomType}
+                            {labelForRoomType(roomTypes, r.roomType)}
                           </div>
                           <div className="text-[11.5px] text-inkMuted mt-0.5">
                             Floor {r.floor}

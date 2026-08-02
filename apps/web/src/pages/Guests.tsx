@@ -140,6 +140,10 @@ export default function Guests() {
   });
 
   const guests = data?.data ?? [];
+  // The list comes back server-filtered, so a zero-length page means very
+  // different things depending on what's switched on. Key the empty state
+  // off the live filter state, not off the (already filtered) result.
+  const isFiltered = !!search || !!tag || hasFollowup;
   const total = data?.meta.total ?? 0;
   const pages = Math.max(1, Math.ceil(total / 25));
 
@@ -229,7 +233,33 @@ export default function Guests() {
       {isLoading ? (
         <ListSkeleton rows={6} />
       ) : guests.length === 0 ? (
-        <div className="card"><EmptyState title="No guests found" hint="Try a different name, phone or ID search." /></div>
+        <div className="card">
+          {!isFiltered ? (
+            <EmptyState
+              icon={<Users className="w-5 h-5" />}
+              title="No guests yet"
+              hint="Guests are created automatically at check-in, or add one manually."
+              action={
+                <button
+                  onClick={() => setShowAdd(true)}
+                  className="btn-primary inline-flex items-center gap-2"
+                >
+                  <Plus className="w-4 h-4" /> Add Guest
+                </button>
+              }
+            />
+          ) : search ? (
+            <EmptyState
+              title="No guests found"
+              hint="Try a different name, phone, ID last 4, email or company."
+            />
+          ) : (
+            <EmptyState
+              title="No guests match this filter"
+              hint="Clear the tag or follow-up filter to see all guests."
+            />
+          )}
+        </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
           {guests.map((g) => (

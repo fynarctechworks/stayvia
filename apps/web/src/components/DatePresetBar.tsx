@@ -19,7 +19,7 @@ import {
   startOfYear,
 } from "date-fns";
 import { ChevronDown } from "@/lib/micons";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 export type DatePresetKey =
   | "today"
@@ -102,6 +102,13 @@ export function DatePresetBar({
 }: Props) {
   const [showCustom, setShowCustom] = useState(preset === "custom");
 
+  // The parent can change the preset without going through pick() (e.g. a
+  // "Reset filters" button), so close the From/To panel when that happens —
+  // otherwise the inputs stay open under a different active pill.
+  useEffect(() => {
+    if (preset !== "custom") setShowCustom(false);
+  }, [preset]);
+
   function pick(key: DatePresetKey) {
     if (key === "all") {
       setShowCustom(false);
@@ -138,7 +145,10 @@ export function DatePresetBar({
           );
         })}
         <button
-          onClick={() => pick("custom")}
+          onClick={() =>
+            showCustom && preset === "custom" ? setShowCustom(false) : pick("custom")
+          }
+          aria-expanded={showCustom}
           className={`px-3.5 h-8 text-xs font-semibold rounded-full border transition-colors inline-flex items-center gap-1 ${
             preset === "custom"
               ? "bg-inkDark text-cream border-inkDark"

@@ -355,8 +355,8 @@ export default function Dashboard() {
                       className="text-[12.5px] font-semibold text-brand-deep"
                       title={
                         floorStats.held > 0
-                          ? `${sellable} of ${floorStats.total} rooms are free tonight — ${floorStats.held} of them is booked from a later date`
-                          : `${sellable} of ${floorStats.total} rooms are free to sell tonight`
+                          ? `${sellable} of ${floorStats.total} room${floorStats.total === 1 ? "" : "s"} ${sellable === 1 ? "is" : "are"} free tonight — ${floorStats.held} of them ${floorStats.held === 1 ? "is" : "are"} booked from a later date`
+                          : `${sellable} of ${floorStats.total} room${floorStats.total === 1 ? "" : "s"} ${sellable === 1 ? "is" : "are"} free to sell tonight`
                       }
                     >
                       {sellable} free tonight

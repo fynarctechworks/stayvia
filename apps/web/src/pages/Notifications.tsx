@@ -31,6 +31,9 @@ interface Notification {
 interface ListResp {
   items: Notification[];
   unreadCount: number;
+  // Global inbox size, independent of the active filter and the page limit.
+  // Optional so the page degrades to "no badge" if the API hasn't sent it.
+  totalCount?: number;
 }
 
 function timeAgo(iso: string): string {
@@ -90,6 +93,10 @@ export default function Notifications() {
 
   const items = q.data?.items ?? [];
   const unread = q.data?.unreadCount ?? 0;
+  // Never derive the "All" badge from items.length — on the Unread tab the
+  // list is filtered server-side, and on the All tab it's capped by `limit`,
+  // so that number is not the size of the inbox.
+  const total = q.data?.totalCount ?? null;
 
   // Group by day
   const groups = new Map<string, Notification[]>();
@@ -129,7 +136,7 @@ export default function Notifications() {
       <div className="inline-flex self-start rounded-sm border border-borderControl divide-x divide-borderControl overflow-hidden bg-surface">
         {(
           [
-            { v: "all", label: "All", count: items.length },
+            { v: "all", label: "All", count: total },
             { v: "unread", label: "Unread", count: unread },
           ] as const
         ).map((opt) => (
@@ -144,7 +151,7 @@ export default function Notifications() {
             }`}
           >
             {opt.label}
-            {opt.count > 0 && (
+            {opt.count !== null && opt.count > 0 && (
               <span
                 className={`inline-grid place-items-center min-w-[19px] h-[19px] px-[5px] rounded-full text-[10px] font-bold ${
                   filter === opt.v ? "bg-white/25 text-white" : "bg-bg text-inkMuted"

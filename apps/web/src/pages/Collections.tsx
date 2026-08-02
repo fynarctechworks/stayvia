@@ -179,8 +179,11 @@ export default function Collections() {
   // matches what the guest profile / dashboard say. The age buckets
   // use the oldest-debt date per guest so a guest with a 2-month-old
   // advance and a 1-day-old invoice is classified by the older debt.
-  const totalAcrossStreams = data.totalOutstanding;
-  const ageCounts = data.byGuest.reduce(
+  // Computed from the *filtered* guest list so the cards always describe
+  // the rows actually on screen; with an empty search this equals the
+  // server's totalOutstanding, which is the sum of byGuest balances.
+  const totalAcrossStreams = filteredByGuest.reduce((s, g) => s + g.balance, 0);
+  const ageCounts = filteredByGuest.reduce(
     (acc, g) => {
       const b = ageBucket(daysSince(g.oldest));
       acc[b] += g.balance;
@@ -193,7 +196,7 @@ export default function Collections() {
     >,
   );
 
-  const totalGuestsOwing = data.byGuest.length;
+  const totalGuestsOwing = filteredByGuest.length;
   const everyoneClear =
     filteredInvoices.length === 0 &&
     filteredPreInvoice.length === 0 &&
@@ -230,6 +233,11 @@ export default function Collections() {
           <div className="text-[11px] text-inkMuted mt-1">
             {totalGuestsOwing} guest{totalGuestsOwing === 1 ? "" : "s"} owing
           </div>
+          {q && (
+            <div className="text-[11px] text-inkFaint">
+              matching "{search.trim()}"
+            </div>
+          )}
         </div>
         <div className="card !rounded-[14px]">
           <div className="label">Within 7 days</div>
@@ -238,7 +246,7 @@ export default function Collections() {
             className="block text-2xl font-bold text-success font-mono mt-1.5"
           />
           <div className="text-[11px] text-inkMuted mt-1">
-            {ageCounts.fresh_count} guest(s)
+            {ageCounts.fresh_count} guest{ageCounts.fresh_count === 1 ? "" : "s"}
           </div>
         </div>
         <div className="card !rounded-[14px]">
@@ -248,7 +256,7 @@ export default function Collections() {
             className="block text-2xl font-bold text-warnFg font-mono mt-1.5"
           />
           <div className="text-[11px] text-inkMuted mt-1">
-            {ageCounts.warm_count} guest(s)
+            {ageCounts.warm_count} guest{ageCounts.warm_count === 1 ? "" : "s"}
           </div>
         </div>
         <div className="card !rounded-[14px]">
@@ -258,7 +266,7 @@ export default function Collections() {
             className="block text-2xl font-bold text-dangerFg font-mono mt-1.5"
           />
           <div className="text-[11px] text-inkMuted mt-1">
-            {ageCounts.old_count} guest(s)
+            {ageCounts.old_count} guest{ageCounts.old_count === 1 ? "" : "s"}
           </div>
         </div>
       </div>
@@ -426,7 +434,7 @@ export default function Collections() {
               <SectionHeader
                 icon={<FileText className="w-4 h-4" />}
                 title="Issued invoices · partial or unpaid"
-                sub="Bills already printed. Older than 7 days = warm; older than 30 = stale."
+                sub="Bills already printed. Age shown is days since the invoice was issued."
                 count={filteredInvoices.length}
               />
               <div className="card !p-0 overflow-x-auto">

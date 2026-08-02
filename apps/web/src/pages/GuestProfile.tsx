@@ -557,7 +557,16 @@ function StatsRow({ stats }: { stats: GuestStats }) {
   if (stats.upcomingStays > 0) parts.push(`${stats.upcomingStays} upcoming`);
   if (stats.completedStays > 0) parts.push(`${stats.completedStays} completed`);
   if (stats.cancelledStays > 0) parts.push(`${stats.cancelledStays} cancelled`);
-  const totalSub = parts.length > 0 ? parts.join(" · ") : "-";
+  // totalStays counts every booking the guest is on, including statuses with
+  // no bucket above (no-show, inquiry, hold, awaiting payment). Fold those
+  // into one honest bucket so the caption always adds up to the number shown.
+  const bucketed =
+    stats.inHouseStays + stats.upcomingStays + stats.completedStays + stats.cancelledStays;
+  const otherStays = Math.max(0, stats.totalStays - bucketed);
+  if (otherStays > 0) {
+    parts.push(`${otherStays} other booking${otherStays === 1 ? "" : "s"}`);
+  }
+  const totalSub = parts.length > 0 ? parts.join(" · ") : "No stays yet";
 
   // For "Last stay", only say "Since X" if there's at least one completed stay.
   // For brand-new guests with only future bookings, surface that instead so we
@@ -848,7 +857,7 @@ function KycSection({ guestId, idProofType }: { guestId: string; idProofType: st
 
       {isLoading ? (
         <div className="text-sm text-textSecondary">Loading documents…</div>
-      ) : !data?.frontUrl ? (
+      ) : !data?.frontUrl && !data?.backUrl && !data?.photoUrl ? (
         <div className="flex items-center gap-3 py-4 text-sm text-textSecondary">
           <FileImage className="w-8 h-8 opacity-40 shrink-0" />
           <div>
@@ -862,18 +871,18 @@ function KycSection({ guestId, idProofType }: { guestId: string; idProofType: st
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           <KycThumb
             label="Customer Photo"
-            url={data.photoUrl}
+            url={data?.photoUrl ?? null}
             onPreview={() =>
-              data.photoUrl && setPreview({ url: data.photoUrl, label: "Customer Photo" })
+              data?.photoUrl && setPreview({ url: data.photoUrl, label: "Customer Photo" })
             }
             onReplace={() => setShowUpload(true)}
             onRemove={() => removeFile("photo", "Customer Photo")}
           />
           <KycThumb
             label={`${proofLabel} · Front`}
-            url={data.frontUrl}
+            url={data?.frontUrl ?? null}
             onPreview={() =>
-              data.frontUrl &&
+              data?.frontUrl &&
               setPreview({ url: data.frontUrl, label: `${proofLabel} · Front` })
             }
             onReplace={() => setShowUpload(true)}
@@ -881,9 +890,9 @@ function KycSection({ guestId, idProofType }: { guestId: string; idProofType: st
           />
           <KycThumb
             label={`${proofLabel} · Back`}
-            url={data.backUrl}
+            url={data?.backUrl ?? null}
             onPreview={() =>
-              data.backUrl && setPreview({ url: data.backUrl, label: `${proofLabel} · Back` })
+              data?.backUrl && setPreview({ url: data.backUrl, label: `${proofLabel} · Back` })
             }
             onReplace={() => setShowUpload(true)}
             onRemove={() => removeFile("back", `${proofLabel} · Back`)}
@@ -891,7 +900,10 @@ function KycSection({ guestId, idProofType }: { guestId: string; idProofType: st
         </div>
       )}
 
-      {data?.kycVerifiedAt && (
+      {/* Tie the timestamp to the same flag as the Verified chip — the API
+          recomputes `verified` from the stored files, so gating on the raw
+          kycVerifiedAt could show "Verified on …" under an unverified card. */}
+      {data?.verified && data.kycVerifiedAt && (
         <div className="text-[11px] text-inkFaint mt-3">
           Verified on {format(new Date(data.kycVerifiedAt), "dd MMM yyyy · HH:mm")}
         </div>

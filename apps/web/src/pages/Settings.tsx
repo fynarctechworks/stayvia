@@ -1449,7 +1449,7 @@ function HotelTab() {
               form.hasComplimentaryUnlockCode || typed.trim() !== "";
             if (form.hideComplimentary && !willHaveCode) {
               setCodeErr(
-                "Hiding complimentary bookings requires a report access code. Set one below first.",
+                "Hiding complimentary bookings requires a report access code. Set one in the Report access code field first.",
               );
               return;
             }

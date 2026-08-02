@@ -214,19 +214,28 @@ export default function Billing() {
               </span>
             </div>
           )}
-          {data.status === "active" && (
-            <div className="flex items-center gap-2.5 px-3.5 py-3 rounded-[11px] bg-surfaceAlt border border-divider">
-              <CalendarClock className="w-[19px] h-[19px] text-textSecondary shrink-0" />
-              <span className="text-[13.5px]">
-                Current period ends{" "}
-                <span className="font-semibold text-ink">{fmtDate(data.currentPeriodEnd)}</span>
-                <span className="text-inkMuted">
-                  {" "}
-                  ({data.daysLeft} {data.daysLeft === 1 ? "day" : "days"} left)
+          {data.status === "active" &&
+            (data.currentPeriodEnd ? (
+              <div className="flex items-center gap-2.5 px-3.5 py-3 rounded-[11px] bg-surfaceAlt border border-divider">
+                <CalendarClock className="w-[19px] h-[19px] text-textSecondary shrink-0" />
+                <span className="text-[13.5px]">
+                  Current period ends{" "}
+                  <span className="font-semibold text-ink">{fmtDate(data.currentPeriodEnd)}</span>
+                  <span className="text-inkMuted">
+                    {" "}
+                    ({data.daysLeft} {data.daysLeft === 1 ? "day" : "days"} left)
+                  </span>
                 </span>
-              </span>
-            </div>
-          )}
+              </div>
+            ) : (
+              <div className="flex items-center gap-2.5 px-3.5 py-3 rounded-[11px] bg-surfaceAlt border border-divider">
+                <CalendarClock className="w-[19px] h-[19px] text-textSecondary shrink-0" />
+                <span className="text-[13.5px]">
+                  Subscription is active. Your renewal date appears here once the first billing
+                  cycle is confirmed.
+                </span>
+              </div>
+            ))}
           {data.status === "cancelled" && data.currentPeriodEnd && (
             <div className="flex items-center gap-2.5 px-3.5 py-3 rounded-[11px] bg-surfaceAlt border border-divider">
               <CalendarClock className="w-[19px] h-[19px] text-textSecondary shrink-0" />
@@ -274,7 +283,7 @@ export default function Billing() {
             <h3 className="text-[15px] font-semibold text-ink">Your workspace is locked</h3>
           </div>
           <p className="text-[13.5px] text-textSecondary leading-relaxed">
-            {data.status === "trialing" || data.status === "expired"
+            {data.status === "trialing"
               ? "Your free trial has ended."
               : "Your subscription has lapsed."}{" "}
             Staff can sign in, but reservations, invoices and other day-to-day features stay

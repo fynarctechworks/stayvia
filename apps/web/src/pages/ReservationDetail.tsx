@@ -1155,8 +1155,12 @@ export default function ReservationDetail() {
             <tr>
               <th>Room #</th>
               <th>Type</th>
-              <th className="tabular-nums">Rate/night</th>
-              <th className="tabular-nums">Subtotal ({nights}n)</th>
+              <th className="tabular-nums">
+                {isShortStay ? "Rate/stay" : "Rate/night"}
+              </th>
+              <th className="tabular-nums">
+                {isShortStay ? "Subtotal (stay)" : `Subtotal (${nights}n)`}
+              </th>
               <th></th>
             </tr>
           </thead>
@@ -1228,8 +1232,6 @@ export default function ReservationDetail() {
                         fromRoom={hop.fromRoom}
                         toRoomNumber={hop.toRoomNumber ?? room.roomNumber}
                         reason={hop.reason}
-                        reservationCheckIn={r.checkInDate}
-                        reservationCheckOut={r.checkOutDate}
                         nights={nights}
                       />
                     ) : null,
@@ -2348,17 +2350,13 @@ function SwapClosedLegRow(props: {
   };
   toRoomNumber: string;
   reason: string | null;
-  reservationCheckIn: string;
-  reservationCheckOut: string;
   nights: number;
 }) {
-  const segLabel =
-    props.nights === 0
-      ? "Same-day swap"
-      : `${format(new Date(props.reservationCheckIn), "dd MMM")} → ${format(
-          new Date(props.reservationCheckIn),
-          "dd MMM",
-        )} · 0n`;
+  // An in-place swap closes this leg without leaving a real date window
+  // behind (the row was re-pointed, not segmented), so there is no honest
+  // range or night count to print here — the active row below carries the
+  // stay's real window and billing.
+  const segLabel = props.nights === 0 ? "Same-day swap" : "Whole stay moved";
   const hasAnyAmenity =
     props.fromRoom.hasAc || props.fromRoom.hasTv || props.fromRoom.hasWifi;
   return (
@@ -2618,15 +2616,21 @@ function RoomRow(props: {
   // would multiply the rate by the parent's total nights and the
   // subtotal column would visually double-bill staff (matches the
   // same fix in invoiceBuilder + invoice preview).
-  const rowNights = isSegmented
-    ? Math.max(
-        1,
-        Math.round(
-          (new Date(segTo).getTime() - new Date(segFrom).getTime()) /
-            (24 * 60 * 60 * 1000),
-        ),
-      )
-    : props.nights;
+  // Day-use bookings have num_nights == 0 (check-out date == check-in date),
+  // and the stored rate is the flat price for the whole stay — so they bill
+  // exactly one unit, matching the server's billingUnits and the invoice
+  // builder. Without this clamp every day-use subtotal renders ₹0.00.
+  const rowNights = props.isShortStay
+    ? 1
+    : isSegmented
+      ? Math.max(
+          1,
+          Math.round(
+            (new Date(segTo).getTime() - new Date(segFrom).getTime()) /
+              (24 * 60 * 60 * 1000),
+          ),
+        )
+      : props.nights;
 
   // Per-room status pill colours. Maps the new reservation-room
   // statuses to badge styles (different from physical room status).

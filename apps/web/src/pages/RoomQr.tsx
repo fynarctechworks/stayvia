@@ -217,7 +217,7 @@ export default function RoomQr() {
 
       <QrTopNav
         hotelName={brochure.hotel.name}
-        logoUrl="/fyn-arc-logo.png"
+        logoUrl={brochure.hotel.logoUrl}
         right={
           <span className="inline-flex items-center gap-1.5 bg-white/10 border border-white/15 rounded-md px-2.5 h-9 shrink-0">
             <DoorOpen className="w-4 h-4 text-white/90" />

@@ -445,7 +445,10 @@ function EditStaffModal({ staff, onClose }: { staff: Staff; onClose: () => void 
             {selectedRole.permissions.includes("*") ? (
               <span className="font-semibold text-success">all permissions (god mode)</span>
             ) : (
-              <span>{selectedRole.permissions.length} permissions</span>
+              <span>
+                {selectedRole.permissions.length}{" "}
+                {selectedRole.permissions.length === 1 ? "permission" : "permissions"}
+              </span>
             )}
             . Effective for this user: <span className="font-mono">{effectivePerms.size}</span>
             {Object.keys(overrides).length > 0 && (

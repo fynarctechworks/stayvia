@@ -248,6 +248,11 @@ export default function HotelQr() {
                 const cats = groupByType(catalog.rooms);
                 const shownCats =
                   activeType === "all" ? cats : cats.filter((c) => c.slug === activeType);
+                // Stats in the band describe what is actually listed below,
+                // not the whole hotel — otherwise the count contradicts the
+                // list whenever a category filter is on.
+                const shownRooms = shownCats.flatMap((c) => c.rooms);
+                const fromRate = Math.min(...shownRooms.map((r) => r.baseRate));
                 return (
                   <>
                     {/* Arrival band — a warm greeting that sets the tone
@@ -293,11 +298,13 @@ export default function HotelQr() {
                         Free tonight
                       </span>
                       <span className="font-mono text-[13px] text-textSecondary">
-                        {catalog.rooms.length}
+                        {activeType === "all"
+                          ? shownRooms.length
+                          : `${shownRooms.length} of ${catalog.rooms.length}`}
                       </span>
                       <span className="flex-1 h-px bg-borderc" />
                       <span className="text-[11px] text-textSecondary whitespace-nowrap">
-                        from <span className="font-mono">{inr0(cats[0]!.fromRate)}</span>
+                        from <span className="font-mono">{inr0(fromRate)}</span>
                       </span>
                     </div>
 
@@ -593,6 +600,7 @@ export default function HotelQr() {
         <RoomDetailSheet
           room={detailRoom}
           selected={selected.includes(detailRoom.id)}
+          atCap={!selected.includes(detailRoom.id) && selected.length >= 3}
           onClose={() => setDetailRoom(null)}
           onSelect={() => {
             if (!selected.includes(detailRoom.id) && selected.length < 3) toggleRoom(detailRoom.id);
@@ -809,11 +817,13 @@ function EmptyRoomArt({ roomNumber, label }: { roomNumber: string; label: string
 function RoomDetailSheet({
   room: r,
   selected,
+  atCap,
   onClose,
   onSelect,
 }: {
   room: QrCatalogRoom;
   selected: boolean;
+  atCap: boolean;
   onClose: () => void;
   onSelect: () => void;
 }) {
@@ -888,9 +898,14 @@ function RoomDetailSheet({
             </div>
           </div>
 
-          <PrimaryButton onClick={onSelect}>
-            {selected ? "Selected ✓" : "Select this room"}
+          <PrimaryButton onClick={onSelect} disabled={atCap}>
+            {selected ? "Selected ✓" : atCap ? "Limit reached — 3 rooms max" : "Select this room"}
           </PrimaryButton>
+          {atCap && (
+            <p className="text-[11px] text-textSecondary text-center">
+              You can book up to 3 rooms. Deselect one to swap.
+            </p>
+          )}
         </div>
       </div>
     </div>

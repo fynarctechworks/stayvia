@@ -246,7 +246,9 @@ export default function MaintenanceDetail() {
             <div className="text-[15px] font-semibold text-ink">Updates</div>
             {issue.comments.length === 0 ? (
               <div className="text-xs text-textSecondary italic">
-                No updates yet. Use the box below to record progress.
+                {isClosed
+                  ? "No updates were recorded on this issue."
+                  : "No updates yet. Use the box below to record progress."}
               </div>
             ) : (
               <ul className="space-y-3.5">

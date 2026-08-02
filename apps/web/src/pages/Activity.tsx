@@ -59,11 +59,18 @@ export default function Activity() {
     [range, customFrom, customTo],
   );
 
+  // A native date input can be cleared (Backspace), leaving one side of the
+  // custom range blank. Querying then sends a single bound and returns the
+  // whole unbounded history under a half-written range label, so we hold the
+  // query until both dates are filled in.
+  const customIncomplete = range === "custom" && (!customFrom || !customTo);
+
   const { data = [], isLoading } = useQuery({
     queryKey: ["activity", { from, to }],
     queryFn: () =>
       api.get<ActivityRow[]>("/activity", { date_from: from, date_to: to }),
     refetchInterval: 30_000,
+    enabled: !customIncomplete,
   });
 
   // Apply the time-of-day filter client-side. Server already scoped by date,
@@ -196,7 +203,7 @@ export default function Activity() {
 
         <div className="ml-auto text-[11px] text-inkMuted flex items-center gap-1.5">
           <Calendar className="w-3.5 h-3.5" />
-          {from === to ? from : `${from} → ${to}`}
+          {customIncomplete ? "Pick a start and end date" : from === to ? from : `${from} → ${to}`}
           {(timeFrom || timeTo) && (
             <span className="font-mono">
               · {timeFrom || "00:00"}–{timeTo || "23:59"}
@@ -211,7 +218,15 @@ export default function Activity() {
       ) : groups.length === 0 ? (
         <div className="card flex flex-col items-center justify-center py-16 text-center text-textSecondary">
           <ActivityIcon className="w-8 h-8 mb-2 opacity-40" />
-          <div className="text-sm">No activity in this range.</div>
+          <div className="text-sm">
+            {customIncomplete
+              ? "Pick a start and end date to see activity."
+              : data.length > 0
+                ? `No activity between ${timeFrom || "00:00"} and ${timeTo || "23:59"}. ${data.length} entr${
+                    data.length === 1 ? "y" : "ies"
+                  } in this date range ${data.length === 1 ? "is" : "are"} outside that time window.`
+                : "No activity in this range."}
+          </div>
         </div>
       ) : (
         <div className="space-y-4">
