@@ -760,7 +760,7 @@ export default function ReservationDetail() {
               </span>
             )}
           </div>
-          <div className="font-mono text-[12.5px] text-inkMuted mt-0.5">
+          <div className="font-mono text-[12.5px] text-inkMuted mt-0.5 break-words">
             {r.reservationNumber}
             {rooms.length > 0 &&
               ` · Room ${rooms.map((rm) => rm.roomNumber).join(", ")}`}
@@ -777,7 +777,7 @@ export default function ReservationDetail() {
           !invoice &&
           can("extend_stay") && (
             <button
-              className="ml-auto btn-secondary inline-flex items-center gap-2 !h-9"
+              className="w-full sm:w-auto sm:ml-auto btn-secondary inline-flex items-center justify-center gap-2 !h-11 sm:!h-9"
               disabled={undoExtension.isPending}
               onClick={async () => {
                 const ok = await dialog.confirm({
@@ -813,9 +813,9 @@ export default function ReservationDetail() {
             </div>
           </div>
           {can("create_reservations") && (
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 w-full sm:w-auto">
               <button
-                className="btn-primary !h-9"
+                className="btn-primary !h-11 sm:!h-9 flex-1 sm:flex-none"
                 disabled={confirmHold.isPending}
                 onClick={() => confirmHold.mutate()}
               >
@@ -823,7 +823,7 @@ export default function ReservationDetail() {
               </button>
               {can("cancel_reservations") && (
                 <button
-                  className="btn-secondary !h-9"
+                  className="btn-secondary !h-11 sm:!h-9 flex-1 sm:flex-none"
                   onClick={async () => {
                     const ok = await dialog.confirm({
                       title: "Reject this booking request?",
@@ -895,9 +895,12 @@ export default function ReservationDetail() {
 
       {/* Two-column detail layout — main flow on the left, sticky Bill
           summary + guest card rail on the right (per the Warm Concierge
-          spec). Pure presentation: every card and control kept. */}
-      <div className="flex flex-wrap gap-4 items-start">
-        <div className="flex-[3_1_380px] min-w-0 space-y-4">
+          spec). Pure presentation: every card and control kept.
+          Below lg the rail drops BELOW the main column and loses its
+          sticky positioning — a pinned rail on a 390px screen eats the
+          viewport and there is no side space to pin it into. */}
+      <div className="flex flex-col lg:flex-row lg:flex-wrap gap-4 items-stretch lg:items-start">
+        <div className="w-full lg:flex-[3_1_380px] min-w-0 space-y-4">
         <div className="card">
           <h2 className="text-base font-semibold text-ink mb-4">Stay details</h2>
           <div className="grid grid-cols-[repeat(auto-fit,minmax(170px,1fr))] gap-x-4 gap-y-4 text-sm">
@@ -1015,28 +1018,31 @@ export default function ReservationDetail() {
       )}
 
       <div
-        className={`card flex items-center justify-between ${
+        className={`card flex items-center justify-between gap-3 flex-wrap ${
           kycVerified ? "!bg-successBg !border-successBorder" : "!bg-dangerBg !border-dangerBorder"
         }`}
       >
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3 min-w-0 flex-1 sm:min-w-[220px]">
           {kycVerified ? (
-            <ShieldCheck className="w-6 h-6 text-success" />
+            <ShieldCheck className="w-6 h-6 text-success shrink-0" />
           ) : (
-            <ShieldAlert className="w-6 h-6 text-danger" />
+            <ShieldAlert className="w-6 h-6 text-danger shrink-0" />
           )}
-          <div>
+          <div className="min-w-0">
             <div className="font-semibold text-ink">
               KYC {kycVerified ? "Verified" : "Required"}
             </div>
-            <div className="text-xs text-textSecondary">
+            <div className="text-xs text-textSecondary break-words">
               {kycVerified
                 ? `${guest?.idProofType?.toUpperCase() ?? "ID"} ending ••••${guest?.idProofLast4 ?? ""}`
                 : "Upload guest ID proof photo before check-in (Form C / Foreigners Order compliance)."}
             </div>
           </div>
         </div>
-        <button className="btn-secondary" onClick={() => setShowKyc(true)}>
+        <button
+          className="btn-secondary w-full sm:w-auto shrink-0"
+          onClick={() => setShowKyc(true)}
+        >
           {kycVerified ? "View / Replace" : "Upload Documents"}
         </button>
       </div>
@@ -1149,9 +1155,11 @@ export default function ReservationDetail() {
       {err && <div className="card !bg-dangerBg !border-dangerBorder text-dangerFg text-sm">{err}</div>}
 
       <div className="card p-0">
-        <div className="px-5 py-3.5 border-b border-divider text-base font-semibold text-ink">Rooms</div>
+        <div className="px-3 sm:px-5 py-3.5 border-b border-divider text-base font-semibold text-ink">Rooms</div>
         <table className="table-base">
-          <thead>
+          {/* Column headers make no sense above the phone cards below —
+              every row renders its own labels there. */}
+          <thead className="hidden md:table-header-group">
             <tr>
               <th>Room #</th>
               <th>Type</th>
@@ -1285,9 +1293,9 @@ export default function ReservationDetail() {
 
       {charges.length > 0 && (
         <div className="card p-0">
-          <div className="px-5 py-3.5 border-b border-divider text-base font-semibold text-ink">Additional Charges</div>
+          <div className="px-3 sm:px-5 py-3.5 border-b border-divider text-base font-semibold text-ink">Additional Charges</div>
           <table className="table-base">
-            <thead>
+            <thead className="hidden md:table-header-group">
               <tr>
                 <th>Description</th>
                 <th className="tabular-nums">GST%</th>
@@ -1330,7 +1338,7 @@ export default function ReservationDetail() {
           card with scope and guest visible. */}
       {(data.invoices ?? (invoice ? [invoice] : [])).length > 0 && (
         <div className="card p-0">
-          <div className="px-5 py-3.5 border-b border-divider flex items-center justify-between">
+          <div className="px-4 sm:px-5 py-3.5 border-b border-divider flex items-center justify-between gap-3 flex-wrap">
             <strong>
               Invoices (
               {(() => {
@@ -1387,7 +1395,7 @@ export default function ReservationDetail() {
                         invoice to create and no "reissue" step. */}
                     {uninvoicedRooms.length >= 2 && (
                       <button
-                        className="btn-secondary !h-8 text-xs inline-flex items-center gap-1"
+                        className="btn-secondary !h-11 sm:!h-8 text-xs inline-flex items-center gap-1"
                         onClick={() => setShowCombinedInvoice(true)}
                       >
                         + Combined Invoice
@@ -1453,8 +1461,11 @@ export default function ReservationDetail() {
               const totalRoomsOnRes = (data.rooms ?? []).length;
               const showScopeBadge = totalRoomsOnRes > 1;
               return (
-                <li key={inv.id} className="px-4 py-3 flex items-start justify-between gap-3">
-                  <div className="min-w-0">
+                <li
+                  key={inv.id}
+                  className="px-4 py-3 flex items-start justify-between gap-3 flex-wrap sm:flex-nowrap"
+                >
+                  <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2 flex-wrap">
                       <span className="font-mono font-bold text-ink">{richInv.invoiceNumber}</span>
                       {isCreditNote ? (
@@ -1472,7 +1483,7 @@ export default function ReservationDetail() {
                         </span>
                       )}
                     </div>
-                    <div className="text-xs text-textSecondary mt-0.5">
+                    <div className="text-xs text-textSecondary mt-0.5 break-words">
                       Grand Total{" "}
                       <span className="font-mono text-ink">{inr(richInv.grandTotal)}</span>
                       {Number(richInv.balanceDue) > 0.009 && (
@@ -1492,11 +1503,14 @@ export default function ReservationDetail() {
                       )}
                     </div>
                   </div>
-                  <div className="flex flex-col items-end gap-1.5 shrink-0">
+                  {/* Phone: the actions wrap onto their own full-width row
+                      under the invoice line rather than fighting it for the
+                      390px. sm+: the original right-aligned stack. */}
+                  <div className="flex flex-col items-stretch sm:items-end gap-1.5 w-full sm:w-auto sm:shrink-0">
                     <div className="flex gap-2">
                       {Number(richInv.balanceDue) > 0.009 && richInv.status !== "voided" && (
                         <button
-                          className="btn-primary !h-8 text-xs inline-flex items-center gap-1"
+                          className="btn-primary !h-11 sm:!h-8 flex-1 sm:flex-none justify-center text-xs inline-flex items-center gap-1"
                           onClick={() =>
                             setPostIssuePay({
                               invoiceId: richInv.id,
@@ -1509,7 +1523,7 @@ export default function ReservationDetail() {
                         </button>
                       )}
                       <button
-                        className="btn-secondary !h-8 text-xs inline-flex items-center gap-1"
+                        className="btn-secondary !h-11 sm:!h-8 flex-1 sm:flex-none justify-center text-xs inline-flex items-center gap-1"
                         onClick={() => previewInvoice(richInv.id, richInv.invoiceNumber)}
                       >
                         <FileDown className="w-3.5 h-3.5" /> Preview
@@ -1524,7 +1538,7 @@ export default function ReservationDetail() {
                       scope !== "room" &&
                       scopedRooms &&
                       scopedRooms.length >= 2 && (
-                        <div className="flex items-center gap-1 flex-wrap justify-end">
+                        <div className="flex items-center gap-1 flex-wrap justify-start sm:justify-end">
                           <span className="text-[10px] text-textSecondary">
                             Per-room bills:
                           </span>
@@ -1536,7 +1550,7 @@ export default function ReservationDetail() {
                                 onClick={() =>
                                   previewRoomBill(richInv.invoiceNumber, richInv.id, num)
                                 }
-                                className="text-[10px] font-mono font-semibold px-1.5 py-0.5 rounded-[6px] border border-borderControl text-inkBody hover:border-brand hover:bg-brand-soft"
+                                className="text-[10px] font-mono font-semibold px-2.5 min-h-[44px] sm:min-h-0 sm:px-1.5 sm:py-0.5 rounded-[6px] border border-borderControl text-inkBody hover:border-brand hover:bg-brand-soft"
                                 title={`Room ${num} bill (split of ${richInv.invoiceNumber})`}
                               >
                                 {num}
@@ -1558,7 +1572,7 @@ export default function ReservationDetail() {
                   <div className="border-t border-divider">
                     <button
                       onClick={() => setShowReversed((v) => !v)}
-                      className="w-full px-4 py-2 text-left text-xs text-textSecondary hover:bg-surfaceAlt flex items-center gap-1.5"
+                      className="w-full px-4 py-2 min-h-[44px] text-left text-xs text-textSecondary hover:bg-surfaceAlt flex items-center gap-1.5 flex-wrap"
                     >
                       <ChevronDown
                         className={`w-3.5 h-3.5 transition-transform ${showReversed ? "rotate-180" : ""}`}
@@ -1583,9 +1597,9 @@ export default function ReservationDetail() {
 
       {(payments.length > 0 || (r.walletLedger?.length ?? 0) > 0) && (
         <div className="card p-0">
-          <div className="px-5 py-3.5 border-b border-divider text-base font-semibold text-ink">Payment History</div>
+          <div className="px-3 sm:px-5 py-3.5 border-b border-divider text-base font-semibold text-ink">Payment History</div>
           <table className="table-base">
-            <thead>
+            <thead className="hidden md:table-header-group">
               <tr>
                 <th>Date</th>
                 <th>Method</th>
@@ -1643,8 +1657,9 @@ export default function ReservationDetail() {
       )}
         </div>
 
-        {/* Right rail — sticky Bill summary + guest card. */}
-        <div className="flex-[1_1_262px] min-w-[250px] space-y-4 lg:sticky lg:top-20">
+        {/* Right rail — Bill summary + guest card. Sticky only from lg,
+            where there is a column to pin it beside. */}
+        <div className="w-full min-w-0 lg:w-auto lg:flex-[1_1_262px] lg:min-w-[250px] space-y-4 lg:sticky lg:top-20">
           <div className="card">
             <h2 className="text-base font-semibold text-ink mb-3.5">Bill summary</h2>
             <div className="flex justify-between items-baseline py-1 text-[13.5px] text-inkBody">
@@ -2359,11 +2374,11 @@ function SwapClosedLegRow(props: {
   const segLabel = props.nights === 0 ? "Same-day swap" : "Whole stay moved";
   const hasAnyAmenity =
     props.fromRoom.hasAc || props.fromRoom.hasTv || props.fromRoom.hasWifi;
-  return (
-    <tr className="bg-surfaceAlt">
-      <td className="font-mono">
+  // Built once, rendered by the desktop row and the phone card below.
+  const body = (
+    <>
         <div className="flex items-center gap-2 flex-wrap">
-          <span className="text-textSecondary">{props.fromRoom.roomNumber}</span>
+          <span className="text-textSecondary font-mono">{props.fromRoom.roomNumber}</span>
         </div>
         <div className="mt-1 flex items-center gap-1.5 flex-wrap">
           <span className="text-[9px] uppercase tracking-wide font-semibold px-1.5 py-0.5 rounded-full border bg-neutralBg text-inkMuted border-neutralBorder">
@@ -2395,16 +2410,36 @@ function SwapClosedLegRow(props: {
             )}
           </div>
         )}
-      </td>
-      <td className="capitalize text-textSecondary">{props.fromRoom.displayType}</td>
-      <td className="font-mono tabular-nums text-textSecondary">-</td>
-      <td className="font-mono tabular-nums text-textSecondary">-</td>
-      <td className="text-right">
-        <span className="text-[10px] uppercase tracking-wider font-semibold px-2 py-0.5 rounded-full bg-neutralBg border border-neutralBorder text-inkMuted">
-          closed
-        </span>
-      </td>
-    </tr>
+    </>
+  );
+  const closedPill = (
+    <span className="text-[10px] uppercase tracking-wider font-semibold px-2 py-0.5 rounded-full bg-neutralBg border border-neutralBorder text-inkMuted">
+      closed
+    </span>
+  );
+  return (
+    <>
+      {/* DESKTOP */}
+      <tr className="bg-surfaceAlt hidden md:table-row">
+        <td className="font-mono">{body}</td>
+        <td className="capitalize text-textSecondary">{props.fromRoom.displayType}</td>
+        <td className="font-mono tabular-nums text-textSecondary">-</td>
+        <td className="font-mono tabular-nums text-textSecondary">-</td>
+        <td className="text-right">{closedPill}</td>
+      </tr>
+      {/* MOBILE */}
+      <tr className="bg-surfaceAlt md:hidden">
+        <td colSpan={5} className="!px-3 !py-3">
+          {body}
+          <div className="mt-2.5 flex items-center justify-between gap-3">
+            <span className="capitalize text-[13px] text-textSecondary min-w-0 break-words">
+              {props.fromRoom.displayType}
+            </span>
+            {closedPill}
+          </div>
+        </td>
+      </tr>
+    </>
   );
 }
 
@@ -2458,27 +2493,47 @@ function ExtensionBreakdownRows(props: {
     to: string,
     n: number,
     badge: { text: string; cls: string },
-  ) => (
-    <tr className="bg-surfaceAlt">
-      <td className="font-mono">
-        <div className="mt-0.5 flex items-center gap-1.5 flex-wrap pl-3">
-          <span className="text-textSecondary">↳</span>
-          <span
-            className={`text-[9px] uppercase tracking-wide font-semibold px-1.5 py-0.5 rounded-full border ${badge.cls}`}
-          >
-            {badge.text}
-          </span>
-          <span className="text-[11px] text-textSecondary font-mono">
-            {format(new Date(from), "dd MMM")} → {format(new Date(to), "dd MMM")} · {n}n
-          </span>
-        </div>
-      </td>
-      <td className="capitalize text-textSecondary text-xs">{label}</td>
-      <td className="font-mono tabular-nums text-textSecondary text-xs">{inr(rate)}</td>
-      <td className="font-mono tabular-nums text-textSecondary text-xs">{inr(rate * n)}</td>
-      <td></td>
-    </tr>
-  );
+  ) => {
+    const windowLine = (
+      <div className="flex items-center gap-1.5 flex-wrap">
+        <span className="text-textSecondary">↳</span>
+        <span
+          className={`text-[9px] uppercase tracking-wide font-semibold px-1.5 py-0.5 rounded-full border ${badge.cls}`}
+        >
+          {badge.text}
+        </span>
+        <span className="text-[11px] text-textSecondary font-mono">
+          {format(new Date(from), "dd MMM")} → {format(new Date(to), "dd MMM")} · {n}n
+        </span>
+      </div>
+    );
+    return (
+      <Fragment key={`${badge.text}-${from}-${to}`}>
+        {/* DESKTOP */}
+        <tr className="bg-surfaceAlt hidden md:table-row">
+          <td className="font-mono">
+            <div className="mt-0.5 pl-3">{windowLine}</div>
+          </td>
+          <td className="capitalize text-textSecondary text-xs">{label}</td>
+          <td className="font-mono tabular-nums text-textSecondary text-xs">{inr(rate)}</td>
+          <td className="font-mono tabular-nums text-textSecondary text-xs">{inr(rate * n)}</td>
+          <td></td>
+        </tr>
+        {/* MOBILE — same split, stacked under the room card it belongs to. */}
+        <tr className="bg-surfaceAlt md:hidden">
+          <td colSpan={5} className="!px-3 !py-2.5">
+            {windowLine}
+            <div className="mt-1.5 flex items-baseline justify-between gap-3 text-xs text-textSecondary">
+              <span className="capitalize min-w-0 break-words">{label}</span>
+              <span className="font-mono shrink-0">
+                {inr(rate)} × {n}n = <strong className="text-ink">{inr(rate * n)}</strong>
+              </span>
+            </div>
+          </td>
+        </tr>
+      </Fragment>
+    );
+  };
 
   if (props.mode === "added") {
     const n = nightsBetween(props.windowFrom, props.windowTo);
@@ -2659,10 +2714,12 @@ function RoomRow(props: {
     props.room.hasTv !== undefined ||
     props.room.hasWifi !== undefined;
 
-  return (
+  // Room identity block (number tile, per-room + housekeeping pills,
+  // occupant, swap/added timeline, amenities, re-let warning). Built once
+  // and rendered by BOTH the desktop row and the phone card below, so the
+  // two presentations can never drift apart.
+  const identity = (
     <>
-    <tr>
-      <td className="font-mono">
         <div className="flex items-center gap-2 flex-wrap">
           <span className="w-[42px] h-[42px] shrink-0 rounded-[11px] bg-inkDark text-cream grid place-items-center font-mono font-semibold text-sm">
             {props.room.roomNumber}
@@ -2833,15 +2890,14 @@ function RoomRow(props: {
             </span>
           </div>
         )}
-      </td>
-      <td className="capitalize">
-        {props.room.displayType ?? props.room.roomType.replace(/_/g, " ")}
-      </td>
-      <td className="font-mono tabular-nums">
-        {inr(props.room.ratePerNight)}
-      </td>
-      <td className="font-mono tabular-nums">{inr(rate * rowNights)}</td>
-      <td className="text-right">
+    </>
+  );
+
+  // Row actions (housekeeping status, Swap, Check Out, invoiced pill), or
+  // the read-only "closed" pill on a vacated swap leg. Also shared by both
+  // presentations; the tap targets grow to 44px below md.
+  const actions = (
+    <>
         {isClosedSwapLeg ? (
           // Closed leg of a swap. No actions — the row is historical,
           // the guest moved to the sibling room. Showing Check Out /
@@ -2857,7 +2913,7 @@ function RoomRow(props: {
           </span>
         ) : (
           <>
-            <div className="inline-flex gap-1 items-center">
+            <div className="inline-flex flex-wrap gap-1 items-center">
               {/* Hide the housekeeping Status changer once the room is
                   checked out (or cancelled) from this reservation's
                   perspective. A finished room's clean/dirty/available state
@@ -2876,7 +2932,7 @@ function RoomRow(props: {
                     invalidateKeys={[["reservation"], ["dashboard"]]}
                     trigger={
                       <span
-                        className="inline-block !h-7 !px-2 text-xs font-medium rounded-sm border border-borderControl bg-surface hover:bg-surfaceAlt cursor-pointer leading-[1.5rem] capitalize"
+                        className="inline-flex items-center h-11 md:h-7 px-3 md:px-2 text-xs font-medium rounded-sm border border-borderControl bg-surface hover:bg-surfaceAlt cursor-pointer capitalize"
                         title="Change room status"
                       >
                         Status…
@@ -2886,7 +2942,7 @@ function RoomRow(props: {
                 )}
               {props.room.roomStatus === "checked_in" && !props.room.roomInvoiceId && can("manage_rooms_on_stay") && (
                 <button
-                  className="btn-secondary !h-7 !px-2 text-xs"
+                  className="btn-secondary !h-11 md:!h-7 !px-3 md:!px-2 text-xs"
                   onClick={() => setShowSwap(true)}
                   title={
                     props.isShortStay
@@ -2899,7 +2955,7 @@ function RoomRow(props: {
               )}
               {props.room.roomStatus === "checked_in" && can("check_out") && (
                 <button
-                  className="btn-secondary !h-7 !px-2 text-xs"
+                  className="btn-secondary !h-11 md:!h-7 !px-3 md:!px-2 text-xs"
                   onClick={() => setShowRoomCheckout(true)}
                   title="Check this guest out & collect payment"
                 >
@@ -2922,16 +2978,80 @@ function RoomRow(props: {
             </div>
           </>
         )}
+    </>
+  );
+
+  const displayType =
+    props.room.displayType ?? props.room.roomType.replace(/_/g, " ");
+  const hasExtraBeds =
+    !isClosedSwapLeg &&
+    Number(props.room.extraBeds ?? 0) > 0 &&
+    Number(props.room.extraBedRate ?? 0) > 0;
+
+  return (
+    <>
+    {/* DESKTOP */}
+    <tr className="hidden md:table-row">
+      <td className="font-mono">{identity}</td>
+      <td className="capitalize">{displayType}</td>
+      <td className="font-mono tabular-nums">
+        {inr(props.room.ratePerNight)}
+      </td>
+      <td className="font-mono tabular-nums">{inr(rate * rowNights)}</td>
+      <td className="text-right">{actions}</td>
+    </tr>
+
+    {/* MOBILE — same room, stacked as a card. Identity on top, the
+        type / rate / subtotal meta right-aligned in font-mono, then the
+        row actions as full tap targets. */}
+    <tr className="md:hidden">
+      <td colSpan={5} className="!px-3 !py-3">
+        {identity}
+        <div className="mt-2.5 flex items-end justify-between gap-3">
+          <div className="min-w-0">
+            <div className="label">Type</div>
+            <div className="capitalize text-[13px] text-inkBody break-words">
+              {displayType}
+            </div>
+          </div>
+          <div className="text-right shrink-0">
+            <div className="font-mono text-sm font-semibold text-ink">
+              {inr(rate * rowNights)}
+            </div>
+            <div className="font-mono text-[11px] text-inkMuted">
+              {inr(props.room.ratePerNight)}
+              {props.isShortStay ? " / stay" : ` × ${rowNights}n`}
+            </div>
+          </div>
+        </div>
+        {hasExtraBeds && (
+          <div className="mt-1.5 flex items-baseline justify-between gap-3 text-[11px] text-textSecondary">
+            <span className="inline-flex items-center gap-1.5 min-w-0">
+              <span className="text-textSecondary/60">↳</span>
+              {props.room.extraBeds} extra person
+              {Number(props.room.extraBeds) === 1 ? "" : "s"} ·{" "}
+              {inr(Number(props.room.extraBedRate))}
+            </span>
+            <span className="font-mono shrink-0">
+              {inr(
+                Number(props.room.extraBedRate) *
+                  Number(props.room.extraBeds) *
+                  rowNights,
+              )}
+            </span>
+          </div>
+        )}
+        <div className="mt-2.5 flex flex-wrap gap-2">{actions}</div>
       </td>
     </tr>
+
     {/* Extra-person (extra bed) sub-line — billed on top of the room tariff
         for the room's own nights, at the same GST. Shown so the reservation
         grand total is self-explanatory (it's a separate line on the
-        invoice). Hidden on closed swap legs and when none were added. */}
-    {!isClosedSwapLeg &&
-      Number(props.room.extraBeds ?? 0) > 0 &&
-      Number(props.room.extraBedRate ?? 0) > 0 && (
-        <tr className="text-textSecondary">
+        invoice). Hidden on closed swap legs and when none were added.
+        Folded into the phone card above, so desktop-only here. */}
+    {hasExtraBeds && (
+        <tr className="text-textSecondary hidden md:table-row">
           <td className="pl-8 text-xs">
             <span className="inline-flex items-center gap-1.5">
               <span className="text-textSecondary/60">↳</span>
@@ -3273,7 +3393,7 @@ function SwapRoomModal(props: {
             {(["maintenance", "dirty", "available"] as const).map((s) => (
               <label
                 key={s}
-                className={`px-3 h-9 inline-flex items-center gap-2 rounded-sm border cursor-pointer text-sm capitalize ${
+                className={`px-3 h-11 sm:h-9 inline-flex items-center gap-2 rounded-sm border cursor-pointer text-sm capitalize ${
                   markOldRoomStatus === s
                     ? "border-brand bg-brand-soft text-brand-deep font-semibold"
                     : "border-borderControl text-textSecondary hover:border-brand"
@@ -3300,7 +3420,7 @@ function SwapRoomModal(props: {
             <div className="text-xs font-semibold uppercase tracking-wider text-warning">
               Issue details for Room {props.fromRoomNumber}
             </div>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
                 <label className="label block mb-1">
                   Category <span className="text-danger">*</span>
@@ -3337,7 +3457,7 @@ function SwapRoomModal(props: {
                   ))}
                 </select>
               </div>
-              <div className="col-span-2">
+              <div className="sm:col-span-2">
                 <label className="label block mb-1">
                   Title <span className="text-danger">*</span>
                 </label>
@@ -3349,7 +3469,7 @@ function SwapRoomModal(props: {
                   maxLength={200}
                 />
               </div>
-              <div className="col-span-2">
+              <div className="sm:col-span-2">
                 <label className="label block mb-1">
                   Description <span className="text-danger">*</span>
                 </label>
@@ -3361,7 +3481,7 @@ function SwapRoomModal(props: {
                   maxLength={2000}
                 />
               </div>
-              <div className="col-span-2">
+              <div className="sm:col-span-2">
                 <label className="label block mb-1">
                   Estimated cost (₹) <span className="text-danger">*</span>
                 </label>
@@ -3495,8 +3615,10 @@ function SwapRoomModal(props: {
               <div className="text-xs font-semibold uppercase tracking-wider text-textSecondary">
                 Rate per room
               </div>
-              <div className="flex items-center gap-3">
-                <div className="flex-1 min-w-0">
+              {/* Phone: room label takes its own line, rate input + line
+                  total sit under it. Three columns don't fit 390px. */}
+              <div className="flex items-center gap-3 flex-wrap">
+                <div className="w-full sm:flex-1 sm:w-auto min-w-0">
                   <div className="font-mono font-bold text-ink text-sm">
                     {picked.roomNumber}
                   </div>
@@ -3508,7 +3630,7 @@ function SwapRoomModal(props: {
                     <span> · base ₹{Number(picked.baseRate).toFixed(0)}/n</span>
                   </div>
                 </div>
-                <div className="w-32">
+                <div className="flex-1 sm:flex-none sm:w-32">
                   <input
                     className="input"
                     type="number"
@@ -3519,7 +3641,7 @@ function SwapRoomModal(props: {
                     onChange={(e) => setRateOverride(e.target.value)}
                   />
                 </div>
-                <div className="w-24 text-right text-xs font-mono text-ink">
+                <div className="w-24 text-right text-xs font-mono text-ink shrink-0">
                   {remainingNights > 0 ? `= ₹${lineTotal.toFixed(2)}` : ""}
                 </div>
               </div>
@@ -3539,7 +3661,7 @@ function SwapRoomModal(props: {
           </div>
         )}
 
-        <div className="flex items-center justify-end gap-2 pt-1">
+        <div className="flex flex-wrap items-center justify-end gap-2 pt-1">
           <button className="btn-secondary" onClick={props.onClose}>
             Cancel
           </button>
@@ -3655,106 +3777,146 @@ function ChargeRow(props: {
       api.del(`/reservations/${props.reservationId}/charges/${props.charge.id}`),
     onSuccess: props.onSaved,
   });
-  return (
-    <tr>
-      <td>
-        {editing ? (
-          <input
-            className="input !h-8 !py-0"
-            value={description}
-            onChange={(e) => setDescription(e.target.value)}
-          />
-        ) : (
-          props.charge.description
-        )}
-      </td>
-      <td className="tabular-nums">{props.charge.gstRate}%</td>
-      <td className="text-xs text-textSecondary">
-        {format(new Date(props.charge.createdAt), "dd MMM HH:mm")}
-      </td>
-      <td className="font-mono tabular-nums">
-        {editing ? (
-          <input
-            className="input !h-8 !py-0 w-24"
-            type="number"
-            min={0}
-            step="0.01"
-            value={amount === 0 ? "" : amount}
-            onChange={(e) => {
-              const v = e.target.value;
-              setAmount(v === "" ? 0 : Number(v));
-            }}
-          />
-        ) : (
-          inr(displayAmount)
-        )}
-      </td>
-      <td className="text-right">
-        {/* Explain the missing delete button rather than leaving a blank gap —
-            staff previously deleted this row expecting it to undo the
-            extension, and instead silently under-billed the stay. */}
-        {props.charge.source === "stay_extension" && !editing && (
-          <span
-            className="mr-1 inline-flex items-center gap-1 text-[10px] uppercase tracking-wider text-textSecondary"
-            title="Part of the stay extension. Use Undo Extension to roll back the dates and this charge together — deleting it alone would leave the stay extended but billed at the old room rate."
-          >
-            <Lock className="w-3 h-3" />
-            Extension
-          </span>
-        )}
-        {(props.canEdit || props.canDelete) && !editing && (
-          <div className="inline-flex gap-1">
-            {props.canEdit && (
-              <button
-                className="btn-secondary !h-7 !px-2"
-                onClick={() => setEditing(true)}
-                title="Edit"
-              >
-                <Pencil className="w-3.5 h-3.5" />
-              </button>
-            )}
-            {props.canDelete && (
-              <button
-                className="btn-secondary !h-7 !px-2 text-danger"
-                onClick={async () => {
-                  const ok = await dialog.confirm({
-                    title: "Delete charge",
-                    message: `Remove "${props.charge.description}" from this reservation?`,
-                    okLabel: "Delete",
-                    tone: "danger",
-                  });
-                  if (ok) del.mutate();
-                }}
-                title="Delete"
-              >
-                <Trash2 className="w-3.5 h-3.5" />
-              </button>
-            )}
-          </div>
-        )}
-        {editing && (
-          <div className="inline-flex gap-1">
+  // Same three fragments in both presentations — only the arrangement
+  // differs between the desktop row and the phone card.
+  const descriptionCell = editing ? (
+    <input
+      className="input !h-9 md:!h-8 !py-0"
+      value={description}
+      onChange={(e) => setDescription(e.target.value)}
+    />
+  ) : (
+    props.charge.description
+  );
+  const amountCell = editing ? (
+    <input
+      className="input !h-9 md:!h-8 !py-0 w-full md:w-24"
+      type="number"
+      min={0}
+      step="0.01"
+      value={amount === 0 ? "" : amount}
+      onChange={(e) => {
+        const v = e.target.value;
+        setAmount(v === "" ? 0 : Number(v));
+      }}
+    />
+  ) : (
+    inr(displayAmount)
+  );
+  // Whether the actions slot renders anything — the phone card skips its
+  // action row entirely when it doesn't, so it isn't left with a blank gap.
+  const hasRowActions =
+    editing ||
+    props.charge.source === "stay_extension" ||
+    props.canEdit ||
+    props.canDelete;
+  const rowActions = (
+    <>
+      {/* Explain the missing delete button rather than leaving a blank gap —
+          staff previously deleted this row expecting it to undo the
+          extension, and instead silently under-billed the stay. */}
+      {props.charge.source === "stay_extension" && !editing && (
+        <span
+          className="mr-1 inline-flex items-center gap-1 text-[10px] uppercase tracking-wider text-textSecondary"
+          title="Part of the stay extension. Use Undo Extension to roll back the dates and this charge together — deleting it alone would leave the stay extended but billed at the old room rate."
+        >
+          <Lock className="w-3 h-3" />
+          Extension
+        </span>
+      )}
+      {(props.canEdit || props.canDelete) && !editing && (
+        <div className="inline-flex gap-1">
+          {props.canEdit && (
             <button
-              className="btn-secondary !h-7 !px-2 text-xs"
-              onClick={() => {
-                setDescription(props.charge.description);
-                setAmount(displayAmount);
-                setEditing(false);
+              className="btn-secondary !h-11 md:!h-7 !px-3 md:!px-2"
+              onClick={() => setEditing(true)}
+              title="Edit"
+              aria-label={`Edit charge ${props.charge.description}`}
+            >
+              <Pencil className="w-3.5 h-3.5" />
+            </button>
+          )}
+          {props.canDelete && (
+            <button
+              className="btn-secondary !h-11 md:!h-7 !px-3 md:!px-2 text-danger"
+              onClick={async () => {
+                const ok = await dialog.confirm({
+                  title: "Delete charge",
+                  message: `Remove "${props.charge.description}" from this reservation?`,
+                  okLabel: "Delete",
+                  tone: "danger",
+                });
+                if (ok) del.mutate();
               }}
+              title="Delete"
+              aria-label={`Delete charge ${props.charge.description}`}
             >
-              Cancel
+              <Trash2 className="w-3.5 h-3.5" />
             </button>
-            <button
-              className="btn-primary !h-7 !px-2 text-xs"
-              disabled={save.isPending || amount <= 0 || !description.trim()}
-              onClick={() => save.mutate()}
+          )}
+        </div>
+      )}
+      {editing && (
+        <div className="inline-flex gap-1">
+          <button
+            className="btn-secondary !h-11 md:!h-7 !px-3 md:!px-2 text-xs"
+            onClick={() => {
+              setDescription(props.charge.description);
+              setAmount(displayAmount);
+              setEditing(false);
+            }}
+          >
+            Cancel
+          </button>
+          <button
+            className="btn-primary !h-11 md:!h-7 !px-3 md:!px-2 text-xs"
+            disabled={save.isPending || amount <= 0 || !description.trim()}
+            onClick={() => save.mutate()}
+          >
+            {save.isPending ? "…" : "Save"}
+          </button>
+        </div>
+      )}
+    </>
+  );
+
+  return (
+    <>
+      {/* DESKTOP */}
+      <tr className="hidden md:table-row">
+        <td>{descriptionCell}</td>
+        <td className="tabular-nums">{props.charge.gstRate}%</td>
+        <td className="text-xs text-textSecondary">
+          {format(new Date(props.charge.createdAt), "dd MMM HH:mm")}
+        </td>
+        <td className="font-mono tabular-nums">{amountCell}</td>
+        <td className="text-right">{rowActions}</td>
+      </tr>
+
+      {/* MOBILE — description on top, GST + added-at in the muted meta
+          line, amount right-aligned in font-mono, actions below. */}
+      <tr className="md:hidden">
+        <td colSpan={5} className="!px-3 !py-3">
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0 flex-1">
+              <div className="text-sm text-ink break-words">{descriptionCell}</div>
+              <div className="text-[11px] text-inkMuted mt-1">
+                GST {props.charge.gstRate}% ·{" "}
+                {format(new Date(props.charge.createdAt), "dd MMM HH:mm")}
+              </div>
+            </div>
+            <div
+              className={`font-mono tabular-nums text-sm font-semibold text-ink ${editing ? "w-28" : "shrink-0"}`}
             >
-              {save.isPending ? "…" : "Save"}
-            </button>
+              {amountCell}
+            </div>
           </div>
-        )}
-      </td>
-    </tr>
+          {hasRowActions && (
+            <div className="mt-2 flex flex-wrap items-center gap-2">{rowActions}</div>
+          )}
+        </td>
+      </tr>
+    </>
   );
 }
 
@@ -3786,57 +3948,75 @@ function PaymentRow(props: {
 
   if (props.payment.voided) {
     return (
-      <tr className="opacity-50">
-        <td className="line-through">{format(new Date(props.payment.paymentDate), "dd MMM yyyy HH:mm")}</td>
-        <td className="capitalize line-through">{props.payment.paymentMethod.replace("_", " ")}</td>
-        <td className="text-xs text-danger">VOIDED</td>
-        <td className="font-mono tabular-nums line-through">{inr(props.payment.amount)}</td>
-        <td></td>
-      </tr>
+      <>
+        {/* DESKTOP */}
+        <tr className="opacity-50 hidden md:table-row">
+          <td className="line-through">{format(new Date(props.payment.paymentDate), "dd MMM yyyy HH:mm")}</td>
+          <td className="capitalize line-through">{props.payment.paymentMethod.replace("_", " ")}</td>
+          <td className="text-xs text-danger">VOIDED</td>
+          <td className="font-mono tabular-nums line-through">{inr(props.payment.amount)}</td>
+          <td></td>
+        </tr>
+        {/* MOBILE */}
+        <tr className="opacity-50 md:hidden">
+          <td colSpan={5} className="!px-3 !py-3">
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0 flex-1">
+                <div className="text-sm capitalize line-through text-ink">
+                  {props.payment.paymentMethod.replace("_", " ")}
+                </div>
+                <div className="text-[11px] text-inkMuted line-through mt-0.5">
+                  {format(new Date(props.payment.paymentDate), "dd MMM yyyy HH:mm")}
+                </div>
+                <div className="text-[11px] text-danger font-semibold mt-0.5">VOIDED</div>
+              </div>
+              <div className="font-mono tabular-nums text-sm line-through shrink-0">
+                {inr(props.payment.amount)}
+              </div>
+            </div>
+          </td>
+        </tr>
+      </>
     );
   }
 
-  return (
-    <tr>
-      <td>
-        {/* Green check tile — received payments read as settled at a glance
-            (Warm Concierge); pending rows get an amber clock instead. */}
-        <div className="flex items-center gap-2.5">
-          <span
-            className={`w-8 h-8 shrink-0 rounded-[9px] grid place-items-center ${
-              isPending ? "bg-warnBg text-warnFg" : "bg-successBg text-success"
-            }`}
-            aria-hidden="true"
-          >
-            {isPending ? <Clock className="w-4 h-4" /> : <CheckCircle2 className="w-4 h-4" />}
-          </span>
-          <span>{format(new Date(props.payment.paymentDate), "dd MMM yyyy HH:mm")}</span>
-        </div>
-      </td>
-      <td className="capitalize">
-        <div className="flex items-center gap-2">
-          <span>{props.payment.paymentMethod.replace("_", " ")}</span>
-          {isPending && (
-            <span className="text-[9px] uppercase tracking-wider px-1.5 py-0.5 rounded-full font-bold bg-warnBg text-warnFg border border-warnBorder">
-              Pending
-            </span>
-          )}
-        </div>
-      </td>
-      <td className="font-mono text-xs">
-        <div>
-          {props.payment.receiptNumber && (
-            <div className="text-[10px] text-ink">{props.payment.receiptNumber}</div>
-          )}
-          <div className="text-textSecondary">{props.payment.notes ?? ""}</div>
-        </div>
-      </td>
-      <td className="font-mono tabular-nums">{inr(props.payment.amount)}</td>
-      <td className="text-right">
-        <div className="inline-flex gap-1">
+  // Shared fragments — same data, two arrangements.
+  const statusTile = (
+    <span
+      className={`w-8 h-8 shrink-0 rounded-[9px] grid place-items-center ${
+        isPending ? "bg-warnBg text-warnFg" : "bg-successBg text-success"
+      }`}
+      aria-hidden="true"
+    >
+      {isPending ? <Clock className="w-4 h-4" /> : <CheckCircle2 className="w-4 h-4" />}
+    </span>
+  );
+  const methodLabel = (
+    <div className="flex items-center gap-2 flex-wrap capitalize">
+      <span>{props.payment.paymentMethod.replace("_", " ")}</span>
+      {isPending && (
+        <span className="text-[9px] uppercase tracking-wider px-1.5 py-0.5 rounded-full font-bold bg-warnBg text-warnFg border border-warnBorder">
+          Pending
+        </span>
+      )}
+    </div>
+  );
+  const noteBlock = (
+    <div className="font-mono text-xs min-w-0">
+      {props.payment.receiptNumber && (
+        <div className="text-[10px] text-ink break-words">{props.payment.receiptNumber}</div>
+      )}
+      <div className="text-textSecondary break-words">{props.payment.notes ?? ""}</div>
+    </div>
+  );
+
+  // Same guard as ChargeRow: no actions → no action row on the phone card.
+  const hasRowActions = isPending || !!props.payment.receiptNumber;
+  const rowActions = (
+    <div className="inline-flex flex-wrap gap-1">
             {isPending && (
               <button
-                className="!h-7 !px-2 text-xs font-semibold rounded-sm bg-success text-white border border-success hover:opacity-90 inline-flex items-center gap-1"
+                className="!h-11 md:!h-7 !px-3 md:!px-2 text-xs font-semibold rounded-sm bg-success text-white border border-success hover:opacity-90 inline-flex items-center gap-1"
                 onClick={async () => {
                   const chosen = await dialog.prompt({
                     title: "Mark payment received",
@@ -3866,9 +4046,10 @@ function PaymentRow(props: {
                 accounting entries, not receipts. */}
             {props.payment.receiptNumber && (
               <button
-                className="btn-secondary !h-7 !px-2"
+                className="btn-secondary !h-11 md:!h-7 !px-3 md:!px-2"
                 onClick={props.onPrintReceipt}
                 title={`Preview receipt ${props.payment.receiptNumber ?? ""}`}
+                aria-label={`Preview receipt ${props.payment.receiptNumber ?? ""}`}
               >
                 <Eye className="w-3.5 h-3.5" />
               </button>
@@ -3878,9 +4059,52 @@ function PaymentRow(props: {
                 an error, void the original by cancelling the
                 reservation (which auto-voids its payments) and
                 re-record. */}
+    </div>
+  );
+
+  return (
+    <>
+      {/* DESKTOP */}
+      <tr className="hidden md:table-row">
+        <td>
+          {/* Green check tile — received payments read as settled at a glance
+              (Warm Concierge); pending rows get an amber clock instead. */}
+          <div className="flex items-center gap-2.5">
+            {statusTile}
+            <span>{format(new Date(props.payment.paymentDate), "dd MMM yyyy HH:mm")}</span>
           </div>
-      </td>
-    </tr>
+        </td>
+        <td>{methodLabel}</td>
+        <td>{noteBlock}</td>
+        <td className="font-mono tabular-nums">{inr(props.payment.amount)}</td>
+        <td className="text-right">{rowActions}</td>
+      </tr>
+
+      {/* MOBILE — status tile + method on top, date and notes as muted
+          meta, amount right-aligned in font-mono, actions below. */}
+      <tr className="md:hidden">
+        <td colSpan={5} className="!px-3 !py-3">
+          <div className="flex items-start justify-between gap-3">
+            <div className="flex items-start gap-2.5 min-w-0 flex-1">
+              {statusTile}
+              <div className="min-w-0">
+                <div className="text-sm text-ink font-medium">{methodLabel}</div>
+                <div className="text-[11px] text-inkMuted mt-0.5">
+                  {format(new Date(props.payment.paymentDate), "dd MMM yyyy HH:mm")}
+                </div>
+                <div className="mt-0.5">{noteBlock}</div>
+              </div>
+            </div>
+            <div className="font-mono tabular-nums text-sm font-semibold text-ink shrink-0">
+              {inr(props.payment.amount)}
+            </div>
+          </div>
+          {hasRowActions && (
+            <div className="mt-2 flex flex-wrap gap-2">{rowActions}</div>
+          )}
+        </td>
+      </tr>
+    </>
   );
 }
 
@@ -4031,7 +4255,7 @@ function AddRoomModal(props: {
             flat rate. Date pickers don't apply.
           </div>
         ) : (
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label className="label block mb-1">Start Date</label>
               <input
@@ -4192,8 +4416,10 @@ function AddRoomModal(props: {
               if (!rm) return null;
               const rate = picked[id] ?? 0;
               return (
-                <div key={id} className="flex items-center gap-3">
-                  <div className="flex-1 min-w-0">
+                <div key={id} className="flex items-center gap-3 flex-wrap">
+                  {/* Phone: room label on its own line, rate + line total
+                      under it — three columns don't fit 390px. */}
+                  <div className="w-full sm:flex-1 sm:w-auto min-w-0">
                     <div className="font-mono font-bold text-ink text-sm">
                       {rm.roomNumber}
                     </div>
@@ -4205,7 +4431,7 @@ function AddRoomModal(props: {
                       <span> · base ₹{Number(rm.baseRate).toFixed(0)}/n</span>
                     </div>
                   </div>
-                  <div className="w-32">
+                  <div className="flex-1 sm:flex-none sm:w-32">
                     <input
                       className="input"
                       type="number"
@@ -4218,14 +4444,14 @@ function AddRoomModal(props: {
                       }
                     />
                   </div>
-                  <div className="w-24 text-right text-xs font-mono text-ink">
+                  <div className="w-24 text-right text-xs font-mono text-ink shrink-0">
                     {nights > 0 ? `= ₹${(rate * nights).toFixed(2)}` : ""}
                   </div>
                 </div>
               );
             })}
             {nights > 0 && (
-              <div className="flex justify-between border-t border-divider pt-2 mt-2 text-sm">
+              <div className="flex justify-between gap-3 border-t border-divider pt-2 mt-2 text-sm">
                 <strong>
                   {pickedIds.length} room{pickedIds.length === 1 ? "" : "s"}
                   {isShortStay
@@ -4248,7 +4474,7 @@ function AddRoomModal(props: {
             Adding room {progress.done + 1} of {progress.total}…
           </div>
         )}
-        <div className="flex justify-end gap-2 pt-1">
+        <div className="flex flex-wrap justify-end gap-2 pt-1">
           <button
             className="btn-secondary"
             onClick={props.onClose}
@@ -4542,7 +4768,7 @@ function ExtendModal(props: {
                 return (
                   <label
                     key={rm.id}
-                    className={`flex items-center gap-2 px-3 py-2 text-sm ${
+                    className={`flex items-center gap-2 flex-wrap px-3 py-2 min-h-[44px] text-sm ${
                       disabled
                         ? "opacity-50 cursor-not-allowed"
                         : isOn
@@ -4618,7 +4844,7 @@ function ExtendModal(props: {
                 <div className="flex items-center gap-2">
                   <span className="text-xs text-textSecondary shrink-0">Continue in:</span>
                   <select
-                    className="input !h-8 text-sm"
+                    className="input !h-11 sm:!h-8 text-sm min-w-0"
                     value={moves[b.roomId] ?? ""}
                     onChange={(e) =>
                       setMoves((m) => ({ ...m, [b.roomId]: e.target.value }))
@@ -4750,7 +4976,7 @@ function ExtendModal(props: {
           </div>
         )}
         {err && <div className="text-danger text-sm">{err}</div>}
-        <div className="flex justify-end gap-2">
+        <div className="flex flex-wrap justify-end gap-2">
           <button className="btn-secondary" onClick={props.onClose}>Cancel</button>
           <button
             className="btn-primary"
@@ -4848,9 +5074,9 @@ function CancelReservationModal(props: {
                 <span className="text-textSecondary">Advance paid</span>
                 <span className="font-mono">₹{props.advancePaid.toFixed(2)}</span>
               </div>
-              <div className="flex items-center justify-between text-sm">
-                <span className="text-textSecondary">Cancellation fee (withheld)</span>
-                <div className="w-32">
+              <div className="flex items-center justify-between gap-3 text-sm flex-wrap">
+                <span className="text-textSecondary min-w-0">Cancellation fee (withheld)</span>
+                <div className="w-full sm:w-32">
                   <input
                     className="input text-right"
                     type="number"
@@ -4884,7 +5110,7 @@ function CancelReservationModal(props: {
                   ).map((opt) => (
                     <label
                       key={opt.v}
-                      className={`px-3 h-9 inline-flex items-center gap-2 rounded-sm border cursor-pointer text-sm ${
+                      className={`px-3 h-11 sm:h-9 inline-flex items-center gap-2 rounded-sm border cursor-pointer text-sm ${
                         refundMode === opt.v
                           ? "border-brand bg-brand-soft text-brand-deep font-semibold"
                           : "border-borderControl text-textSecondary hover:border-brand"
@@ -4910,7 +5136,7 @@ function CancelReservationModal(props: {
           </>
         )}
 
-        <div className="flex items-center justify-end gap-2 pt-1">
+        <div className="flex flex-wrap items-center justify-end gap-2 pt-1">
           <button
             className="btn-secondary"
             onClick={props.onClose}
@@ -4966,7 +5192,7 @@ function LateCheckoutModal(props: {
           optional agreed fee (added to the bill now). The stay won't show as
           overdue until the granted time passes.
         </div>
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div>
             <label className="label block mb-1">Extra Hours</label>
             <input
@@ -5008,7 +5234,7 @@ function LateCheckoutModal(props: {
           />
         </div>
         {err && <div className="text-danger text-sm">{err}</div>}
-        <div className="flex justify-end gap-2">
+        <div className="flex flex-wrap justify-end gap-2">
           <button className="btn-secondary" onClick={props.onClose}>Cancel</button>
           <button
             className="btn-primary"
@@ -5156,7 +5382,7 @@ function ChargeModal(props: {
                 return (
                   <label
                     key={rm.id}
-                    className={`flex items-center gap-2 px-3 py-2 text-sm cursor-pointer ${
+                    className={`flex items-center gap-2 flex-wrap px-3 py-2 min-h-[44px] text-sm cursor-pointer ${
                       rm.invoiced
                         ? "opacity-50 cursor-not-allowed"
                         : isOn
@@ -5192,7 +5418,7 @@ function ChargeModal(props: {
             </div>
           </div>
         )}
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div>
             <label className="label block mb-1">Amount (₹)</label>
             <input
@@ -5219,7 +5445,7 @@ function ChargeModal(props: {
           </div>
         </div>
         {err && <div className="text-danger text-sm">{err}</div>}
-        <div className="flex justify-end gap-2">
+        <div className="flex flex-wrap justify-end gap-2">
           <button className="btn-secondary" onClick={props.onClose}>Cancel</button>
           <button
             className="btn-primary"
@@ -5351,7 +5577,7 @@ function PaymentModal(props: {
           />
         </div>
         {err && <div className="text-danger text-sm">{err}</div>}
-        <div className="flex justify-end gap-2">
+        <div className="flex flex-wrap justify-end gap-2">
           <button className="btn-secondary" onClick={props.onClose}>Cancel</button>
           <button
             className="btn-primary"
@@ -5506,35 +5732,35 @@ function PerRoomCheckoutModal(props: {
             )}
           </div>
           <div className="border border-divider rounded-sm p-3 space-y-1 bg-surfaceAlt">
-            <div className="flex justify-between text-sm">
+            <div className="flex justify-between gap-3 text-sm">
               <span className="text-textSecondary">Subtotal (room charges + extras, pre-GST)</span>
               <span className="font-mono">{inr(quoteQ.data.subtotal)}</span>
             </div>
-            <div className="flex justify-between text-sm">
+            <div className="flex justify-between gap-3 text-sm">
               <span className="text-textSecondary">CGST (Central GST, half of total tax)</span>
               <span className="font-mono">{inr(quoteQ.data.cgst)}</span>
             </div>
-            <div className="flex justify-between text-sm">
+            <div className="flex justify-between gap-3 text-sm">
               <span className="text-textSecondary">SGST (State GST, half of total tax)</span>
               <span className="font-mono">{inr(quoteQ.data.sgst)}</span>
             </div>
-            <div className="flex justify-between text-sm">
+            <div className="flex justify-between gap-3 text-sm">
               <span className="text-textSecondary">Total GST</span>
               <span className="font-mono">{inr(quoteQ.data.gst)}</span>
             </div>
-            <div className="flex justify-between text-sm border-t border-divider pt-2 mt-2">
+            <div className="flex justify-between gap-3 text-sm border-t border-divider pt-2 mt-2">
               <span className="text-textSecondary">Grand Total</span>
               <span className="font-mono">{inr(quoteQ.data.grandTotal)}</span>
             </div>
             {quoteQ.data.alreadyInvoiced && quoteQ.data.totalPaid > 0.009 && (
-              <div className="flex justify-between text-sm">
+              <div className="flex justify-between gap-3 text-sm">
                 <span className="text-textSecondary">Already paid</span>
                 <span className="font-mono">− {inr(quoteQ.data.totalPaid)}</span>
               </div>
             )}
             {!quoteQ.data.alreadyInvoiced &&
               (quoteQ.data.advanceApplied ?? 0) > 0.009 && (
-                <div className="flex justify-between text-sm">
+                <div className="flex justify-between gap-3 text-sm">
                   <span className="text-textSecondary">
                     Advance applied to this room
                   </span>
@@ -5543,7 +5769,7 @@ function PerRoomCheckoutModal(props: {
                   </span>
                 </div>
               )}
-            <div className="flex justify-between border-t border-divider pt-2 mt-2">
+            <div className="flex justify-between gap-3 border-t border-divider pt-2 mt-2">
               <strong>{due <= 0.009 ? "Due now" : "Balance due now"}</strong>
               <strong className={`font-mono ${due <= 0.009 ? "text-success" : ""}`}>
                 {inr(due)}
@@ -5552,7 +5778,7 @@ function PerRoomCheckoutModal(props: {
           </div>
           {due > 0.009 && (
             <>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="label block mb-1">Payment amount (₹)</label>
                   <input
@@ -5634,7 +5860,7 @@ function PerRoomCheckoutModal(props: {
             </>
           )}
           {err && <div className="text-danger text-sm">{err}</div>}
-          <div className="flex justify-end gap-2 pt-2">
+          <div className="flex flex-wrap justify-end gap-2 pt-2">
             <button className="btn-secondary" onClick={props.onClose}>
               Cancel
             </button>
@@ -5896,7 +6122,7 @@ function CombinedInvoiceModal({
             <span className="text-sm font-medium">Collect payment with this invoice</span>
           </label>
           {collectNow && (
-            <div className="grid grid-cols-2 gap-3 pt-1">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
               <div>
                 <label className="label block mb-1">Amount (₹)</label>
                 <input
@@ -5929,7 +6155,7 @@ function CombinedInvoiceModal({
                   <option value="bank_transfer">Bank transfer</option>
                 </select>
               </div>
-              <div className="col-span-2">
+              <div className="sm:col-span-2">
                 <label className="label block mb-1">Notes (optional)</label>
                 <input
                   className="input"
@@ -5944,7 +6170,7 @@ function CombinedInvoiceModal({
 
         {err && <div className="text-danger text-sm">{err}</div>}
 
-        <div className="flex justify-end gap-2">
+        <div className="flex flex-wrap justify-end gap-2">
           <button className="btn-secondary" onClick={onClose} disabled={issue.isPending}>
             Cancel
           </button>
@@ -6415,7 +6641,7 @@ function CheckoutModal(props: {
           {props.remainingRoomCount > 1 && <InvoiceModeToggle value={combineIntoOne} onChange={setCombineIntoOne} count={props.remainingRoomCount} />}
 
           {err && <div className="text-danger text-sm">{err}</div>}
-          <div className="flex justify-end gap-2">
+          <div className="flex flex-wrap justify-end gap-2">
             <button className="btn-secondary" onClick={props.onClose}>
               Cancel
             </button>
@@ -6484,7 +6710,7 @@ function CheckoutModal(props: {
             // the single combined subtotal line as before.
             if (props.additionalCharges.length === 0) {
               return (
-                <div className="flex justify-between text-sm">
+                <div className="flex justify-between gap-3 text-sm">
                   <span className="text-textSecondary">
                     Subtotal (room charges, pre-GST)
                   </span>
@@ -6494,12 +6720,12 @@ function CheckoutModal(props: {
             }
             return (
               <>
-                <div className="flex justify-between text-sm">
+                <div className="flex justify-between gap-3 text-sm">
                   <span className="text-textSecondary">Room charges (pre-GST)</span>
                   <span className="font-mono">{inr(roomPortion)}</span>
                 </div>
                 {props.additionalCharges.map((c, i) => (
-                  <div key={i} className="flex justify-between text-sm">
+                  <div key={i} className="flex justify-between gap-3 text-sm">
                     <span className="text-textSecondary pl-3">· {c.description}</span>
                     <span className="font-mono">{inr(c.amount)}</span>
                   </div>
@@ -6511,15 +6737,15 @@ function CheckoutModal(props: {
               </>
             );
           })()}
-          <div className="flex justify-between text-sm">
+          <div className="flex justify-between gap-3 text-sm">
             <span className="text-textSecondary">CGST (Central GST, half of total tax)</span>
             <span className="font-mono">{inr(cgst)}</span>
           </div>
-          <div className="flex justify-between text-sm">
+          <div className="flex justify-between gap-3 text-sm">
             <span className="text-textSecondary">SGST (State GST, half of total tax)</span>
             <span className="font-mono">{inr(sgst)}</span>
           </div>
-          <div className="flex justify-between text-sm">
+          <div className="flex justify-between gap-3 text-sm">
             <span className="text-textSecondary">Total GST</span>
             <span className="font-mono">{inr(props.totalGst)}</span>
           </div>
@@ -6529,15 +6755,15 @@ function CheckoutModal(props: {
               <span className="font-mono">{inr(lateFeeAmount)}</span>
             </div>
           )}
-          <div className="flex justify-between text-sm border-t border-divider pt-2 mt-2">
+          <div className="flex justify-between gap-3 text-sm border-t border-divider pt-2 mt-2">
             <span className="text-textSecondary">Grand Total (bill for this stay)</span>
             <span className="font-mono">{inr(props.grandTotal + lateFeeAmount)}</span>
           </div>
-          <div className="flex justify-between text-sm">
+          <div className="flex justify-between gap-3 text-sm">
             <span className="text-textSecondary">Already paid</span>
             <span className="font-mono">− {inr(props.totalPaid)}</span>
           </div>
-          <div className="flex justify-between border-t border-divider pt-2 mt-2">
+          <div className="flex justify-between gap-3 border-t border-divider pt-2 mt-2">
             <strong>Balance before final payment</strong>
             <strong className="font-mono">{inr(props.balance + lateFeeAmount)}</strong>
           </div>
@@ -6579,7 +6805,7 @@ function CheckoutModal(props: {
                   {previousItems.map((it) => (
                     <li
                       key={`${it.kind}-${it.invoiceId ?? it.reservationId}`}
-                      className="font-mono"
+                      className="font-mono break-words"
                     >
                       {it.invoiceNumber ?? it.reservationNumber}
                       {it.invoiceNumber && ` (${it.reservationNumber})`}
@@ -6598,7 +6824,7 @@ function CheckoutModal(props: {
           </div>
         )}
 
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div>
             <label className="label block mb-1">
               Final Payment {balanceRemaining && <span className="text-danger">*</span>}
@@ -6694,8 +6920,8 @@ function CheckoutModal(props: {
               Charges are recomputed at check-out. If the guest paid more than the actual bill, choose
               how to handle the refund.
             </div>
-            <div className="grid grid-cols-2 gap-2">
-              <label className={`flex items-center gap-2 px-3 py-2 rounded-sm border cursor-pointer ${refundMode === "credit" ? "border-brand bg-brand-soft" : "border-borderControl"}`}>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              <label className={`flex items-center gap-2 px-3 py-2 min-h-[44px] rounded-sm border cursor-pointer ${refundMode === "credit" ? "border-brand bg-brand-soft" : "border-borderControl"}`}>
                 <input
                   type="radio"
                   name="refundMode"
@@ -6708,7 +6934,7 @@ function CheckoutModal(props: {
                   <div className="text-[11px] text-textSecondary">Saved against guest, no expiry</div>
                 </div>
               </label>
-              <label className={`flex items-center gap-2 px-3 py-2 rounded-sm border cursor-pointer ${refundMode === "cash" ? "border-brand bg-brand-soft" : "border-borderControl"}`}>
+              <label className={`flex items-center gap-2 px-3 py-2 min-h-[44px] rounded-sm border cursor-pointer ${refundMode === "cash" ? "border-brand bg-brand-soft" : "border-borderControl"}`}>
                 <input
                   type="radio"
                   name="refundMode"
@@ -6731,7 +6957,7 @@ function CheckoutModal(props: {
           </div>
         )}
         {err && <div className="text-danger text-sm">{err}</div>}
-        <div className="flex justify-end gap-2">
+        <div className="flex flex-wrap justify-end gap-2">
           <button className="btn-secondary" onClick={props.onClose}>Cancel</button>
           <button
             className="btn-primary"
@@ -6811,7 +7037,7 @@ function MakeCompModal(props: {
             placeholder="Owner name, manager on duty, etc."
           />
         </div>
-        <div className="flex justify-end gap-2 pt-1">
+        <div className="flex flex-wrap justify-end gap-2 pt-1">
           <button className="btn-secondary" onClick={props.onClose} disabled={props.pending}>
             Cancel
           </button>

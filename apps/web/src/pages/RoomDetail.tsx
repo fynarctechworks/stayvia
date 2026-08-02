@@ -83,7 +83,7 @@ export default function RoomDetail() {
           {room.hasWifi && <AmenityPill icon={<Wifi className="w-3.5 h-3.5" />} label="Wi-Fi" />}
           <button
             onClick={() => setShowQr(true)}
-            className="inline-flex items-center gap-1.5 h-8 px-3 rounded-[9px] border border-borderControl bg-surface text-inkBody text-xs font-semibold hover:bg-surfaceAlt transition-colors"
+            className="inline-flex items-center gap-1.5 h-11 sm:h-8 px-3 rounded-[9px] border border-borderControl bg-surface text-inkBody text-xs font-semibold hover:bg-surfaceAlt transition-colors"
           >
             <QrCode className="w-4 h-4" /> Room QR
           </button>
@@ -177,8 +177,8 @@ function RoomMaintenanceSection({
   return (
     <section>
       <div className="card !p-0 overflow-hidden">
-        <div className="flex items-center justify-between flex-wrap gap-3 px-[18px] py-4 border-b border-divider">
-          <div className="flex items-center gap-2">
+        <div className="flex items-center justify-between flex-wrap gap-3 px-4 sm:px-[18px] py-4 border-b border-divider">
+          <div className="flex items-center flex-wrap gap-2">
             <Wrench className="w-5 h-5 text-brand-deep" />
             <h2 className="text-base font-semibold text-ink">
               Maintenance History
@@ -192,7 +192,7 @@ function RoomMaintenanceSection({
           <Can do="manage_maintenance">
             <button
               onClick={() => setShowNew(true)}
-              className="btn-primary !h-[38px] inline-flex items-center gap-1.5"
+              className="btn-primary w-full sm:w-auto !h-[44px] sm:!h-[38px] inline-flex items-center justify-center gap-1.5"
             >
               <Plus className="w-4 h-4" /> New Issue
             </button>
@@ -204,71 +204,109 @@ function RoomMaintenanceSection({
             <Loader />
           </div>
         ) : rows.length === 0 ? (
-          <div className="text-sm text-textSecondary text-center py-10">
+          <div className="text-sm text-textSecondary text-center px-4 py-10">
             No maintenance issues recorded for Room {roomNumber}.
           </div>
         ) : (
-          <table className="table-base min-w-[720px]">
-            <thead>
-              <tr>
-                <th>Title</th>
-                <th>Category</th>
-                <th>Severity</th>
-                <th>Status</th>
-                <th>Reported</th>
-                <th className="!text-right">Cost</th>
-              </tr>
-            </thead>
-            <tbody>
+          <div>
+            {/* Desktop column headers — the mobile cards below carry their
+                own labels, so the header row is md-and-up only. */}
+            <div className="hidden md:grid grid-cols-[minmax(180px,1fr)_130px_110px_120px_130px_100px] gap-3 px-3 py-2.5 text-[10px] font-bold uppercase tracking-[0.06em] text-inkMuted bg-surfaceAlt border-b border-borderc">
+              <div>Title</div>
+              <div>Category</div>
+              <div>Severity</div>
+              <div>Status</div>
+              <div>Reported</div>
+              <div className="text-right">Cost</div>
+            </div>
+            <ul className="divide-y divide-divider">
               {rows.map((r) => (
-                <tr
+                <li
                   key={r.id}
-                  className="cursor-pointer transition-colors"
+                  className="hover:bg-surfaceAlt transition-colors cursor-pointer"
                   onClick={() => navigate(`/maintenance/${r.id}`)}
                 >
-                  <td>
-                    <div className="font-semibold text-sm text-ink">
-                      {r.title}
+                  {/* DESKTOP */}
+                  <div className="hidden md:grid grid-cols-[minmax(180px,1fr)_130px_110px_120px_130px_100px] gap-3 items-center px-3 py-3">
+                    <div className="min-w-0">
+                      <div className="font-semibold text-sm text-ink">{r.title}</div>
+                      {r.reportedByName && (
+                        <div className="text-[11.5px] text-inkMuted mt-0.5">
+                          by {r.reportedByName}
+                        </div>
+                      )}
                     </div>
-                    {r.reportedByName && (
-                      <div className="text-[11.5px] text-inkMuted mt-0.5">
-                        by {r.reportedByName}
+                    <div className="text-[12.5px] text-textSecondary">
+                      {MAINTENANCE_CATEGORY_LABELS[r.category]}
+                    </div>
+                    <div>
+                      <span
+                        className={`inline-flex items-center text-[10px] uppercase tracking-[0.05em] font-bold px-2 py-0.5 rounded-[6px] border ${ROOM_MAINT_SEVERITY_STYLES[r.severity]}`}
+                      >
+                        {MAINTENANCE_SEVERITY_LABELS[r.severity]}
+                      </span>
+                    </div>
+                    <div>
+                      <span
+                        className={`inline-flex items-center text-[10px] uppercase tracking-[0.05em] font-bold px-2 py-0.5 rounded-[6px] border ${ROOM_MAINT_STATUS_STYLES[r.status]}`}
+                      >
+                        {MAINTENANCE_STATUS_LABELS[r.status]}
+                      </span>
+                    </div>
+                    <div className="text-xs text-textSecondary">
+                      {format(new Date(r.reportedAt), "dd MMM yyyy")}
+                      {r.resolvedAt && (
+                        <div className="text-[10.5px] text-inkMuted">
+                          resolved {format(new Date(r.resolvedAt), "dd MMM yyyy")}
+                        </div>
+                      )}
+                    </div>
+                    <div className="text-right text-[12.5px] font-mono text-textSecondary">
+                      {r.costActual ? inr(r.costActual) : "-"}
+                    </div>
+                  </div>
+
+                  {/* MOBILE */}
+                  <div className="md:hidden px-4 py-3 min-h-[44px]">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0 flex-1">
+                        <div className="font-semibold text-sm text-ink">{r.title}</div>
+                        {r.reportedByName && (
+                          <div className="text-[11.5px] text-inkMuted mt-0.5">
+                            by {r.reportedByName}
+                          </div>
+                        )}
                       </div>
-                    )}
-                  </td>
-                  <td className="text-[12.5px] text-textSecondary">
-                    {MAINTENANCE_CATEGORY_LABELS[r.category]}
-                  </td>
-                  <td>
-                    <span
-                      className={`inline-flex items-center text-[10px] uppercase tracking-[0.05em] font-bold px-2 py-0.5 rounded-[6px] border ${ROOM_MAINT_SEVERITY_STYLES[r.severity]}`}
-                    >
-                      {MAINTENANCE_SEVERITY_LABELS[r.severity]}
-                    </span>
-                  </td>
-                  <td>
-                    <span
-                      className={`inline-flex items-center text-[10px] uppercase tracking-[0.05em] font-bold px-2 py-0.5 rounded-[6px] border ${ROOM_MAINT_STATUS_STYLES[r.status]}`}
-                    >
-                      {MAINTENANCE_STATUS_LABELS[r.status]}
-                    </span>
-                  </td>
-                  <td className="text-xs text-textSecondary">
-                    {format(new Date(r.reportedAt), "dd MMM yyyy")}
-                    {r.resolvedAt && (
-                      <div className="text-[10.5px] text-inkMuted">
-                        resolved{" "}
-                        {format(new Date(r.resolvedAt), "dd MMM yyyy")}
+                      <div className="shrink-0 text-right text-[12.5px] font-mono text-textSecondary">
+                        {r.costActual ? inr(r.costActual) : "-"}
                       </div>
-                    )}
-                  </td>
-                  <td className="!text-right text-[12.5px] font-mono text-textSecondary">
-                    {r.costActual ? inr(r.costActual) : "-"}
-                  </td>
-                </tr>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-1.5 mt-2">
+                      <span
+                        className={`inline-flex items-center text-[10px] uppercase tracking-[0.05em] font-bold px-2 py-0.5 rounded-[6px] border ${ROOM_MAINT_SEVERITY_STYLES[r.severity]}`}
+                      >
+                        {MAINTENANCE_SEVERITY_LABELS[r.severity]}
+                      </span>
+                      <span
+                        className={`inline-flex items-center text-[10px] uppercase tracking-[0.05em] font-bold px-2 py-0.5 rounded-[6px] border ${ROOM_MAINT_STATUS_STYLES[r.status]}`}
+                      >
+                        {MAINTENANCE_STATUS_LABELS[r.status]}
+                      </span>
+                      <span className="text-[11.5px] text-textSecondary">
+                        {MAINTENANCE_CATEGORY_LABELS[r.category]}
+                      </span>
+                    </div>
+                    <div className="text-[11.5px] text-inkMuted mt-1.5">
+                      {format(new Date(r.reportedAt), "dd MMM yyyy")}
+                      {r.resolvedAt
+                        ? ` · resolved ${format(new Date(r.resolvedAt), "dd MMM yyyy")}`
+                        : ""}
+                    </div>
+                  </div>
+                </li>
               ))}
-            </tbody>
-          </table>
+            </ul>
+          </div>
         )}
       </div>
 

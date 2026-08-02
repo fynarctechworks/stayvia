@@ -27,7 +27,15 @@ import {
   Wallet,
 } from "@/lib/micons";
 import Papa from "papaparse";
-import { Fragment, useEffect, useMemo, useState, type ReactNode } from "react";
+import {
+  Fragment,
+  useEffect,
+  useMemo,
+  useState,
+  type CSSProperties,
+  type KeyboardEvent as ReactKeyboardEvent,
+  type ReactNode,
+} from "react";
 import { useNavigate } from "react-router-dom";
 import {
   Bar,
@@ -207,14 +215,14 @@ function AccessCodePrompt({
           <div className="flex justify-end gap-2 pt-1">
             <button
               type="button"
-              className="btn-secondary !h-8 text-xs"
+              className="btn-secondary !h-11 sm:!h-8 text-xs"
               onClick={onClose}
             >
               Cancel
             </button>
             <button
               type="button"
-              className="btn-primary !h-8 text-xs"
+              className="btn-primary !h-11 sm:!h-8 text-xs"
               disabled={busy || !code.trim()}
               onClick={submit}
             >
@@ -409,7 +417,7 @@ function DateToolbar({
               <button
                 key={p.key}
                 onClick={() => onPreset(p)}
-                className={`px-3.5 h-[34px] text-xs font-semibold rounded-[8px] border transition-colors ${
+                className={`px-3.5 h-11 sm:h-[34px] text-xs font-semibold rounded-[8px] border transition-colors ${
                   active
                     ? "bg-brand text-white border-brand"
                     : "bg-surface text-textSecondary border-borderControl hover:border-brand hover:text-brand"
@@ -421,7 +429,7 @@ function DateToolbar({
           })}
           <button
             onClick={onCustom}
-            className={`px-3.5 h-[34px] text-xs font-semibold rounded-[8px] border transition-colors inline-flex items-center gap-1 ${
+            className={`px-3.5 h-11 sm:h-[34px] text-xs font-semibold rounded-[8px] border transition-colors inline-flex items-center gap-1 ${
               preset === "custom"
                 ? "bg-brand text-white border-brand"
                 : "bg-surface text-textSecondary border-borderControl hover:border-brand hover:text-brand"
@@ -437,20 +445,20 @@ function DateToolbar({
 
       {showCustom && (
         <div className="flex flex-wrap items-end gap-3 mt-3 pt-3 border-t border-divider">
-          <div>
+          <div className="flex-1 min-w-[140px] sm:flex-none">
             <label className="label block mb-1">From</label>
             <input
-              className="input w-44"
+              className="input w-full sm:w-44"
               type="date"
               value={from}
               max={to}
               onChange={(e) => onFromChange(e.target.value)}
             />
           </div>
-          <div>
+          <div className="flex-1 min-w-[140px] sm:flex-none">
             <label className="label block mb-1">To</label>
             <input
-              className="input w-44"
+              className="input w-full sm:w-44"
               type="date"
               value={to}
               min={from}
@@ -492,8 +500,12 @@ function TabBar({
     }
   }
 
+  // Ten icon pills wrap into a four-row block on a 390px phone, which
+  // pushes the report itself below the fold. Below md the strip becomes a
+  // single no-wrap row that scrolls sideways (bleeding into the shell's
+  // 16px gutter so it reads as swipeable); md+ keeps the wrapping layout.
   return (
-    <div className="flex gap-2 flex-wrap items-center">
+    <div className="flex gap-2 items-center overflow-x-auto no-scrollbar -mx-4 px-4 pb-0.5 sm:mx-0 sm:px-0 md:flex-wrap md:overflow-x-visible">
       {primary.map((t) => {
         const on = t.id === active;
         return (
@@ -501,7 +513,7 @@ function TabBar({
             key={t.id}
             onClick={() => onChange(t.id)}
             title={t.caption}
-            className={`inline-flex items-center gap-1.5 px-3 h-[38px] text-[13px] font-semibold rounded-[9px] border transition-colors ${
+            className={`inline-flex shrink-0 whitespace-nowrap items-center gap-1.5 px-3 h-11 md:h-[38px] text-[13px] font-semibold rounded-[9px] border transition-colors ${
               on
                 ? "bg-brand text-white border-brand"
                 : "bg-surface text-textSecondary border-borderControl hover:border-brand hover:text-brand"
@@ -525,7 +537,7 @@ function TabBar({
               : "Show more reports (Complimentary, etc.)"
           }
           aria-pressed={secondaryVisible}
-          className={`inline-flex items-center gap-1.5 px-3 h-[38px] text-[13px] font-semibold rounded-[9px] border transition-colors ${
+          className={`inline-flex shrink-0 whitespace-nowrap items-center gap-1.5 px-3 h-11 md:h-[38px] text-[13px] font-semibold rounded-[9px] border transition-colors ${
             secondaryVisible
               ? "bg-parchment text-inkDark border-borderControl"
               : "bg-surface text-textSecondary border-borderControl hover:border-brand hover:text-brand"
@@ -546,7 +558,7 @@ function TabBar({
               key={t.id}
               onClick={() => onChange(t.id)}
               title={t.caption}
-              className={`inline-flex items-center gap-1.5 px-3 h-[38px] text-[13px] font-semibold rounded-[9px] border transition-colors ${
+              className={`inline-flex shrink-0 whitespace-nowrap items-center gap-1.5 px-3 h-11 md:h-[38px] text-[13px] font-semibold rounded-[9px] border transition-colors ${
                 on
                   ? "bg-brand text-white border-brand"
                   : "bg-surface text-textSecondary border-borderControl hover:border-brand hover:text-brand"
@@ -590,14 +602,21 @@ function Kpi({
     warning: "bg-warnBg text-warnFg",
     success: "bg-successBg text-success",
   };
+  // Phone stacks icon → label → value so a long ₹ figure gets the full
+  // card width; two-up KPI grids are only ~140px of inner space, which a
+  // side-by-side icon would eat. sm+ keeps the original icon-left row.
   return (
-    <div className="card flex items-start gap-3 !p-4 !rounded-[14px]">
-      <div className={`w-10 h-10 rounded-[9px] grid place-items-center shrink-0 ${iconBg[tone]}`}>
+    <div className="card !p-3 sm:!p-4 !rounded-[14px] sm:flex sm:items-start sm:gap-3">
+      <div
+        className={`w-9 h-9 sm:w-10 sm:h-10 rounded-[9px] grid place-items-center shrink-0 mb-2 sm:mb-0 ${iconBg[tone]}`}
+      >
         <Icon className="w-5 h-5" />
       </div>
-      <div className="min-w-0 flex-1">
+      <div className="min-w-0 sm:flex-1">
         <div className="label">{label}</div>
-        <div className={`text-2xl font-bold font-mono tabular-nums mt-0.5 ${toneClasses[tone]}`}>
+        <div
+          className={`text-lg sm:text-2xl font-bold font-mono tabular-nums mt-0.5 break-words ${toneClasses[tone]}`}
+        >
           {value}
         </div>
         {hint && <div className="text-[11px] text-inkMuted mt-0.5">{hint}</div>}
@@ -616,8 +635,8 @@ function SectionHeader({
   right?: ReactNode;
 }) {
   return (
-    <div className="flex items-end justify-between gap-3 mb-2">
-      <div>
+    <div className="flex flex-wrap items-end justify-between gap-2 sm:gap-3 mb-2">
+      <div className="min-w-0">
         <div className="text-[11px] uppercase tracking-[0.1em] text-inkMuted font-bold">
           {title}
         </div>
@@ -626,6 +645,21 @@ function SectionHeader({
       {right}
     </div>
   );
+}
+
+// Phone cards are whole-row tap targets. Same convention the reservation
+// and invoice lists use: role="button" on the row element (a real <button>
+// can't legally wrap the stacked block layout) plus Enter/Space handling.
+const MOBILE_ROW =
+  "block w-full text-left px-3 py-3 min-h-[44px] cursor-pointer active:bg-surfaceAlt focus:outline-none focus-visible:bg-surfaceAlt";
+
+function rowKeyActivate(fn: () => void) {
+  return (e: ReactKeyboardEvent) => {
+    if (e.key === "Enter" || e.key === " ") {
+      e.preventDefault();
+      fn();
+    }
+  };
 }
 
 function exportCsv(filename: string, rows: Record<string, unknown>[]) {
@@ -650,7 +684,7 @@ function ExportBtn({
 }) {
   return (
     <button
-      className="inline-flex items-center gap-1.5 px-3.5 h-[34px] text-xs font-semibold rounded-[9px] border border-borderControl bg-surface text-textSecondary hover:border-brand hover:text-brand transition-colors disabled:opacity-40 disabled:hover:border-borderControl disabled:hover:text-textSecondary"
+      className="inline-flex items-center justify-center gap-1.5 px-3.5 h-11 sm:h-[34px] text-xs font-semibold rounded-[9px] border border-borderControl bg-surface text-textSecondary hover:border-brand hover:text-brand transition-colors disabled:opacity-40 disabled:hover:border-borderControl disabled:hover:text-textSecondary shrink-0"
       onClick={onClick}
       disabled={disabled}
     >
@@ -690,10 +724,19 @@ function ChartCard({
   children: ReactNode;
   height?: number;
 }) {
+  // Charts get a shorter fixed height on phone — the requested height is
+  // handed to CSS as a variable so sm+ keeps the original proportions
+  // without a second inline style. ResponsiveContainer sizes to this box,
+  // so the SVG can never push the page wider than the viewport.
   return (
     <div className="card">
       <SectionHeader title={title} subtitle={subtitle} />
-      <div style={{ width: "100%", height }}>{children}</div>
+      <div
+        className="w-full h-[220px] sm:h-[var(--chart-h)]"
+        style={{ "--chart-h": `${height}px` } as CSSProperties}
+      >
+        {children}
+      </div>
     </div>
   );
 }
@@ -749,10 +792,19 @@ function OccupancyTab({ from, to }: { from: string; to: string }) {
         height={300}
       >
         <ResponsiveContainer>
-          <LineChart data={data.daily}>
+          <LineChart data={data.daily} margin={{ top: 4, right: 8, bottom: 0, left: 0 }}>
             <CartesianGrid strokeDasharray="3 3" stroke="#EFEDE7" />
-            <XAxis dataKey="day" fontSize={11} stroke="#8A9088" />
-            <YAxis domain={[0, 100]} fontSize={11} stroke="#8A9088" unit="%" />
+            {/* minTickGap thins the day labels out on a phone-width axis
+                instead of letting them collide into a grey smear. */}
+            <XAxis
+              dataKey="day"
+              fontSize={10}
+              stroke="#8A9088"
+              interval="preserveStartEnd"
+              minTickGap={28}
+              tickMargin={4}
+            />
+            <YAxis domain={[0, 100]} fontSize={10} stroke="#8A9088" unit="%" width={40} />
             <Tooltip
               formatter={(v: number) => [`${v}%`, "Occupancy"]}
               contentStyle={{ borderRadius: 10, border: "1px solid #E9E6DE", fontSize: 12 }}
@@ -854,10 +906,17 @@ function RevenueTab({ from, to }: { from: string; to: string }) {
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <ChartCard title="Daily revenue" subtitle="Earnings per day in the selected range">
           <ResponsiveContainer>
-            <BarChart data={dailyChart}>
+            <BarChart data={dailyChart} margin={{ top: 4, right: 8, bottom: 0, left: 0 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="#EFEDE7" />
-              <XAxis dataKey="day" fontSize={11} stroke="#8A9088" />
-              <YAxis fontSize={11} stroke="#8A9088" />
+              <XAxis
+                dataKey="day"
+                fontSize={10}
+                stroke="#8A9088"
+                interval="preserveStartEnd"
+                minTickGap={28}
+                tickMargin={4}
+              />
+              <YAxis fontSize={10} stroke="#8A9088" width={48} />
               <Tooltip
                 formatter={(v: number) => [inr(v), "Revenue"]}
                 contentStyle={{ borderRadius: 10, border: "1px solid #E9E6DE", fontSize: 12 }}
@@ -868,10 +927,17 @@ function RevenueTab({ from, to }: { from: string; to: string }) {
         </ChartCard>
         <ChartCard title="By room type" subtitle="Which categories are pulling the weight">
           <ResponsiveContainer>
-            <BarChart data={typeChart}>
+            <BarChart data={typeChart} margin={{ top: 4, right: 8, bottom: 0, left: 0 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="#EFEDE7" />
-              <XAxis dataKey="roomType" fontSize={11} stroke="#8A9088" />
-              <YAxis fontSize={11} stroke="#8A9088" />
+              <XAxis
+                dataKey="roomType"
+                fontSize={10}
+                stroke="#8A9088"
+                interval="preserveStartEnd"
+                minTickGap={12}
+                tickMargin={4}
+              />
+              <YAxis fontSize={10} stroke="#8A9088" width={48} />
               <Tooltip
                 formatter={(v: number) => [inr(v), "Revenue"]}
                 contentStyle={{ borderRadius: 10, border: "1px solid #E9E6DE", fontSize: 12 }}
@@ -885,35 +951,39 @@ function RevenueTab({ from, to }: { from: string; to: string }) {
       {stayTypeRows.length > 0 && (
         <div className="card">
           <div className="text-sm font-semibold text-ink mb-2">Booking types</div>
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="text-left text-[10.5px] uppercase tracking-[0.05em] text-inkMuted border-b border-divider">
-                <th className="py-2 font-bold">Type</th>
-                <th className="py-2 font-bold text-right">Bookings</th>
-                <th className="py-2 font-bold text-right">Revenue</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr className="border-b border-divider">
-                <td className="py-2">Full Day</td>
-                <td className="py-2 text-right font-mono tabular-nums">
-                  {overnight?.bookings ?? 0}
-                </td>
-                <td className="py-2 text-right font-mono tabular-nums">
-                  {inr(overnight?.revenue ?? 0)}
-                </td>
-              </tr>
-              <tr>
-                <td className="py-2">Day use (short stay)</td>
-                <td className="py-2 text-right font-mono tabular-nums">
-                  {shortStay?.bookings ?? 0}
-                </td>
-                <td className="py-2 text-right font-mono tabular-nums">
-                  {inr(shortStay?.revenue ?? 0)}
-                </td>
-              </tr>
-            </tbody>
-          </table>
+          {/* Two-row numeric breakdown — stays a table, but scrolls inside
+              its own box so the page never moves sideways. */}
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm min-w-[320px]">
+              <thead>
+                <tr className="text-left text-[10.5px] uppercase tracking-[0.05em] text-inkMuted border-b border-divider">
+                  <th className="py-2 font-bold">Type</th>
+                  <th className="py-2 font-bold text-right">Bookings</th>
+                  <th className="py-2 font-bold text-right">Revenue</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr className="border-b border-divider">
+                  <td className="py-2">Full Day</td>
+                  <td className="py-2 text-right font-mono tabular-nums">
+                    {overnight?.bookings ?? 0}
+                  </td>
+                  <td className="py-2 text-right font-mono tabular-nums">
+                    {inr(overnight?.revenue ?? 0)}
+                  </td>
+                </tr>
+                <tr>
+                  <td className="py-2">Day use (short stay)</td>
+                  <td className="py-2 text-right font-mono tabular-nums">
+                    {shortStay?.bookings ?? 0}
+                  </td>
+                  <td className="py-2 text-right font-mono tabular-nums">
+                    {inr(shortStay?.revenue ?? 0)}
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
         </div>
       )}
 
@@ -929,31 +999,33 @@ function RevenueTab({ from, to }: { from: string; to: string }) {
             No payments received in this range.
           </div>
         ) : (
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="text-left text-[10.5px] uppercase tracking-[0.05em] text-inkMuted border-b border-divider">
-                <th className="py-2 font-bold">Method</th>
-                <th className="py-2 font-bold text-right">Payments</th>
-                <th className="py-2 font-bold text-right">Amount</th>
-              </tr>
-            </thead>
-            <tbody>
-              {byMethod.map((m) => (
-                <tr key={m.method} className="border-b border-divider">
-                  <td className="py-2">{methodLabels[m.method] ?? m.method}</td>
-                  <td className="py-2 text-right font-mono tabular-nums">{m.count}</td>
-                  <td className="py-2 text-right font-mono tabular-nums">{inr(m.total)}</td>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm min-w-[320px]">
+              <thead>
+                <tr className="text-left text-[10.5px] uppercase tracking-[0.05em] text-inkMuted border-b border-divider">
+                  <th className="py-2 font-bold">Method</th>
+                  <th className="py-2 font-bold text-right">Payments</th>
+                  <th className="py-2 font-bold text-right">Amount</th>
                 </tr>
-              ))}
-              <tr className="font-semibold text-ink">
-                <td className="py-2">Total</td>
-                <td className="py-2 text-right font-mono tabular-nums">
-                  {byMethod.reduce((s, m) => s + m.count, 0)}
-                </td>
-                <td className="py-2 text-right font-mono tabular-nums">{inr(methodGrand)}</td>
-              </tr>
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {byMethod.map((m) => (
+                  <tr key={m.method} className="border-b border-divider">
+                    <td className="py-2">{methodLabels[m.method] ?? m.method}</td>
+                    <td className="py-2 text-right font-mono tabular-nums">{m.count}</td>
+                    <td className="py-2 text-right font-mono tabular-nums">{inr(m.total)}</td>
+                  </tr>
+                ))}
+                <tr className="font-semibold text-ink">
+                  <td className="py-2">Total</td>
+                  <td className="py-2 text-right font-mono tabular-nums">
+                    {byMethod.reduce((s, m) => s + m.count, 0)}
+                  </td>
+                  <td className="py-2 text-right font-mono tabular-nums">{inr(methodGrand)}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
         )}
       </div>
 
@@ -987,6 +1059,25 @@ interface InvoiceListRow {
   scope: "room" | "combined" | "partial";
   scopeRoomIds: string[] | null;
   createdAt: string;
+}
+
+// Pill tones shared by the desktop table and the phone card list so the
+// two presentations of the same row can never drift apart.
+const PILL_BASE =
+  "text-[10px] uppercase tracking-wider font-semibold px-2 py-0.5 rounded-full border";
+
+function invScopeTone(scope: InvoiceListRow["scope"]): string {
+  if (scope === "room") return "bg-brand-soft text-brand-deep border-brand-tint";
+  if (scope === "combined") return "bg-infoBg text-info border-infoBorder";
+  return "bg-neutralBg text-inkMuted border-neutralBorder";
+}
+
+function invStatusTone(status: InvoiceListRow["status"]): string {
+  if (status === "paid") return "bg-successBg text-success border-successBorder";
+  if (status === "partial") return "bg-warnBg text-warnFg border-warnBorder";
+  if (status === "voided")
+    return "bg-neutralBg text-inkMuted border-neutralBorder line-through";
+  return "bg-dangerBg text-dangerFg border-dangerBorder";
 }
 
 function InvoicesTab({ from, to }: { from: string; to: string }) {
@@ -1114,7 +1205,7 @@ function InvoicesTab({ from, to }: { from: string; to: string }) {
             <button
               key={s}
               onClick={() => setStatus(s)}
-              className={`px-2.5 h-8 text-xs font-semibold rounded-sm border transition-colors capitalize ${
+              className={`px-3 h-11 sm:h-8 text-xs font-semibold rounded-sm border transition-colors capitalize ${
                 status === s
                   ? "bg-inkDark text-cream border-inkDark"
                   : "bg-surface border-borderControl text-textSecondary hover:border-brand hover:text-brand"
@@ -1124,7 +1215,7 @@ function InvoicesTab({ from, to }: { from: string; to: string }) {
             </button>
           ))}
         </div>
-        <div className="h-6 w-px bg-borderControl mx-1" />
+        <div className="hidden sm:block h-6 w-px bg-borderControl mx-1" />
         <div className="flex flex-wrap gap-1">
           {(
             [
@@ -1137,7 +1228,7 @@ function InvoicesTab({ from, to }: { from: string; to: string }) {
             <button
               key={s.id}
               onClick={() => setScope(s.id)}
-              className={`px-2.5 h-8 text-xs font-semibold rounded-sm border transition-colors ${
+              className={`px-3 h-11 sm:h-8 text-xs font-semibold rounded-sm border transition-colors ${
                 scope === s.id
                   ? "bg-inkDark text-cream border-inkDark"
                   : "bg-surface border-borderControl text-textSecondary hover:border-brand hover:text-brand"
@@ -1147,9 +1238,9 @@ function InvoicesTab({ from, to }: { from: string; to: string }) {
             </button>
           ))}
         </div>
-        <div className="flex-1 min-w-[180px]">
+        <div className="w-full sm:flex-1 sm:min-w-[180px]">
           <input
-            className="input h-8 text-sm"
+            className="input sm:h-8 text-sm"
             placeholder="Search invoice #, guest, GSTIN, reservation #…"
             value={q}
             onChange={(e) => setQ(e.target.value)}
@@ -1171,111 +1262,153 @@ function InvoicesTab({ from, to }: { from: string; to: string }) {
           hint="Try widening the date range or clearing the status / scope filter."
         />
       ) : (
-        <div className="card !p-0 overflow-x-auto">
-          <table className="table-base">
-            <thead>
-              <tr>
-                <th>Invoice #</th>
-                <th>Issued</th>
-                <th>Reservation · Guest</th>
-                <th>Scope</th>
-                <th>Status</th>
-                <th className="!text-right">Grand Total</th>
-                <th className="!text-right">Paid</th>
-                <th className="!text-right">Balance</th>
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((inv) => {
-                const balance = Number(inv.balanceDue);
-                return (
-                  <tr
-                    key={inv.id}
-                    className="cursor-pointer"
-                    onClick={() =>
-                      navigate(
-                        `/reservations/${inv.reservationNumber ?? inv.reservationId}`,
-                      )
-                    }
-                  >
-                    <td className="font-mono font-semibold text-ink">
-                      {inv.invoiceNumber}
-                    </td>
-                    <td className="text-xs text-textSecondary">
-                      {format(new Date(inv.createdAt), "dd MMM yyyy · HH:mm")}
-                    </td>
-                    <td>
-                      <div className="font-mono text-xs text-textSecondary">
-                        {inv.reservationNumber ?? "-"}
+        <div className="card !p-0 overflow-hidden">
+          {/* DESKTOP */}
+          <div className="hidden md:block overflow-x-auto">
+            <table className="table-base">
+              <thead>
+                <tr>
+                  <th>Invoice #</th>
+                  <th>Issued</th>
+                  <th>Reservation · Guest</th>
+                  <th>Scope</th>
+                  <th>Status</th>
+                  <th className="!text-right">Grand Total</th>
+                  <th className="!text-right">Paid</th>
+                  <th className="!text-right">Balance</th>
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map((inv) => {
+                  const balance = Number(inv.balanceDue);
+                  return (
+                    <tr
+                      key={inv.id}
+                      className="cursor-pointer"
+                      onClick={() =>
+                        navigate(
+                          `/reservations/${inv.reservationNumber ?? inv.reservationId}`,
+                        )
+                      }
+                    >
+                      <td className="font-mono font-semibold text-ink">
+                        {inv.invoiceNumber}
+                      </td>
+                      <td className="text-xs text-textSecondary">
+                        {format(new Date(inv.createdAt), "dd MMM yyyy · HH:mm")}
+                      </td>
+                      <td>
+                        <div className="font-mono text-xs text-textSecondary">
+                          {inv.reservationNumber ?? "-"}
+                        </div>
+                        <div className="text-sm font-medium text-ink truncate max-w-[18ch]">
+                          {inv.guestName}
+                        </div>
+                      </td>
+                      <td>
+                        <span className={`${PILL_BASE} ${invScopeTone(inv.scope)}`}>
+                          {inv.scope === "room" ? "Per room" : inv.scope}
+                        </span>
+                      </td>
+                      <td>
+                        <span className={`${PILL_BASE} ${invStatusTone(inv.status)}`}>
+                          {inv.status}
+                        </span>
+                      </td>
+                      <td className="text-right font-mono tabular-nums">
+                        {inr(inv.grandTotal)}
+                      </td>
+                      <td className="text-right font-mono tabular-nums text-success">
+                        {inr(inv.totalPaid)}
+                      </td>
+                      <td
+                        className={`text-right font-mono tabular-nums ${
+                          balance > 0.009 ? "text-dangerFg font-semibold" : "text-textSecondary"
+                        }`}
+                      >
+                        {inr(balance)}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+
+          {/* MOBILE */}
+          <ul className="md:hidden divide-y divide-divider">
+            {rows.map((inv) => {
+              const balance = Number(inv.balanceDue);
+              const open = () =>
+                navigate(`/reservations/${inv.reservationNumber ?? inv.reservationId}`);
+              return (
+                <li
+                  key={inv.id}
+                  role="button"
+                  tabIndex={0}
+                  className={MOBILE_ROW}
+                  onClick={open}
+                  onKeyDown={rowKeyActivate(open)}
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0 flex-1">
+                      <div className="font-mono text-xs font-semibold text-ink truncate">
+                        {inv.invoiceNumber}
                       </div>
-                      <div className="text-sm font-medium text-ink truncate max-w-[18ch]">
+                      <div className="text-sm font-medium text-ink truncate mt-0.5">
                         {inv.guestName}
                       </div>
-                    </td>
-                    <td>
-                      <span
-                        className={`text-[10px] uppercase tracking-wider font-semibold px-2 py-0.5 rounded-full border ${
-                          inv.scope === "room"
-                            ? "bg-brand-soft text-brand-deep border-brand-tint"
-                            : inv.scope === "combined"
-                              ? "bg-infoBg text-info border-infoBorder"
-                              : "bg-neutralBg text-inkMuted border-neutralBorder"
-                        }`}
-                      >
-                        {inv.scope === "room" ? "Per room" : inv.scope}
-                      </span>
-                    </td>
-                    <td>
-                      <span
-                        className={`text-[10px] uppercase tracking-wider font-semibold px-2 py-0.5 rounded-full border ${
-                          inv.status === "paid"
-                            ? "bg-successBg text-success border-successBorder"
-                            : inv.status === "partial"
-                              ? "bg-warnBg text-warnFg border-warnBorder"
-                              : inv.status === "voided"
-                                ? "bg-neutralBg text-inkMuted border-neutralBorder line-through"
-                                : "bg-dangerBg text-dangerFg border-dangerBorder"
-                        }`}
-                      >
-                        {inv.status}
-                      </span>
-                    </td>
-                    <td className="text-right font-mono tabular-nums">
-                      {inr(inv.grandTotal)}
-                    </td>
-                    <td className="text-right font-mono tabular-nums text-success">
-                      {inr(inv.totalPaid)}
-                    </td>
-                    <td
-                      className={`text-right font-mono tabular-nums ${
-                        balance > 0.009 ? "text-dangerFg font-semibold" : "text-textSecondary"
-                      }`}
-                    >
-                      {inr(balance)}
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
+                      <div className="font-mono text-[10px] text-textSecondary truncate mt-0.5">
+                        {inv.reservationNumber ?? "-"}
+                      </div>
+                      <div className="text-[10px] text-inkMuted mt-1">
+                        {format(new Date(inv.createdAt), "dd MMM yyyy · HH:mm")}
+                      </div>
+                    </div>
+                    <div className="text-right shrink-0">
+                      <div className="text-sm font-mono font-semibold text-ink tabular-nums">
+                        {inr(inv.grandTotal)}
+                      </div>
+                      <div className="text-[11px] font-mono text-success tabular-nums mt-0.5">
+                        {inr(inv.totalPaid)} paid
+                      </div>
+                      {balance > 0.009 && (
+                        <div className="text-[11px] font-mono font-semibold text-dangerFg tabular-nums mt-0.5">
+                          {inr(balance)} due
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                  <div className="flex flex-wrap gap-1.5 mt-2">
+                    <span className={`${PILL_BASE} ${invStatusTone(inv.status)}`}>
+                      {inv.status}
+                    </span>
+                    <span className={`${PILL_BASE} ${invScopeTone(inv.scope)}`}>
+                      {inv.scope === "room" ? "Per room" : inv.scope}
+                    </span>
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
         </div>
       )}
 
       {total > perPage && (
-        <div className="flex items-center justify-between text-xs text-textSecondary">
+        <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-textSecondary">
           <span>
             Showing {(page - 1) * perPage + 1}–{Math.min(page * perPage, total)} of {total}
           </span>
           <div className="flex gap-1">
             <button
-              className="px-2.5 h-7 rounded-sm border border-borderControl bg-surface disabled:opacity-40"
+              className="px-4 h-11 sm:px-2.5 sm:h-7 rounded-sm border border-borderControl bg-surface disabled:opacity-40"
               disabled={page === 1}
               onClick={() => setPage((p) => Math.max(1, p - 1))}
             >
               Prev
             </button>
             <button
-              className="px-2.5 h-7 rounded-sm border border-borderControl bg-surface disabled:opacity-40"
+              className="px-4 h-11 sm:px-2.5 sm:h-7 rounded-sm border border-borderControl bg-surface disabled:opacity-40"
               disabled={page >= totalPages}
               onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
             >
@@ -1320,7 +1453,7 @@ function CollectionsTab({ from, to }: { from: string; to: string }) {
             />
           }
         />
-        <div className="card !p-0 overflow-x-auto">
+        <div className="card !p-0 overflow-hidden">
           {data.byMethod.length === 0 ? (
             <EmptyState
               Icon={Inbox}
@@ -1328,51 +1461,94 @@ function CollectionsTab({ from, to }: { from: string; to: string }) {
               hint="Once you record a payment in this date range it'll show up here."
             />
           ) : (
-            <table className="table-base">
-              <thead>
-                <tr>
-                  <th>Method</th>
-                  <th className="!text-right">Transactions</th>
-                  <th className="!text-right">Total collected</th>
-                  <th className="!text-right">Share</th>
-                </tr>
-              </thead>
-              <tbody>
+            <>
+              {/* DESKTOP */}
+              <div className="hidden md:block overflow-x-auto">
+                <table className="table-base">
+                  <thead>
+                    <tr>
+                      <th>Method</th>
+                      <th className="!text-right">Transactions</th>
+                      <th className="!text-right">Total collected</th>
+                      <th className="!text-right">Share</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {data.byMethod.map((m) => {
+                      const share = grand > 0 ? (Number(m.total) / grand) * 100 : 0;
+                      return (
+                        <tr key={m.method}>
+                          <td className="capitalize font-medium text-ink">
+                            {m.method.replace(/_/g, " ")}
+                          </td>
+                          <td className="text-right tabular-nums">{m.count}</td>
+                          <td className="text-right font-mono tabular-nums">{inr(m.total)}</td>
+                          <td className="text-right">
+                            <div className="inline-flex items-center gap-2">
+                              <div className="w-20 h-1.5 rounded-full bg-surfaceSubtle overflow-hidden">
+                                <div
+                                  className="h-full bg-brand"
+                                  style={{ width: `${share}%` }}
+                                />
+                              </div>
+                              <span className="text-[11px] font-mono text-textSecondary w-10 text-right">
+                                {share.toFixed(0)}%
+                              </span>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                  <tfoot>
+                    <tr className="bg-surfaceAlt">
+                      <td className="font-semibold text-ink">Total</td>
+                      <td className="text-right font-semibold tabular-nums">{txns}</td>
+                      <td className="text-right font-mono font-bold tabular-nums">{inr(grand)}</td>
+                      <td></td>
+                    </tr>
+                  </tfoot>
+                </table>
+              </div>
+
+              {/* MOBILE */}
+              <ul className="md:hidden divide-y divide-divider">
                 {data.byMethod.map((m) => {
                   const share = grand > 0 ? (Number(m.total) / grand) * 100 : 0;
                   return (
-                    <tr key={m.method}>
-                      <td className="capitalize font-medium text-ink">
-                        {m.method.replace(/_/g, " ")}
-                      </td>
-                      <td className="text-right tabular-nums">{m.count}</td>
-                      <td className="text-right font-mono tabular-nums">{inr(m.total)}</td>
-                      <td className="text-right">
-                        <div className="inline-flex items-center gap-2">
-                          <div className="w-20 h-1.5 rounded-full bg-surfaceSubtle overflow-hidden">
-                            <div
-                              className="h-full bg-brand"
-                              style={{ width: `${share}%` }}
-                            />
-                          </div>
-                          <span className="text-[11px] font-mono text-textSecondary w-10 text-right">
-                            {share.toFixed(0)}%
-                          </span>
+                    <li key={m.method} className="px-3 py-3">
+                      <div className="flex items-baseline justify-between gap-2">
+                        <span className="capitalize font-medium text-ink truncate">
+                          {m.method.replace(/_/g, " ")}
+                        </span>
+                        <span className="font-mono font-semibold text-ink tabular-nums shrink-0">
+                          {inr(m.total)}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-2 mt-1.5">
+                        <div className="flex-1 h-1.5 rounded-full bg-surfaceSubtle overflow-hidden">
+                          <div className="h-full bg-brand" style={{ width: `${share}%` }} />
                         </div>
-                      </td>
-                    </tr>
+                        <span className="text-[11px] font-mono text-textSecondary shrink-0">
+                          {share.toFixed(0)}%
+                        </span>
+                      </div>
+                      <div className="text-[11px] text-inkMuted mt-1">
+                        {m.count} transaction{m.count === 1 ? "" : "s"}
+                      </div>
+                    </li>
                   );
                 })}
-              </tbody>
-              <tfoot>
-                <tr className="bg-surfaceAlt">
-                  <td className="font-semibold text-ink">Total</td>
-                  <td className="text-right font-semibold tabular-nums">{txns}</td>
-                  <td className="text-right font-mono font-bold tabular-nums">{inr(grand)}</td>
-                  <td></td>
-                </tr>
-              </tfoot>
-            </table>
+                <li className="px-3 py-3 bg-surfaceAlt flex items-baseline justify-between gap-2">
+                  <span className="font-semibold text-ink">
+                    Total · {txns} transaction{txns === 1 ? "" : "s"}
+                  </span>
+                  <span className="font-mono font-bold text-ink tabular-nums shrink-0">
+                    {inr(grand)}
+                  </span>
+                </li>
+              </ul>
+            </>
           )}
         </div>
       </div>
@@ -1458,6 +1634,9 @@ function GstTab({ from, to }: { from: string; to: string }) {
             />
           }
         />
+        {/* Genuine numeric matrix (four money columns) — stays a table and
+            scrolls inside the card rather than folding into cards, so the
+            CGST/SGST figures stay comparable row to row. */}
         <div className="card !p-0 overflow-x-auto">
           {data.byStatus.length === 0 ? (
             <EmptyState
@@ -1466,7 +1645,7 @@ function GstTab({ from, to }: { from: string; to: string }) {
               hint="Adjust the date picker above."
             />
           ) : (
-            <table className="table-base">
+            <table className="table-base min-w-[700px]">
               <thead>
                 <tr>
                   <th>Status</th>
@@ -1604,6 +1783,26 @@ function OutstandingTab() {
     onError: (e: Error) => toast(e.message, "error"),
   });
 
+  // Shared by the desktop row button and the phone card button so the
+  // confirm dialog and mutation stay in exactly one place.
+  async function promptMarkReceived(p: OutstandingResp["pendingPayments"][number]) {
+    const chosen = await dialog.prompt({
+      title: "Mark payment received",
+      message: `Confirm collection of ${inr(p.amount)} from ${p.guestName}.`,
+      okLabel: "Mark received",
+      tone: "success",
+      required: true,
+      defaultValue: "cash",
+      options: [
+        { value: "cash", label: "Cash" },
+        { value: "upi", label: "UPI" },
+        { value: "card", label: "Card" },
+        { value: "bank_transfer", label: "Bank transfer" },
+      ],
+    });
+    if (chosen) markReceived.mutate({ id: p.paymentId, method: chosen });
+  }
+
   if (!data) return <Loader />;
   const { invoices, pendingPayments, byGuest, totalOutstanding } = data;
 
@@ -1636,38 +1835,71 @@ function OutstandingTab() {
             title="By guest"
             subtitle="Click a row to open the guest profile"
           />
-          <div className="card !p-0 overflow-x-auto">
-            <table className="table-base">
-              <thead>
-                <tr>
-                  <th>Guest</th>
-                  <th>Phone</th>
-                  <th>Oldest invoice</th>
-                  <th className="!text-right">Balance</th>
-                </tr>
-              </thead>
-              <tbody>
-                {byGuest.map((g) => (
-                  <tr
-                    key={g.guestId}
-                    className="cursor-pointer"
-                    onClick={() => navigate(`/guests/${g.guestPhone}`)}
-                  >
-                    <td className="font-medium text-ink">{g.guestName}</td>
-                    <td className="font-mono text-textSecondary text-xs">{g.guestPhone}</td>
-                    <td>
-                      <div className="inline-flex items-center gap-2">
-                        <span>{format(new Date(g.oldest), "dd MMM yyyy")}</span>
-                        <AgeBadge days={daysSince(g.oldest)} />
-                      </div>
-                    </td>
-                    <td className="text-right font-mono text-dangerFg font-semibold tabular-nums">
-                      {inr(g.balance)}
-                    </td>
+          <div className="card !p-0 overflow-hidden">
+            {/* DESKTOP */}
+            <div className="hidden md:block overflow-x-auto">
+              <table className="table-base">
+                <thead>
+                  <tr>
+                    <th>Guest</th>
+                    <th>Phone</th>
+                    <th>Oldest invoice</th>
+                    <th className="!text-right">Balance</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {byGuest.map((g) => (
+                    <tr
+                      key={g.guestId}
+                      className="cursor-pointer"
+                      onClick={() => navigate(`/guests/${g.guestPhone}`)}
+                    >
+                      <td className="font-medium text-ink">{g.guestName}</td>
+                      <td className="font-mono text-textSecondary text-xs">{g.guestPhone}</td>
+                      <td>
+                        <div className="inline-flex items-center gap-2">
+                          <span>{format(new Date(g.oldest), "dd MMM yyyy")}</span>
+                          <AgeBadge days={daysSince(g.oldest)} />
+                        </div>
+                      </td>
+                      <td className="text-right font-mono text-dangerFg font-semibold tabular-nums">
+                        {inr(g.balance)}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            {/* MOBILE */}
+            <ul className="md:hidden divide-y divide-divider">
+              {byGuest.map((g) => (
+                <li
+                  key={g.guestId}
+                  role="button"
+                  tabIndex={0}
+                  className={MOBILE_ROW}
+                  onClick={() => navigate(`/guests/${g.guestPhone}`)}
+                  onKeyDown={rowKeyActivate(() => navigate(`/guests/${g.guestPhone}`))}
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0 flex-1">
+                      <div className="font-medium text-ink truncate">{g.guestName}</div>
+                      <div className="font-mono text-xs text-textSecondary truncate mt-0.5">
+                        {g.guestPhone}
+                      </div>
+                    </div>
+                    <div className="font-mono text-dangerFg font-semibold tabular-nums shrink-0">
+                      {inr(g.balance)}
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2 mt-1.5 text-[11px] text-inkMuted">
+                    <span>Oldest {format(new Date(g.oldest), "dd MMM yyyy")}</span>
+                    <AgeBadge days={daysSince(g.oldest)} />
+                  </div>
+                </li>
+              ))}
+            </ul>
           </div>
         </section>
       )}
@@ -1678,68 +1910,92 @@ function OutstandingTab() {
             title="Pending payments"
             subtitle="Promised collections - mark them received once the money's in"
           />
-          <div className="card !p-0 overflow-x-auto">
-            <table className="table-base">
-              <thead>
-                <tr>
-                  <th>Reservation</th>
-                  <th>Guest</th>
-                  <th>Notes</th>
-                  <th>Promised</th>
-                  <th className="!text-right">Amount</th>
-                  <th></th>
-                </tr>
-              </thead>
-              <tbody>
-                {pendingPayments.map((p) => (
-                  <tr key={p.paymentId}>
-                    <td className="font-mono text-xs">{p.reservationNumber}</td>
-                    <td>
-                      <div className="font-medium text-ink">{p.guestName}</div>
-                      <div className="text-[11px] text-textSecondary font-mono">
+          <div className="card !p-0 overflow-hidden">
+            {/* DESKTOP */}
+            <div className="hidden md:block overflow-x-auto">
+              <table className="table-base">
+                <thead>
+                  <tr>
+                    <th>Reservation</th>
+                    <th>Guest</th>
+                    <th>Notes</th>
+                    <th>Promised</th>
+                    <th className="!text-right">Amount</th>
+                    <th></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {pendingPayments.map((p) => (
+                    <tr key={p.paymentId}>
+                      <td className="font-mono text-xs">{p.reservationNumber}</td>
+                      <td>
+                        <div className="font-medium text-ink">{p.guestName}</div>
+                        <div className="text-[11px] text-textSecondary font-mono">
+                          {p.guestPhone}
+                        </div>
+                      </td>
+                      <td className="text-xs text-textSecondary">{p.notes ?? ""}</td>
+                      <td>
+                        <div className="inline-flex items-center gap-2">
+                          <span>{format(new Date(p.promisedAt), "dd MMM yyyy")}</span>
+                          <AgeBadge days={daysSince(p.promisedAt)} />
+                        </div>
+                      </td>
+                      <td className="text-right font-mono text-dangerFg font-semibold tabular-nums">
+                        {inr(p.amount)}
+                      </td>
+                      <td className="text-right">
+                        <button
+                          className="!h-7 !px-2 text-xs font-semibold rounded-sm bg-success text-white border border-success hover:opacity-90 inline-flex items-center gap-1"
+                          onClick={() => promptMarkReceived(p)}
+                          disabled={markReceived.isPending}
+                        >
+                          <CheckCircle2 className="w-3 h-3" />
+                          Received
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            {/* MOBILE */}
+            <ul className="md:hidden divide-y divide-divider">
+              {pendingPayments.map((p) => (
+                <li key={p.paymentId} className="px-3 py-3">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0 flex-1">
+                      <div className="font-mono text-xs text-textSecondary truncate">
+                        {p.reservationNumber}
+                      </div>
+                      <div className="font-medium text-ink truncate mt-0.5">{p.guestName}</div>
+                      <div className="text-[11px] text-textSecondary font-mono truncate">
                         {p.guestPhone}
                       </div>
-                    </td>
-                    <td className="text-xs text-textSecondary">{p.notes ?? ""}</td>
-                    <td>
-                      <div className="inline-flex items-center gap-2">
-                        <span>{format(new Date(p.promisedAt), "dd MMM yyyy")}</span>
-                        <AgeBadge days={daysSince(p.promisedAt)} />
-                      </div>
-                    </td>
-                    <td className="text-right font-mono text-dangerFg font-semibold tabular-nums">
+                    </div>
+                    <div className="font-mono text-dangerFg font-semibold tabular-nums shrink-0">
                       {inr(p.amount)}
-                    </td>
-                    <td className="text-right">
-                      <button
-                        className="!h-7 !px-2 text-xs font-semibold rounded-sm bg-success text-white border border-success hover:opacity-90 inline-flex items-center gap-1"
-                        onClick={async () => {
-                          const chosen = await dialog.prompt({
-                            title: "Mark payment received",
-                            message: `Confirm collection of ${inr(p.amount)} from ${p.guestName}.`,
-                            okLabel: "Mark received",
-                            tone: "success",
-                            required: true,
-                            defaultValue: "cash",
-                            options: [
-                              { value: "cash", label: "Cash" },
-                              { value: "upi", label: "UPI" },
-                              { value: "card", label: "Card" },
-                              { value: "bank_transfer", label: "Bank transfer" },
-                            ],
-                          });
-                          if (chosen) markReceived.mutate({ id: p.paymentId, method: chosen });
-                        }}
-                        disabled={markReceived.isPending}
-                      >
-                        <CheckCircle2 className="w-3 h-3" />
-                        Received
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2 mt-1.5 text-[11px] text-inkMuted">
+                    <span>Promised {format(new Date(p.promisedAt), "dd MMM yyyy")}</span>
+                    <AgeBadge days={daysSince(p.promisedAt)} />
+                  </div>
+                  {p.notes && (
+                    <div className="text-xs text-textSecondary mt-1 break-words">{p.notes}</div>
+                  )}
+                  <button
+                    className="w-full mt-2 h-11 text-xs font-semibold rounded-sm bg-success text-white border border-success inline-flex items-center justify-center gap-1 disabled:opacity-40"
+                    onClick={() => promptMarkReceived(p)}
+                    disabled={markReceived.isPending}
+                  >
+                    <CheckCircle2 className="w-3.5 h-3.5" />
+                    Received
+                  </button>
+                </li>
+              ))}
+            </ul>
           </div>
         </section>
       )}
@@ -1755,7 +2011,7 @@ function OutstandingTab() {
             />
           }
         />
-        <div className="card !p-0 overflow-x-auto">
+        <div className="card !p-0 overflow-hidden">
           {invoices.length === 0 ? (
             <EmptyState
               Icon={CheckCircle2}
@@ -1763,45 +2019,92 @@ function OutstandingTab() {
               hint="Every issued invoice has been paid. Nice."
             />
           ) : (
-            <table className="table-base">
-              <thead>
-                <tr>
-                  <th>Invoice</th>
-                  <th>Reservation</th>
-                  <th>Guest</th>
-                  <th>Issued</th>
-                  <th>Status</th>
-                  <th className="!text-right">Total</th>
-                  <th className="!text-right">Balance</th>
-                </tr>
-              </thead>
-              <tbody>
+            <>
+              {/* DESKTOP */}
+              <div className="hidden md:block overflow-x-auto">
+                <table className="table-base">
+                  <thead>
+                    <tr>
+                      <th>Invoice</th>
+                      <th>Reservation</th>
+                      <th>Guest</th>
+                      <th>Issued</th>
+                      <th>Status</th>
+                      <th className="!text-right">Total</th>
+                      <th className="!text-right">Balance</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {invoices.map((r) => (
+                      <tr
+                        key={r.invoiceId}
+                        className="cursor-pointer"
+                        onClick={() => navigate(`/reservations/${r.reservationNumber}`)}
+                      >
+                        <td className="font-mono text-xs">{r.invoiceNumber}</td>
+                        <td className="font-mono text-textSecondary text-xs">
+                          {r.reservationNumber}
+                        </td>
+                        <td className="font-medium text-ink">{r.guestName}</td>
+                        <td>
+                          <div className="inline-flex items-center gap-2">
+                            <span>{format(new Date(r.issuedAt), "dd MMM yyyy")}</span>
+                            <AgeBadge days={daysSince(r.issuedAt)} />
+                          </div>
+                        </td>
+                        <td className="capitalize">{r.status}</td>
+                        <td className="text-right font-mono tabular-nums">{inr(r.grandTotal)}</td>
+                        <td className="text-right font-mono text-dangerFg font-semibold tabular-nums">
+                          {inr(r.balanceDue)}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* MOBILE */}
+              <ul className="md:hidden divide-y divide-divider">
                 {invoices.map((r) => (
-                  <tr
+                  <li
                     key={r.invoiceId}
-                    className="cursor-pointer"
+                    role="button"
+                    tabIndex={0}
+                    className={MOBILE_ROW}
                     onClick={() => navigate(`/reservations/${r.reservationNumber}`)}
+                    onKeyDown={rowKeyActivate(() =>
+                      navigate(`/reservations/${r.reservationNumber}`),
+                    )}
                   >
-                    <td className="font-mono text-xs">{r.invoiceNumber}</td>
-                    <td className="font-mono text-textSecondary text-xs">
-                      {r.reservationNumber}
-                    </td>
-                    <td className="font-medium text-ink">{r.guestName}</td>
-                    <td>
-                      <div className="inline-flex items-center gap-2">
-                        <span>{format(new Date(r.issuedAt), "dd MMM yyyy")}</span>
-                        <AgeBadge days={daysSince(r.issuedAt)} />
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0 flex-1">
+                        <div className="font-mono text-xs font-semibold text-ink truncate">
+                          {r.invoiceNumber}
+                        </div>
+                        <div className="font-medium text-ink truncate mt-0.5">{r.guestName}</div>
+                        <div className="font-mono text-[10px] text-textSecondary truncate mt-0.5">
+                          {r.reservationNumber}
+                        </div>
                       </div>
-                    </td>
-                    <td className="capitalize">{r.status}</td>
-                    <td className="text-right font-mono tabular-nums">{inr(r.grandTotal)}</td>
-                    <td className="text-right font-mono text-dangerFg font-semibold tabular-nums">
-                      {inr(r.balanceDue)}
-                    </td>
-                  </tr>
+                      <div className="text-right shrink-0">
+                        <div className="font-mono text-dangerFg font-semibold tabular-nums">
+                          {inr(r.balanceDue)}
+                        </div>
+                        <div className="font-mono text-[11px] text-textSecondary tabular-nums mt-0.5">
+                          of {inr(r.grandTotal)}
+                        </div>
+                      </div>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-x-2 gap-y-1 mt-1.5 text-[11px] text-inkMuted">
+                      <span className="capitalize">{r.status}</span>
+                      <span>·</span>
+                      <span>Issued {format(new Date(r.issuedAt), "dd MMM yyyy")}</span>
+                      <AgeBadge days={daysSince(r.issuedAt)} />
+                    </div>
+                  </li>
                 ))}
-              </tbody>
-            </table>
+              </ul>
+            </>
           )}
         </div>
       </section>
@@ -1853,6 +2156,9 @@ function DailyLedgerTab({ from, to }: { from: string; to: string }) {
   // week view keeps every day so gaps are visible.
   const hasAnything = (d: LedgerDay) =>
     d.roomsOccupied > 0 || d.collected > 0.009 || d.expenses > 0.009;
+  // Computed once — the desktop table and the phone card list render the
+  // same filtered set.
+  const visibleDays = daily.filter(hasAnything);
 
   if (isLoading) return <Loader label="Building the day book…" />;
 
@@ -1885,7 +2191,7 @@ function DailyLedgerTab({ from, to }: { from: string; to: string }) {
           title="Day book"
           subtitle="Click a day to see each room, guest and nightly price"
           right={
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               <ExportBtn
                 label="Export days CSV"
                 disabled={!daily.length}
@@ -1928,111 +2234,222 @@ function DailyLedgerTab({ from, to }: { from: string; to: string }) {
             </div>
           }
         />
-        <div className="card !p-0 overflow-x-auto">
-          {daily.filter(hasAnything).length === 0 ? (
+        <div className="card !p-0 overflow-hidden">
+          {visibleDays.length === 0 ? (
             <EmptyState Icon={Inbox} title="Nothing recorded in this range" />
           ) : (
-            <table className="table-base">
-              <thead>
-                <tr>
-                  <th>Date</th>
-                  <th className="!text-right">Rooms</th>
-                  <th>Room numbers</th>
-                  <th className="!text-right">Room charges</th>
-                  <th className="!text-right">Collected</th>
-                  <th className="!text-right">Expenses</th>
-                  <th className="!text-right">Net</th>
-                </tr>
-              </thead>
-              <tbody>
-                {daily.filter(hasAnything).map((d) => {
-                  const open = expanded === d.day;
-                  return (
-                    <Fragment key={d.day}>
-                      <tr
-                        className={`cursor-pointer hover:bg-surfaceAlt ${open ? "bg-brand-soft/30" : ""}`}
-                        onClick={() => setExpanded(open ? null : d.day)}
-                      >
-                        <td className="font-mono font-semibold text-ink whitespace-nowrap">
-                          {format(new Date(d.day), "dd MMM yyyy")}
-                          <span className="ml-1.5 text-[10px] font-sans font-normal text-textSecondary">
-                            {format(new Date(d.day), "EEE")}
-                          </span>
-                        </td>
-                        <td className="text-right tabular-nums">{d.roomsOccupied}</td>
-                        <td className="max-w-[220px] truncate text-textSecondary text-xs font-mono">
-                          {d.roomNumbers || "-"}
-                        </td>
-                        <td className="text-right font-mono tabular-nums">{inr(d.roomCharges)}</td>
-                        <td className="text-right font-mono tabular-nums text-success">
-                          {inr(d.collected)}
-                        </td>
-                        <td className="text-right font-mono tabular-nums text-dangerFg">
-                          {d.expenses > 0.009 ? `− ${inr(d.expenses)}` : inr(0)}
-                        </td>
-                        <td
-                          className={`text-right font-mono font-semibold tabular-nums ${
-                            d.net >= 0 ? "text-ink" : "text-dangerFg"
-                          }`}
+            <>
+            {/* DESKTOP */}
+            <div className="hidden md:block overflow-x-auto">
+              <table className="table-base min-w-[880px]">
+                <thead>
+                  <tr>
+                    <th>Date</th>
+                    <th className="!text-right">Rooms</th>
+                    <th>Room numbers</th>
+                    <th className="!text-right">Room charges</th>
+                    <th className="!text-right">Collected</th>
+                    <th className="!text-right">Expenses</th>
+                    <th className="!text-right">Net</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {visibleDays.map((d) => {
+                    const open = expanded === d.day;
+                    return (
+                      <Fragment key={d.day}>
+                        <tr
+                          className={`cursor-pointer hover:bg-surfaceAlt ${open ? "bg-brand-soft/30" : ""}`}
+                          onClick={() => setExpanded(open ? null : d.day)}
                         >
-                          {inr(d.net)}
-                        </td>
-                      </tr>
-                      {open && d.rooms.length > 0 && (
-                        <tr>
-                          <td colSpan={7} className="!p-0 bg-surfaceAlt">
-                            <table className="w-full text-xs">
-                              <tbody>
-                                {d.rooms.map((r, i) => (
-                                  <tr key={`${d.day}-${r.roomNumber}-${i}`} className="border-b border-divider last:border-0">
-                                    <td className="pl-10 py-1.5 font-mono font-semibold text-ink w-24">
-                                      {r.roomNumber}
-                                    </td>
-                                    <td className="py-1.5">
-                                      {r.guestName}
-                                      {r.complimentary && (
-                                        <span className="ml-1.5 text-[10px] text-success">Comp</span>
-                                      )}
-                                    </td>
-                                    <td className="py-1.5 font-mono text-textSecondary">
-                                      {r.reservationNumber}
-                                    </td>
-                                    <td className="py-1.5 pr-4 text-right font-mono tabular-nums">
-                                      {inr(r.rate)}/night
-                                    </td>
-                                  </tr>
-                                ))}
-                              </tbody>
-                            </table>
+                          <td className="font-mono font-semibold text-ink whitespace-nowrap">
+                            {format(new Date(d.day), "dd MMM yyyy")}
+                            <span className="ml-1.5 text-[10px] font-sans font-normal text-textSecondary">
+                              {format(new Date(d.day), "EEE")}
+                            </span>
+                          </td>
+                          <td className="text-right tabular-nums">{d.roomsOccupied}</td>
+                          <td className="max-w-[220px] truncate text-textSecondary text-xs font-mono">
+                            {d.roomNumbers || "-"}
+                          </td>
+                          <td className="text-right font-mono tabular-nums">{inr(d.roomCharges)}</td>
+                          <td className="text-right font-mono tabular-nums text-success">
+                            {inr(d.collected)}
+                          </td>
+                          <td className="text-right font-mono tabular-nums text-dangerFg">
+                            {d.expenses > 0.009 ? `− ${inr(d.expenses)}` : inr(0)}
+                          </td>
+                          <td
+                            className={`text-right font-mono font-semibold tabular-nums ${
+                              d.net >= 0 ? "text-ink" : "text-dangerFg"
+                            }`}
+                          >
+                            {inr(d.net)}
                           </td>
                         </tr>
+                        {open && d.rooms.length > 0 && (
+                          <tr>
+                            <td colSpan={7} className="!p-0 bg-surfaceAlt">
+                              <table className="w-full text-xs">
+                                <tbody>
+                                  {d.rooms.map((r, i) => (
+                                    <tr key={`${d.day}-${r.roomNumber}-${i}`} className="border-b border-divider last:border-0">
+                                      <td className="pl-10 py-1.5 font-mono font-semibold text-ink w-24">
+                                        {r.roomNumber}
+                                      </td>
+                                      <td className="py-1.5">
+                                        {r.guestName}
+                                        {r.complimentary && (
+                                          <span className="ml-1.5 text-[10px] text-success">Comp</span>
+                                        )}
+                                      </td>
+                                      <td className="py-1.5 font-mono text-textSecondary">
+                                        {r.reservationNumber}
+                                      </td>
+                                      <td className="py-1.5 pr-4 text-right font-mono tabular-nums">
+                                        {inr(r.rate)}/night
+                                      </td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                            </td>
+                          </tr>
+                        )}
+                      </Fragment>
+                    );
+                  })}
+                </tbody>
+                <tfoot>
+                  <tr className="bg-surfaceAlt">
+                    <td className="font-semibold text-ink">Total</td>
+                    <td className="text-right font-semibold tabular-nums">
+                      {totals?.roomNights ?? 0}
+                    </td>
+                    <td></td>
+                    <td className="text-right font-mono font-bold tabular-nums">
+                      {inr(totals?.roomCharges ?? 0)}
+                    </td>
+                    <td className="text-right font-mono font-bold tabular-nums text-success">
+                      {inr(totals?.collected ?? 0)}
+                    </td>
+                    <td className="text-right font-mono font-bold tabular-nums text-dangerFg">
+                      − {inr(totals?.expenses ?? 0)}
+                    </td>
+                    <td className="text-right font-mono font-bold tabular-nums">
+                      {inr(totals?.net ?? 0)}
+                    </td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+
+            {/* MOBILE — same day rows as stacked cards; tapping one opens
+                the per-room detail, exactly like the desktop expander. */}
+            <ul className="md:hidden divide-y divide-divider">
+              {visibleDays.map((d) => {
+                const open = expanded === d.day;
+                return (
+                  <li key={d.day}>
+                    <div
+                      role="button"
+                      tabIndex={0}
+                      aria-expanded={open}
+                      className={`${MOBILE_ROW} ${open ? "bg-brand-soft/30" : ""}`}
+                      onClick={() => setExpanded(open ? null : d.day)}
+                      onKeyDown={rowKeyActivate(() => setExpanded(open ? null : d.day))}
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="min-w-0 flex-1">
+                          <div className="font-mono font-semibold text-ink">
+                            {format(new Date(d.day), "dd MMM yyyy")}
+                            <span className="ml-1.5 text-[10px] font-sans font-normal text-textSecondary">
+                              {format(new Date(d.day), "EEE")}
+                            </span>
+                          </div>
+                          <div className="text-[11px] text-inkMuted mt-0.5">
+                            {d.roomsOccupied} room{d.roomsOccupied === 1 ? "" : "s"} ·{" "}
+                            {inr(d.roomCharges)} charges
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-1.5 shrink-0">
+                          <span
+                            className={`font-mono font-semibold tabular-nums ${
+                              d.net >= 0 ? "text-ink" : "text-dangerFg"
+                            }`}
+                          >
+                            {inr(d.net)}
+                          </span>
+                          <ChevronDown
+                            className={`w-4 h-4 text-textSecondary transition-transform ${
+                              open ? "rotate-180" : ""
+                            }`}
+                          />
+                        </div>
+                      </div>
+                      <div className="flex flex-wrap gap-x-3 gap-y-0.5 mt-1.5 text-[11px] font-mono tabular-nums">
+                        <span className="text-success">{inr(d.collected)} collected</span>
+                        <span className="text-dangerFg">
+                          {d.expenses > 0.009 ? `− ${inr(d.expenses)}` : inr(0)} expenses
+                        </span>
+                      </div>
+                      {d.roomNumbers && (
+                        <div className="text-[11px] font-mono text-textSecondary mt-1 break-words">
+                          {d.roomNumbers}
+                        </div>
                       )}
-                    </Fragment>
-                  );
-                })}
-              </tbody>
-              <tfoot>
-                <tr className="bg-surfaceAlt">
-                  <td className="font-semibold text-ink">Total</td>
-                  <td className="text-right font-semibold tabular-nums">
-                    {totals?.roomNights ?? 0}
-                  </td>
-                  <td></td>
-                  <td className="text-right font-mono font-bold tabular-nums">
-                    {inr(totals?.roomCharges ?? 0)}
-                  </td>
-                  <td className="text-right font-mono font-bold tabular-nums text-success">
-                    {inr(totals?.collected ?? 0)}
-                  </td>
-                  <td className="text-right font-mono font-bold tabular-nums text-dangerFg">
-                    − {inr(totals?.expenses ?? 0)}
-                  </td>
-                  <td className="text-right font-mono font-bold tabular-nums">
+                    </div>
+                    {open && d.rooms.length > 0 && (
+                      <ul className="bg-surfaceAlt border-t border-divider divide-y divide-divider">
+                        {d.rooms.map((r, i) => (
+                          <li
+                            key={`${d.day}-${r.roomNumber}-${i}`}
+                            className="px-3 py-2 flex items-start justify-between gap-2"
+                          >
+                            <div className="min-w-0">
+                              <div className="text-xs">
+                                <span className="font-mono font-semibold text-ink">
+                                  {r.roomNumber}
+                                </span>
+                                <span className="ml-2">{r.guestName}</span>
+                                {r.complimentary && (
+                                  <span className="ml-1.5 text-[10px] text-success">Comp</span>
+                                )}
+                              </div>
+                              <div className="text-[10px] font-mono text-textSecondary truncate">
+                                {r.reservationNumber}
+                              </div>
+                            </div>
+                            <div className="text-xs font-mono tabular-nums shrink-0">
+                              {inr(r.rate)}/night
+                            </div>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </li>
+                );
+              })}
+              <li className="px-3 py-3 bg-surfaceAlt">
+                <div className="flex items-baseline justify-between gap-2">
+                  <span className="font-semibold text-ink">
+                    Total · {totals?.roomNights ?? 0} room night
+                    {(totals?.roomNights ?? 0) === 1 ? "" : "s"}
+                  </span>
+                  <span className="font-mono font-bold text-ink tabular-nums shrink-0">
                     {inr(totals?.net ?? 0)}
-                  </td>
-                </tr>
-              </tfoot>
-            </table>
+                  </span>
+                </div>
+                <div className="flex flex-wrap gap-x-3 gap-y-0.5 mt-1 text-[11px] font-mono tabular-nums">
+                  <span className="text-textSecondary">
+                    {inr(totals?.roomCharges ?? 0)} charges
+                  </span>
+                  <span className="text-success">{inr(totals?.collected ?? 0)} collected</span>
+                  <span className="text-dangerFg">− {inr(totals?.expenses ?? 0)} expenses</span>
+                </div>
+              </li>
+            </ul>
+            </>
           )}
         </div>
         <p className="text-[11px] text-textSecondary mt-2 leading-snug">
@@ -2094,64 +2511,115 @@ function RoomsTab({ from, to }: { from: string; to: string }) {
             />
           }
         />
-        <div className="card !p-0 overflow-x-auto">
+        <div className="card !p-0 overflow-hidden">
           {data.length === 0 ? (
             <EmptyState Icon={Inbox} title="No room activity in this range" />
           ) : (
-            <table className="table-base">
-              <thead>
-                <tr>
-                  <th>Room</th>
-                  <th>Type</th>
-                  <th className="!text-right">Base rate</th>
-                  <th className="!text-right">Bookings</th>
-                  <th className="!text-right">Day use</th>
-                  <th className="!text-right">Revenue</th>
-                  <th className="!text-right">Share</th>
-                </tr>
-              </thead>
-              <tbody>
+            <>
+              {/* DESKTOP */}
+              <div className="hidden md:block overflow-x-auto">
+                <table className="table-base">
+                  <thead>
+                    <tr>
+                      <th>Room</th>
+                      <th>Type</th>
+                      <th className="!text-right">Base rate</th>
+                      <th className="!text-right">Bookings</th>
+                      <th className="!text-right">Day use</th>
+                      <th className="!text-right">Revenue</th>
+                      <th className="!text-right">Share</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {data.map((r) => {
+                      const share = total > 0 ? (Number(r.revenue) / total) * 100 : 0;
+                      return (
+                        <tr key={r.roomId}>
+                          <td className="font-mono font-semibold text-ink">{r.roomNumber}</td>
+                          <td className="capitalize">{r.roomType}</td>
+                          <td className="text-right font-mono tabular-nums">{inr(r.baseRate)}</td>
+                          <td className="text-right tabular-nums">{r.bookings}</td>
+                          <td className="text-right tabular-nums">{r.shortStayBookings ?? 0}</td>
+                          <td className="text-right font-mono tabular-nums">{inr(r.revenue)}</td>
+                          <td className="text-right">
+                            <div className="inline-flex items-center gap-2">
+                              <div className="w-16 h-1.5 rounded-full bg-surfaceSubtle overflow-hidden">
+                                <div
+                                  className="h-full bg-brand"
+                                  style={{ width: `${share}%` }}
+                                />
+                              </div>
+                              <span className="text-[11px] font-mono text-textSecondary w-9 text-right">
+                                {share.toFixed(0)}%
+                              </span>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                  <tfoot>
+                    <tr className="bg-surfaceAlt">
+                      <td className="font-semibold text-ink" colSpan={3}>
+                        Total
+                      </td>
+                      <td className="text-right font-semibold tabular-nums">{totalBookings}</td>
+                      <td className="text-right font-semibold tabular-nums">
+                        {data.reduce((s, r) => s + (r.shortStayBookings ?? 0), 0)}
+                      </td>
+                      <td className="text-right font-mono font-bold tabular-nums">{inr(total)}</td>
+                      <td></td>
+                    </tr>
+                  </tfoot>
+                </table>
+              </div>
+
+              {/* MOBILE */}
+              <ul className="md:hidden divide-y divide-divider">
                 {data.map((r) => {
                   const share = total > 0 ? (Number(r.revenue) / total) * 100 : 0;
                   return (
-                    <tr key={r.roomId}>
-                      <td className="font-mono font-semibold text-ink">{r.roomNumber}</td>
-                      <td className="capitalize">{r.roomType}</td>
-                      <td className="text-right font-mono tabular-nums">{inr(r.baseRate)}</td>
-                      <td className="text-right tabular-nums">{r.bookings}</td>
-                      <td className="text-right tabular-nums">{r.shortStayBookings ?? 0}</td>
-                      <td className="text-right font-mono tabular-nums">{inr(r.revenue)}</td>
-                      <td className="text-right">
-                        <div className="inline-flex items-center gap-2">
-                          <div className="w-16 h-1.5 rounded-full bg-surfaceSubtle overflow-hidden">
-                            <div
-                              className="h-full bg-brand"
-                              style={{ width: `${share}%` }}
-                            />
+                    <li key={r.roomId} className="px-3 py-3">
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="min-w-0 flex-1">
+                          <div className="font-mono font-semibold text-ink">{r.roomNumber}</div>
+                          <div className="text-[11px] text-inkMuted capitalize mt-0.5">
+                            {r.roomType} · base {inr(r.baseRate)}
                           </div>
-                          <span className="text-[11px] font-mono text-textSecondary w-9 text-right">
-                            {share.toFixed(0)}%
-                          </span>
                         </div>
-                      </td>
-                    </tr>
+                        <div className="font-mono font-semibold text-ink tabular-nums shrink-0">
+                          {inr(r.revenue)}
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2 mt-1.5">
+                        <div className="flex-1 h-1.5 rounded-full bg-surfaceSubtle overflow-hidden">
+                          <div className="h-full bg-brand" style={{ width: `${share}%` }} />
+                        </div>
+                        <span className="text-[11px] font-mono text-textSecondary shrink-0">
+                          {share.toFixed(0)}%
+                        </span>
+                      </div>
+                      <div className="text-[11px] text-inkMuted mt-1">
+                        {r.bookings} booking{r.bookings === 1 ? "" : "s"} ·{" "}
+                        {r.shortStayBookings ?? 0} day use
+                      </div>
+                    </li>
                   );
                 })}
-              </tbody>
-              <tfoot>
-                <tr className="bg-surfaceAlt">
-                  <td className="font-semibold text-ink" colSpan={3}>
-                    Total
-                  </td>
-                  <td className="text-right font-semibold tabular-nums">{totalBookings}</td>
-                  <td className="text-right font-semibold tabular-nums">
-                    {data.reduce((s, r) => s + (r.shortStayBookings ?? 0), 0)}
-                  </td>
-                  <td className="text-right font-mono font-bold tabular-nums">{inr(total)}</td>
-                  <td></td>
-                </tr>
-              </tfoot>
-            </table>
+                <li className="px-3 py-3 bg-surfaceAlt">
+                  <div className="flex items-baseline justify-between gap-2">
+                    <span className="font-semibold text-ink">Total</span>
+                    <span className="font-mono font-bold text-ink tabular-nums shrink-0">
+                      {inr(total)}
+                    </span>
+                  </div>
+                  <div className="text-[11px] text-inkMuted mt-1">
+                    {totalBookings} booking{totalBookings === 1 ? "" : "s"} ·{" "}
+                    {data.reduce((s, r) => s + (r.shortStayBookings ?? 0), 0)} day use
+                  </div>
+                </li>
+              </ul>
+            </>
           )}
         </div>
       </div>
@@ -2235,7 +2703,7 @@ function CreditTab({ from, to }: { from: string; to: string }) {
             />
           }
         />
-        <div className="card !p-0 overflow-x-auto">
+        <div className="card !p-0 overflow-hidden">
           {data.rows.length === 0 ? (
             <EmptyState
               Icon={Inbox}
@@ -2243,63 +2711,124 @@ function CreditTab({ from, to }: { from: string; to: string }) {
               hint="Bookings marked as complimentary or carrying credit notes show up here."
             />
           ) : (
-            <table className="table-base">
-              <thead>
-                <tr>
-                  <th>Reservation</th>
-                  <th>Guest</th>
-                  <th>Source</th>
-                  <th>Check-in</th>
-                  <th>Check-out</th>
-                  <th className="!text-right">Nights</th>
-                  <th className="!text-right">Total</th>
-                  <th className="!text-right">Paid</th>
-                  <th className="!text-right">Balance</th>
-                  <th>Notes</th>
-                </tr>
-              </thead>
-              <tbody>
+            <>
+              {/* DESKTOP */}
+              <div className="hidden md:block overflow-x-auto">
+                <table className="table-base min-w-[1000px]">
+                  <thead>
+                    <tr>
+                      <th>Reservation</th>
+                      <th>Guest</th>
+                      <th>Source</th>
+                      <th>Check-in</th>
+                      <th>Check-out</th>
+                      <th className="!text-right">Nights</th>
+                      <th className="!text-right">Total</th>
+                      <th className="!text-right">Paid</th>
+                      <th className="!text-right">Balance</th>
+                      <th>Notes</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {data.rows.map((r) => (
+                      <tr
+                        key={r.id}
+                        role="button"
+                        tabIndex={0}
+                        onClick={() => navigate(`/reservations/${r.reservationNumber}`)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter" || e.key === " ") {
+                            e.preventDefault();
+                            navigate(`/reservations/${r.reservationNumber}`);
+                          }
+                        }}
+                        className="cursor-pointer hover:bg-brand-soft/30 focus:outline-none focus:bg-brand-soft/30"
+                      >
+                        <td className="font-mono text-accentBlue text-xs">
+                          {r.reservationNumber}
+                        </td>
+                        <td>
+                          <div className="font-medium text-ink">{r.guestName}</div>
+                          <div className="text-[11px] text-textSecondary font-mono">
+                            {r.guestPhone}
+                          </div>
+                        </td>
+                        <td className="capitalize text-xs">
+                          {r.bookingSource
+                            .replace(/_/g, " ")
+                            .replace("phone whatsapp", "Phone / WhatsApp")}
+                        </td>
+                        <td>{format(new Date(r.checkInDate), "dd MMM yyyy")}</td>
+                        <td>{format(new Date(r.checkOutDate), "dd MMM yyyy")}</td>
+                        <td className="text-right tabular-nums">{r.numNights}</td>
+                        <td className="text-right font-mono tabular-nums">{inr(r.grandTotal)}</td>
+                        <td className="text-right font-mono text-success tabular-nums">
+                          {inr(r.totalPaid)}
+                        </td>
+                        <td className="text-right font-mono text-dangerFg tabular-nums">
+                          {inr(r.balanceDue)}
+                        </td>
+                        <td className="text-xs text-textSecondary">{r.creditNotes ?? "-"}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* MOBILE */}
+              <ul className="md:hidden divide-y divide-divider">
                 {data.rows.map((r) => (
-                  <tr
+                  <li
                     key={r.id}
                     role="button"
                     tabIndex={0}
+                    className={MOBILE_ROW}
                     onClick={() => navigate(`/reservations/${r.reservationNumber}`)}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter" || e.key === " ") {
-                        e.preventDefault();
-                        navigate(`/reservations/${r.reservationNumber}`);
-                      }
-                    }}
-                    className="cursor-pointer hover:bg-brand-soft/30 focus:outline-none focus:bg-brand-soft/30"
+                    onKeyDown={rowKeyActivate(() =>
+                      navigate(`/reservations/${r.reservationNumber}`),
+                    )}
                   >
-                    <td className="font-mono text-accentBlue text-xs">{r.reservationNumber}</td>
-                    <td>
-                      <div className="font-medium text-ink">{r.guestName}</div>
-                      <div className="text-[11px] text-textSecondary font-mono">
-                        {r.guestPhone}
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0 flex-1">
+                        <div className="font-mono text-accentBlue text-xs truncate">
+                          {r.reservationNumber}
+                        </div>
+                        <div className="font-medium text-ink truncate mt-0.5">{r.guestName}</div>
+                        <div className="text-[11px] text-textSecondary font-mono truncate">
+                          {r.guestPhone}
+                        </div>
                       </div>
-                    </td>
-                    <td className="capitalize text-xs">
+                      <div className="text-right shrink-0">
+                        <div className="font-mono font-semibold text-ink tabular-nums">
+                          {inr(r.grandTotal)}
+                        </div>
+                        <div className="font-mono text-[11px] text-success tabular-nums mt-0.5">
+                          {inr(r.totalPaid)} paid
+                        </div>
+                        <div className="font-mono text-[11px] text-dangerFg tabular-nums mt-0.5">
+                          {inr(r.balanceDue)} due
+                        </div>
+                      </div>
+                    </div>
+                    <div className="text-[11px] text-inkMuted mt-1.5">
+                      {format(new Date(r.checkInDate), "dd MMM yyyy")} →{" "}
+                      {format(new Date(r.checkOutDate), "dd MMM yyyy")} · {r.numNights} night
+                      {r.numNights === 1 ? "" : "s"}
+                    </div>
+                    <div className="text-[11px] text-inkMuted capitalize mt-0.5">
                       {r.bookingSource
                         .replace(/_/g, " ")
                         .replace("phone whatsapp", "Phone / WhatsApp")}
-                    </td>
-                    <td>{format(new Date(r.checkInDate), "dd MMM yyyy")}</td>
-                    <td>{format(new Date(r.checkOutDate), "dd MMM yyyy")}</td>
-                    <td className="text-right tabular-nums">{r.numNights}</td>
-                    <td className="text-right font-mono tabular-nums">{inr(r.grandTotal)}</td>
-                    <td className="text-right font-mono text-success tabular-nums">
-                      {inr(r.totalPaid)}
-                    </td>
-                    <td className="text-right font-mono text-dangerFg tabular-nums">
-                      {inr(r.balanceDue)}
-                    </td>
-                    <td className="text-xs text-textSecondary">{r.creditNotes ?? "-"}</td>
-                  </tr>
+                    </div>
+                    {r.creditNotes && (
+                      <div className="text-xs text-textSecondary mt-1 break-words">
+                        {r.creditNotes}
+                      </div>
+                    )}
+                  </li>
                 ))}
-              </tbody>
-            </table>
+              </ul>
+            </>
           )}
         </div>
       </div>
@@ -2351,34 +2880,68 @@ function GuestsTab({ from, to }: { from: string; to: string }) {
             />
           }
         />
-        <div className="card !p-0 overflow-x-auto">
+        <div className="card !p-0 overflow-hidden">
           {data.length === 0 ? (
             <EmptyState Icon={Inbox} title="No guests in this range yet" />
           ) : (
-            <table className="table-base">
-              <thead>
-                <tr>
-                  <th>Guest</th>
-                  <th>Phone</th>
-                  <th className="!text-right">Stays</th>
-                  <th className="!text-right">Revenue</th>
-                </tr>
-              </thead>
-              <tbody>
+            <>
+              {/* DESKTOP */}
+              <div className="hidden md:block overflow-x-auto">
+                <table className="table-base">
+                  <thead>
+                    <tr>
+                      <th>Guest</th>
+                      <th>Phone</th>
+                      <th className="!text-right">Stays</th>
+                      <th className="!text-right">Revenue</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {data.map((g) => (
+                      <tr
+                        key={g.guestId}
+                        className="cursor-pointer"
+                        onClick={() => navigate(`/guests/${g.phone}`)}
+                      >
+                        <td className="font-medium text-ink">{g.fullName}</td>
+                        <td className="font-mono text-textSecondary text-xs">{g.phone}</td>
+                        <td className="text-right tabular-nums">{g.stays}</td>
+                        <td className="text-right font-mono tabular-nums">{inr(g.revenue)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* MOBILE */}
+              <ul className="md:hidden divide-y divide-divider">
                 {data.map((g) => (
-                  <tr
+                  <li
                     key={g.guestId}
-                    className="cursor-pointer"
+                    role="button"
+                    tabIndex={0}
+                    className={MOBILE_ROW}
                     onClick={() => navigate(`/guests/${g.phone}`)}
+                    onKeyDown={rowKeyActivate(() => navigate(`/guests/${g.phone}`))}
                   >
-                    <td className="font-medium text-ink">{g.fullName}</td>
-                    <td className="font-mono text-textSecondary text-xs">{g.phone}</td>
-                    <td className="text-right tabular-nums">{g.stays}</td>
-                    <td className="text-right font-mono tabular-nums">{inr(g.revenue)}</td>
-                  </tr>
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0 flex-1">
+                        <div className="font-medium text-ink truncate">{g.fullName}</div>
+                        <div className="font-mono text-xs text-textSecondary truncate mt-0.5">
+                          {g.phone}
+                        </div>
+                        <div className="text-[11px] text-inkMuted mt-1">
+                          {g.stays} stay{g.stays === 1 ? "" : "s"}
+                        </div>
+                      </div>
+                      <div className="font-mono font-semibold text-ink tabular-nums shrink-0">
+                        {inr(g.revenue)}
+                      </div>
+                    </div>
+                  </li>
                 ))}
-              </tbody>
-            </table>
+              </ul>
+            </>
           )}
         </div>
       </div>

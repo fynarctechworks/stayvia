@@ -80,14 +80,17 @@ export default function StaffPage() {
           </p>
         </div>
         {view === "staff" && canStaff && (
-          <button className="btn-primary inline-flex items-center gap-2" onClick={() => setShowAdd(true)}>
+          <button
+            className="btn-primary w-full sm:w-auto inline-flex items-center justify-center gap-2"
+            onClick={() => setShowAdd(true)}
+          >
             <UserPlus className="w-4 h-4" /> Add Staff
           </button>
         )}
       </div>
 
       {canStaff && canRoles && (
-        <div className="flex gap-0.5 border-b border-borderc">
+        <div className="flex gap-0.5 border-b border-borderc overflow-x-auto">
           {(
             [
               { id: "staff", label: "Staff" },
@@ -97,7 +100,7 @@ export default function StaffPage() {
             <button
               key={t.id}
               onClick={() => setView(t.id)}
-              className={`px-4 py-2.5 text-sm font-semibold border-b-2 -mb-px transition-colors ${
+              className={`px-4 py-2.5 min-h-[44px] whitespace-nowrap text-sm font-semibold border-b-2 -mb-px transition-colors ${
                 view === t.id
                   ? "border-gold text-ink"
                   : "border-transparent text-inkMuted hover:text-ink"
@@ -113,76 +116,94 @@ export default function StaffPage() {
         <RolesManager />
       ) : (
       <>
-      <div className="card p-0">
-        <table className="table-base">
-          <thead>
-            <tr>
-              <th>Name</th>
-              <th>Email</th>
-              <th>Role</th>
-              <th>Phone</th>
-              <th>Status</th>
-              <th className="!text-right">Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {data.map((s) => (
-              <tr key={s.id} className={s.isActive ? "" : "opacity-60"}>
-                <td>
+      <div className="card !p-0 overflow-hidden">
+        {/* Desktop column headers — the mobile cards label themselves, so
+            this row only exists from md up. */}
+        <div className="hidden md:grid grid-cols-[minmax(140px,1fr)_minmax(160px,1.2fr)_100px_120px_110px_200px] gap-3 px-3 py-2.5 text-[10px] font-bold uppercase tracking-[0.06em] text-inkMuted bg-surfaceAlt border-b border-borderc">
+          <div>Name</div>
+          <div>Email</div>
+          <div>Role</div>
+          <div>Phone</div>
+          <div>Status</div>
+          <div className="text-right">Actions</div>
+        </div>
+        <ul className="divide-y divide-divider">
+          {data.map((s) => {
+            // Handlers shared by both layouts — only the presentation differs.
+            const onDeactivate = async () => {
+              const ok = await dialog.confirm({
+                title: `Deactivate ${s.fullName}?`,
+                message: "They will lose access but their history is kept.",
+                okLabel: "Deactivate",
+                tone: "warning",
+              });
+              if (ok) deactivate.mutate(s.id);
+            };
+            const onHardDelete = async () => {
+              const ans = await dialog.prompt({
+                title: `Permanently delete ${s.fullName}?`,
+                message:
+                  "This removes them from auth and the database. Only works if they have no reservations, invoices, payments, or activity. Type DELETE to confirm.",
+                placeholder: "Type DELETE",
+                okLabel: "Delete forever",
+                tone: "danger",
+                required: true,
+              });
+              if (ans === "DELETE") hardDelete.mutate(s.id);
+            };
+            const roleChip = (
+              <span
+                className={`inline-flex items-center px-2 py-0.5 text-[11px] font-semibold rounded-[6px] capitalize ${
+                  ROLE_CHIP[s.role] ?? "bg-neutralBg text-inkMuted"
+                }`}
+              >
+                {s.role}
+              </span>
+            );
+            const statusPill = (
+              <span
+                className={`inline-flex items-center px-2.5 py-0.5 text-[11px] font-semibold rounded-full ${
+                  s.isActive ? "bg-successBg text-success" : "bg-neutralBg text-inkMuted"
+                }`}
+              >
+                {s.isActive ? "Active" : "Deactivated"}
+              </span>
+            );
+
+            return (
+              <li
+                key={s.id}
+                className={`hover:bg-surfaceAlt transition-colors ${s.isActive ? "" : "opacity-60"}`}
+              >
+                {/* DESKTOP */}
+                <div className="hidden md:grid grid-cols-[minmax(140px,1fr)_minmax(160px,1.2fr)_100px_120px_110px_200px] gap-3 items-center px-3 py-3 text-sm">
                   <div className="flex items-center gap-2.5 min-w-0">
                     <span className="w-[34px] h-[34px] shrink-0 rounded-full bg-parchment text-inkBody grid place-items-center font-bold text-xs">
                       {initials(s.fullName)}
                     </span>
-                    <span className="font-semibold text-ink whitespace-nowrap">{s.fullName}</span>
+                    <span className="font-semibold text-ink truncate">{s.fullName}</span>
                   </div>
-                </td>
-                <td className="text-textSecondary">{s.email}</td>
-                <td>
-                  <span
-                    className={`inline-flex items-center px-2 py-0.5 text-[11px] font-semibold rounded-[6px] capitalize ${
-                      ROLE_CHIP[s.role] ?? "bg-neutralBg text-inkMuted"
-                    }`}
-                  >
-                    {s.role}
-                  </span>
-                </td>
-                <td className="font-mono text-xs text-textSecondary">{s.phone ?? "-"}</td>
-                <td>
-                  <span
-                    className={`inline-flex items-center px-2.5 py-0.5 text-[11px] font-semibold rounded-full ${
-                      s.isActive
-                        ? "bg-successBg text-success"
-                        : "bg-neutralBg text-inkMuted"
-                    }`}
-                  >
-                    {s.isActive ? "Active" : "Deactivated"}
-                  </span>
-                </td>
-                <td className="!text-right">
-                  <div className="inline-flex items-center gap-3">
+                  <div className="text-textSecondary truncate" title={s.email}>
+                    {s.email}
+                  </div>
+                  <div>{roleChip}</div>
+                  <div className="font-mono text-xs text-textSecondary">{s.phone ?? "-"}</div>
+                  <div>{statusPill}</div>
+                  <div className="flex justify-end items-center gap-3">
                     <button
                       className="text-brand-deep hover:underline text-xs font-semibold inline-flex items-center gap-1"
                       onClick={() => setEditing(s)}
                     >
                       <Pencil className="w-3 h-3" /> Edit
                     </button>
-                    {s.isActive && (
+                    {s.isActive ? (
                       <button
                         className="text-warnFg hover:underline text-xs font-semibold inline-flex items-center gap-1"
-                        onClick={async () => {
-                          const ok = await dialog.confirm({
-                            title: `Deactivate ${s.fullName}?`,
-                            message: "They will lose access but their history is kept.",
-                            okLabel: "Deactivate",
-                            tone: "warning",
-                          });
-                          if (ok) deactivate.mutate(s.id);
-                        }}
+                        onClick={onDeactivate}
                       >
                         Deactivate
                       </button>
-                    )}
-                    {!s.isActive && (
+                    ) : (
                       <button
                         className="text-success hover:underline text-xs font-semibold"
                         onClick={() => reactivate.mutate(s.id)}
@@ -192,27 +213,67 @@ export default function StaffPage() {
                     )}
                     <button
                       className="text-dangerFg hover:underline text-xs font-semibold inline-flex items-center gap-1"
-                      onClick={async () => {
-                        const ans = await dialog.prompt({
-                          title: `Permanently delete ${s.fullName}?`,
-                          message:
-                            "This removes them from auth and the database. Only works if they have no reservations, invoices, payments, or activity. Type DELETE to confirm.",
-                          placeholder: "Type DELETE",
-                          okLabel: "Delete forever",
-                          tone: "danger",
-                          required: true,
-                        });
-                        if (ans === "DELETE") hardDelete.mutate(s.id);
-                      }}
+                      onClick={onHardDelete}
                     >
                       <Trash2 className="w-3 h-3" /> Delete
                     </button>
                   </div>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+                </div>
+
+                {/* MOBILE */}
+                <div className="md:hidden px-4 py-3">
+                  <div className="flex items-start gap-2.5">
+                    <span className="w-[38px] h-[38px] shrink-0 rounded-full bg-parchment text-inkBody grid place-items-center font-bold text-xs">
+                      {initials(s.fullName)}
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <div className="font-semibold text-ink text-sm truncate">
+                        {s.fullName}
+                      </div>
+                      <div className="text-xs text-textSecondary break-all">{s.email}</div>
+                      <div className="flex flex-wrap items-center gap-1.5 mt-1.5">
+                        {roleChip}
+                        {statusPill}
+                      </div>
+                      <div className="font-mono text-xs text-textSecondary mt-1.5">
+                        {s.phone ?? "-"}
+                      </div>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2 mt-3">
+                    <button
+                      className="min-h-[44px] inline-flex items-center justify-center gap-1.5 rounded-md border border-borderControl bg-surface text-brand-deep text-[13px] font-semibold"
+                      onClick={() => setEditing(s)}
+                    >
+                      <Pencil className="w-3.5 h-3.5" /> Edit
+                    </button>
+                    {s.isActive ? (
+                      <button
+                        className="min-h-[44px] inline-flex items-center justify-center rounded-md border border-warnBorder bg-warnBg text-warnFg text-[13px] font-semibold"
+                        onClick={onDeactivate}
+                      >
+                        Deactivate
+                      </button>
+                    ) : (
+                      <button
+                        className="min-h-[44px] inline-flex items-center justify-center rounded-md border border-successBorder bg-successBg text-success text-[13px] font-semibold"
+                        onClick={() => reactivate.mutate(s.id)}
+                      >
+                        Reactivate
+                      </button>
+                    )}
+                    <button
+                      className="col-span-2 min-h-[44px] inline-flex items-center justify-center gap-1.5 rounded-md border border-dangerBorder bg-surface text-dangerFg text-[13px] font-semibold"
+                      onClick={onHardDelete}
+                    >
+                      <Trash2 className="w-3.5 h-3.5" /> Delete
+                    </button>
+                  </div>
+                </div>
+              </li>
+            );
+          })}
+        </ul>
       </div>
       {showAdd && <AddStaffModal onClose={() => setShowAdd(false)} />}
       {editing && <EditStaffModal staff={editing} onClose={() => setEditing(null)} />}
@@ -391,10 +452,12 @@ function EditStaffModal({ staff, onClose }: { staff: Staff; onClose: () => void 
         className="bg-surface rounded-2xl shadow-modal w-full max-w-2xl max-h-[90vh] overflow-hidden flex flex-col"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="px-5 py-3 border-b border-borderc">
-          <h2 className="text-lg font-semibold text-ink">Edit Staff · {staff.fullName}</h2>
+        <div className="px-4 sm:px-5 py-3 border-b border-borderc">
+          <h2 className="text-lg font-semibold text-ink truncate">
+            Edit Staff · {staff.fullName}
+          </h2>
         </div>
-        <div className="p-5 space-y-4 overflow-y-auto">
+        <div className="p-4 sm:p-5 space-y-4 overflow-y-auto">
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <Field label="Full Name">
             <input
@@ -483,11 +546,11 @@ function EditStaffModal({ staff, onClose }: { staff: Staff; onClose: () => void 
                         return (
                           <div
                             key={d.key}
-                            className="flex items-center justify-between gap-2 text-sm py-1"
+                            className="flex flex-wrap items-center justify-between gap-2 text-sm py-1"
                           >
-                            <div className="flex-1 min-w-0">
+                            <div className="flex-1 min-w-[150px]">
                               <div className="text-ink truncate">{d.label}</div>
-                              <div className="text-[11px] text-textSecondary font-mono">
+                              <div className="text-[11px] text-textSecondary font-mono break-all">
                                 {d.key} · role:{" "}
                                 {inRole ? (
                                   <span className="text-success">allowed</span>
@@ -523,7 +586,7 @@ function EditStaffModal({ staff, onClose }: { staff: Staff; onClose: () => void 
                                         return next;
                                       })
                                     }
-                                    className={`px-2 h-6 text-[10px] font-semibold rounded-sm border transition-colors capitalize ${cls}`}
+                                    className={`px-2.5 h-8 sm:h-6 text-[10px] font-semibold rounded-sm border transition-colors capitalize ${cls}`}
                                   >
                                     {opt}
                                   </button>
@@ -561,7 +624,7 @@ function EditStaffModal({ staff, onClose }: { staff: Staff; onClose: () => void 
               {showPw ? "Hide" : "Show"}
             </button>
           </div>
-          <div className="flex justify-between items-center mt-1">
+          <div className="flex flex-wrap justify-between items-center gap-2 mt-1">
             <button type="button" onClick={genStrong} className="text-xs text-brand hover:underline">
               Generate strong password
             </button>
@@ -589,7 +652,7 @@ function EditStaffModal({ staff, onClose }: { staff: Staff; onClose: () => void 
         {err && <div className="text-danger text-sm">{err}</div>}
         {msg && <div className="text-success text-sm">{msg}</div>}
         </div>
-        <div className="flex justify-end gap-2 px-5 py-3 border-t border-divider bg-surfaceAlt">
+        <div className="flex justify-end gap-2 px-4 sm:px-5 py-3 border-t border-divider bg-surfaceAlt">
           <button className="btn-secondary" onClick={onClose}>Cancel</button>
           <button
             className="btn-primary"
@@ -657,11 +720,11 @@ function AddStaffModal({ onClose }: { onClose: () => void }) {
   if (created) {
     return (
       <div
-        className="fixed inset-0 bg-black/50 flex items-center justify-center z-50"
+        className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
         onClick={onClose}
       >
         <div
-          className="bg-surface rounded-2xl shadow-modal w-full max-w-md p-6 space-y-4"
+          className="bg-surface rounded-2xl shadow-modal w-full max-w-md p-5 sm:p-6 space-y-4 max-h-[90vh] overflow-y-auto"
           onClick={(e) => e.stopPropagation()}
         >
           <h2 className="text-lg font-semibold text-ink">Staff created</h2>
@@ -705,11 +768,11 @@ function AddStaffModal({ onClose }: { onClose: () => void }) {
 
   return (
     <div
-      className="fixed inset-0 bg-black/50 flex items-center justify-center z-50"
+      className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
       onClick={onClose}
     >
       <div
-        className="bg-surface rounded-2xl shadow-modal w-full max-w-md p-6 space-y-4"
+        className="bg-surface rounded-2xl shadow-modal w-full max-w-md p-5 sm:p-6 space-y-4 max-h-[90vh] overflow-y-auto"
         onClick={(e) => e.stopPropagation()}
       >
         <h2 className="text-lg font-semibold text-ink">Add Staff</h2>
@@ -746,7 +809,7 @@ function AddStaffModal({ onClose }: { onClose: () => void }) {
               {showPw ? "Hide" : "Show"}
             </button>
           </div>
-          <div className="flex justify-between items-center mt-1">
+          <div className="flex flex-wrap justify-between items-center gap-2 mt-1">
             <button type="button" onClick={genStrong} className="text-xs text-brand hover:underline">
               Generate strong password
             </button>

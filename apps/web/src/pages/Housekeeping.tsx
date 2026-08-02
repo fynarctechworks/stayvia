@@ -4,6 +4,7 @@ import {
   BedDouble,
   Check,
   CheckCircle2,
+  ChevronDown,
   KeyRound,
   SprayCan,
   Wrench,
@@ -80,6 +81,11 @@ export default function Housekeeping() {
   // Drives the NewIssueModal when staff clicks Flag — opens with the
   // chosen room preselected.
   const [flaggingRoom, setFlaggingRoom] = useState<Room | null>(null);
+  // Phone-only: the kanban columns stack vertically, so each one gets a
+  // tappable header that folds its cards away (a long Occupied column
+  // would otherwise bury the rest of the board). Desktop always shows
+  // every card — the collapse classes are md:-reset below.
+  const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
 
   // Fetch all rooms; floor filtering is done client-side so the floor
   // dropdown always has the full property's list (it would otherwise
@@ -160,11 +166,11 @@ export default function Housekeeping() {
             All rooms at a glance. {rooms.length} total.
           </p>
         </div>
-        <div className="flex items-end gap-3">
-          <div>
+        <div className="flex items-end gap-3 w-full sm:w-auto">
+          <div className="w-full sm:w-auto">
             <label className="label block mb-1">Floor</label>
             <select
-              className="input w-32"
+              className="input w-full sm:w-32"
               value={floor}
               onChange={(e) => setFloor(e.target.value)}
             >
@@ -187,7 +193,7 @@ export default function Housekeeping() {
             <button
               key={s}
               onClick={() => setStatusFilter(s)}
-              className={`text-xs font-semibold px-3 py-1.5 rounded-full border transition-colors inline-flex items-center gap-2 ${
+              className={`text-xs font-semibold px-3 py-1.5 min-h-[44px] md:min-h-0 rounded-full border transition-colors inline-flex items-center gap-2 ${
                 active
                   ? "bg-brand text-white border-brand shadow-primary"
                   : "bg-surface text-textSecondary border-borderControl hover:text-ink hover:bg-surfaceAlt"
@@ -230,32 +236,52 @@ export default function Housekeeping() {
           )}
         </div>
       ) : (
+        // Phone: one column per row (the board stacks into sequential,
+        // collapsible sections). md+: the original auto-fit kanban.
         // items-start keeps each column at its natural height instead of
         // stretching to the tallest one in the row.
-        <div className="grid grid-cols-[repeat(auto-fit,minmax(230px,1fr))] gap-4 items-start">
+        <div className="grid grid-cols-1 md:grid-cols-[repeat(auto-fit,minmax(230px,1fr))] gap-4 items-start">
           {visibleColumns.map((col) => {
             const colRooms = sorted.filter((r) => r.status === col.status);
+            const isCollapsed = !!collapsed[col.status];
             return (
               <div
                 key={col.status}
                 className="bg-surfaceSubtle border border-borderc rounded-2xl p-3.5 flex flex-col gap-3"
               >
-                <div className="flex items-center gap-2.5">
+                <button
+                  type="button"
+                  onClick={() =>
+                    setCollapsed((c) => ({ ...c, [col.status]: !c[col.status] }))
+                  }
+                  aria-expanded={!isCollapsed}
+                  className="flex items-center gap-2.5 w-full text-left min-h-[44px] md:min-h-0 md:cursor-default"
+                >
                   <span
-                    className={`w-[30px] h-[30px] rounded-[9px] grid place-items-center ${col.chip}`}
+                    className={`w-[30px] h-[30px] rounded-[9px] grid place-items-center shrink-0 ${col.chip}`}
                   >
                     <col.Icon className="w-[18px] h-[18px]" />
                   </span>
-                  <strong className="text-sm text-ink flex-1">
+                  <strong className="text-sm text-ink flex-1 truncate">
                     {STATUS_LABELS[col.status]}
                   </strong>
                   <span className="inline-flex items-center justify-center min-w-[22px] h-[22px] px-1.5 rounded-full text-xs font-bold text-textSecondary bg-surface border border-borderControl tabular-nums">
                     {colRooms.length}
                   </span>
-                </div>
+                  <ChevronDown
+                    className={`w-4 h-4 shrink-0 text-textSecondary transition-transform md:hidden ${
+                      isCollapsed ? "-rotate-90" : ""
+                    }`}
+                  />
+                </button>
 
+                {/* Phone shows two room cards per row so a stacked section
+                    stays short; md+ falls back to the single-file column. */}
+                <div
+                  className={`${isCollapsed ? "hidden" : "grid"} grid-cols-2 md:flex md:flex-col gap-3`}
+                >
                 {colRooms.length === 0 ? (
-                  <div className="text-xs text-inkMuted text-center py-4">
+                  <div className="col-span-2 text-xs text-inkMuted text-center py-4">
                     No rooms
                   </div>
                 ) : (
@@ -311,7 +337,7 @@ export default function Housekeeping() {
 
                         {canMarkReady && (
                           <button
-                            className="w-full inline-flex items-center justify-center gap-1.5 h-9 rounded-[10px] bg-brand text-white text-[13px] font-semibold shadow-primary hover:bg-brand-deep transition-colors disabled:opacity-60"
+                            className="w-full inline-flex items-center justify-center gap-1.5 h-11 md:h-9 rounded-[10px] bg-brand text-white text-[13px] font-semibold shadow-primary hover:bg-brand-deep transition-colors disabled:opacity-60"
                             onClick={() => markReady.mutate(r.id)}
                             disabled={markReady.isPending}
                           >
@@ -327,7 +353,7 @@ export default function Housekeeping() {
                           {r.status !== "maintenance" && (
                             <button
                               type="button"
-                              className="w-full inline-flex items-center justify-center gap-1.5 h-9 rounded-[10px] border border-warnBorder bg-surface text-warnDeep text-[13px] font-semibold hover:bg-warnBg transition-colors"
+                              className="w-full inline-flex items-center justify-center gap-1.5 h-11 md:h-9 rounded-[10px] border border-warnBorder bg-surface text-warnDeep text-[13px] font-semibold hover:bg-warnBg transition-colors"
                               onClick={(e) => {
                                 // Stop propagation so the parent card's
                                 // onClick handler doesn't also fire — even
@@ -344,7 +370,7 @@ export default function Housekeeping() {
                           )}
                           {r.status === "maintenance" && profile?.role === "admin" && (
                             <button
-                              className="w-full inline-flex items-center justify-center gap-1.5 h-9 rounded-[10px] bg-success text-white text-[13px] font-semibold hover:opacity-90 transition-opacity"
+                              className="w-full inline-flex items-center justify-center gap-1.5 h-11 md:h-9 rounded-[10px] bg-success text-white text-[13px] font-semibold hover:opacity-90 transition-opacity"
                               onClick={() => resolveMaint.mutate(r.id)}
                             >
                               Resolve
@@ -355,6 +381,7 @@ export default function Housekeeping() {
                     );
                   })
                 )}
+                </div>
               </div>
             );
           })}

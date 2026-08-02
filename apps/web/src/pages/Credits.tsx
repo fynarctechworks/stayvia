@@ -98,7 +98,7 @@ export default function Credits() {
         {canAddCredit && (
           <button
             onClick={() => setShowAdd(true)}
-            className="btn-primary inline-flex items-center gap-2"
+            className="btn-primary w-full sm:w-auto min-h-[44px] inline-flex items-center justify-center gap-2"
           >
             <Plus className="w-4 h-4" /> Add credit
           </button>
@@ -128,7 +128,7 @@ export default function Credits() {
       </div>
       </StickyBar>
 
-      <div className="card p-0 overflow-x-auto">
+      <div className="card p-0 overflow-hidden">
         {isLoading ? (
           <ListSkeleton rows={6} />
         ) : filtered.length === 0 ? (
@@ -144,65 +144,105 @@ export default function Credits() {
             )}
           </div>
         ) : (
-          <table className="table-base">
-            <thead>
-              <tr>
-                <th>Guest</th>
-                <th>Phone</th>
-                <th className="tabular-nums text-right">Balance</th>
-                <th>Last activity</th>
-                <th className="text-right"></th>
-              </tr>
-            </thead>
-            <tbody>
-              {filtered.map((g) => (
-                <tr
-                  key={g.guestId}
-                  className="cursor-pointer"
-                  onClick={() => navigate(`/guests/${g.phone}`)}
-                >
-                  <td>
-                    <div className="font-semibold text-ink">{g.fullName}</div>
-                    {g.email && (
-                      <div className="text-[10px] text-inkMuted">{g.email}</div>
-                    )}
-                  </td>
-                  <td className="font-mono text-xs text-textSecondary">{g.phone}</td>
-                  <td className="font-mono tabular-nums font-bold text-ink text-right">
-                    {inr(g.balance)}
-                  </td>
-                  <td className="text-inkMuted text-xs">
-                    {g.lastActivityAt
-                      ? formatDistanceToNow(new Date(g.lastActivityAt), { addSuffix: true })
-                      : "-"}
-                    <div className="text-[10px]">
-                      {g.entryCount} ledger entr{g.entryCount === 1 ? "y" : "ies"}
-                    </div>
-                  </td>
-                  <td
-                    className="text-right"
-                    onClick={(e) => e.stopPropagation()}
+          <>
+            <div className="hidden md:grid grid-cols-[minmax(180px,1fr)_150px_140px_180px_170px] gap-3 px-3 py-2.5 text-[10px] font-bold uppercase tracking-[0.06em] text-inkMuted bg-surfaceAlt border-b border-divider">
+              <div>Guest</div>
+              <div>Phone</div>
+              <div className="text-right">Balance</div>
+              <div>Last activity</div>
+              <div />
+            </div>
+            <ul className="divide-y divide-divider">
+              {filtered.map((g) => {
+                const lastActivity = g.lastActivityAt
+                  ? formatDistanceToNow(new Date(g.lastActivityAt), { addSuffix: true })
+                  : "-";
+                const entries = `${g.entryCount} ledger entr${g.entryCount === 1 ? "y" : "ies"}`;
+                return (
+                  <li
+                    key={g.guestId}
+                    className="cursor-pointer hover:bg-surfaceAlt transition-colors"
+                    onClick={() => navigate(`/guests/${g.phone}`)}
                   >
-                    <div className="inline-flex gap-1">
-                      <button
-                        className="btn-secondary !h-7 !px-2 text-xs"
-                        onClick={() => navigate(`/guests/${g.phone}`)}
-                      >
-                        Open
-                      </button>
-                      <button
-                        className="btn-secondary !h-7 !px-2 text-xs"
-                        onClick={() => setCashoutFor(g)}
-                        disabled={cashout.isPending}
-                      >
-                        Cashout
-                      </button>
+                    {/* DESKTOP */}
+                    <div className="hidden md:grid grid-cols-[minmax(180px,1fr)_150px_140px_180px_170px] gap-3 items-center px-3 py-2.5">
+                      <div className="min-w-0">
+                        <div className="font-semibold text-ink truncate">{g.fullName}</div>
+                        {g.email && (
+                          <div className="text-[10px] text-inkMuted truncate">{g.email}</div>
+                        )}
+                      </div>
+                      <div className="font-mono text-xs text-textSecondary truncate">
+                        {g.phone}
+                      </div>
+                      <div className="font-mono tabular-nums font-bold text-ink text-right">
+                        {inr(g.balance)}
+                      </div>
+                      <div className="text-inkMuted text-xs">
+                        {lastActivity}
+                        <div className="text-[10px]">{entries}</div>
+                      </div>
+                      <div className="text-right" onClick={(e) => e.stopPropagation()}>
+                        <div className="inline-flex gap-1">
+                          <button
+                            className="btn-secondary !h-7 !px-2 text-xs"
+                            onClick={() => navigate(`/guests/${g.phone}`)}
+                          >
+                            Open
+                          </button>
+                          <button
+                            className="btn-secondary !h-7 !px-2 text-xs"
+                            onClick={() => setCashoutFor(g)}
+                            disabled={cashout.isPending}
+                          >
+                            Cashout
+                          </button>
+                        </div>
+                      </div>
                     </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+
+                    {/* MOBILE */}
+                    <div className="md:hidden px-3 py-3">
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="min-w-0 flex-1">
+                          <div className="text-sm font-semibold text-ink truncate">
+                            {g.fullName}
+                          </div>
+                          <div className="font-mono text-[11px] text-textSecondary truncate">
+                            {g.phone}
+                          </div>
+                          {g.email && (
+                            <div className="text-[10px] text-inkMuted truncate">{g.email}</div>
+                          )}
+                          <div className="text-[11px] text-inkMuted mt-1">
+                            {lastActivity} · {entries}
+                          </div>
+                        </div>
+                        <div className="font-mono tabular-nums text-sm font-bold text-ink text-right shrink-0">
+                          {inr(g.balance)}
+                        </div>
+                      </div>
+                      <div className="flex gap-2 mt-2.5" onClick={(e) => e.stopPropagation()}>
+                        <button
+                          className="btn-secondary flex-1 min-h-[44px] text-xs"
+                          onClick={() => navigate(`/guests/${g.phone}`)}
+                        >
+                          Open
+                        </button>
+                        <button
+                          className="btn-secondary flex-1 min-h-[44px] text-xs"
+                          onClick={() => setCashoutFor(g)}
+                          disabled={cashout.isPending}
+                        >
+                          Cashout
+                        </button>
+                      </div>
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
+          </>
         )}
       </div>
 

@@ -212,44 +212,48 @@ export default function Rooms() {
           </div>
         ))}
       </div>
-      {/* Status chips — click to filter */}
+      {/* Status chips — click to filter. On phone the chip row scrolls
+          sideways in its own strip so the page itself never does; the
+          floor/type selects drop below it full-width. */}
       <div className="card !p-3">
-        <div className="flex flex-wrap items-center gap-2">
-          {STATUS_CHIPS.map((c) => {
-            const isActive = status === c.key;
-            const count = c.key === "" ? chipBase.length : chipCounts[c.key] ?? 0;
-            return (
-              <button
-                key={c.key || "all"}
-                onClick={() => setStatus(c.key)}
-                className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold border transition ${
-                  isActive
-                    ? "bg-brand text-white border-brand shadow-primary"
-                    : "bg-surface text-textSecondary border-borderControl hover:bg-surfaceAlt hover:text-ink"
-                }`}
-                aria-pressed={isActive}
-              >
-                <span
-                  className={`w-2 h-2 rounded-full ${chipDot(c.key)}`}
-                  aria-hidden="true"
-                />
-                <span>{c.label}</span>
-                <span
-                  className={`inline-grid place-items-center min-w-[18px] h-[18px] px-1 rounded-full text-[10px] font-bold tabular-nums leading-none ${
-                    isActive ? "bg-white/20 text-white" : "bg-surfaceSubtle text-textSecondary"
-                  }`}
-                >
-                  {count}
-                </span>
-              </button>
-            );
-          })}
+        <div className="flex flex-col md:flex-row md:flex-wrap md:items-center gap-2">
+          <div className="-mx-3 px-3 overflow-x-auto md:mx-0 md:px-0 md:overflow-visible md:grow">
+            <div className="flex md:flex-wrap items-center gap-2 w-max md:w-auto">
+              {STATUS_CHIPS.map((c) => {
+                const isActive = status === c.key;
+                const count = c.key === "" ? chipBase.length : chipCounts[c.key] ?? 0;
+                return (
+                  <button
+                    key={c.key || "all"}
+                    onClick={() => setStatus(c.key)}
+                    className={`inline-flex shrink-0 items-center gap-1.5 rounded-full min-h-[44px] md:min-h-0 px-3.5 md:px-3 py-1.5 text-xs font-semibold border transition ${
+                      isActive
+                        ? "bg-brand text-white border-brand shadow-primary"
+                        : "bg-surface text-textSecondary border-borderControl hover:bg-surfaceAlt hover:text-ink"
+                    }`}
+                    aria-pressed={isActive}
+                  >
+                    <span
+                      className={`w-2 h-2 rounded-full ${chipDot(c.key)}`}
+                      aria-hidden="true"
+                    />
+                    <span className="whitespace-nowrap">{c.label}</span>
+                    <span
+                      className={`inline-grid place-items-center min-w-[18px] h-[18px] px-1 rounded-full text-[10px] font-bold tabular-nums leading-none ${
+                        isActive ? "bg-white/20 text-white" : "bg-surfaceSubtle text-textSecondary"
+                      }`}
+                    >
+                      {count}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
 
-          <div className="grow" />
-
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <select
-              className="input !h-8 w-28 text-sm"
+              className="input !min-h-[44px] md:!min-h-0 md:!h-8 flex-1 min-w-[130px] md:flex-none md:w-28 text-sm"
               value={floor}
               onChange={(e) => setFloor(e.target.value)}
               aria-label="Filter by floor"
@@ -264,7 +268,7 @@ export default function Rooms() {
                 ))}
             </select>
             <select
-              className="input !h-8 w-40 text-sm"
+              className="input !min-h-[44px] md:!min-h-0 md:!h-8 flex-1 min-w-[130px] md:flex-none md:w-40 text-sm"
               value={type}
               onChange={(e) => setType(e.target.value)}
               aria-label="Filter by type"
@@ -283,7 +287,7 @@ export default function Rooms() {
                   setType("");
                   setStatus("");
                 }}
-                className="text-xs text-textSecondary hover:text-danger px-2"
+                className="text-xs text-textSecondary hover:text-danger px-2 min-h-[44px] md:min-h-0 w-full md:w-auto"
               >
                 Reset
               </button>
@@ -303,83 +307,54 @@ export default function Rooms() {
         </div>
       ) : (
         <div className="card !p-0 overflow-hidden">
-          <table className="table-base min-w-[640px]">
-            <thead>
-              <tr>
-                <th>Room</th>
-                <th>Type</th>
-                <th>Floor</th>
-                <th className="!text-right">Rate / night</th>
-                <th>Status</th>
-                <th className="!text-right" aria-label="Actions" />
-              </tr>
-            </thead>
-            <tbody>
-              {sortedRooms.map((r) => (
-                <tr
-                  key={r.id}
-                  className="cursor-pointer transition-colors"
-                  onClick={() => navigate(`/rooms/${r.roomNumber}`)}
-                >
-                  <td className="font-mono text-base font-semibold text-ink">
-                    {r.roomNumber}
-                  </td>
-                  <td>
-                    <div
-                      className="text-[13.5px] text-inkBody capitalize"
-                      title={labelForRoomType(roomTypes, r.roomType)}
-                    >
-                      {labelForRoomType(roomTypes, r.roomType)}
+          {/* Desktop column headers — pointless above the mobile cards, so
+              they only exist from md up. */}
+          <div className="hidden md:grid grid-cols-[90px_minmax(160px,1fr)_90px_130px_150px_190px] gap-3 px-3 py-2.5 text-[10px] font-bold uppercase tracking-[0.06em] text-inkMuted bg-surfaceAlt border-b border-borderc">
+            <div>Room</div>
+            <div>Type</div>
+            <div>Floor</div>
+            <div className="text-right">Rate / night</div>
+            <div>Status</div>
+            <div className="text-right">Actions</div>
+          </div>
+          <ul className="divide-y divide-divider">
+            {sortedRooms.map((r) => {
+              const typeLabel = labelForRoomType(roomTypes, r.roomType);
+              const statusLabel =
+                r.status === "dirty"
+                  ? "Needs Cleaning"
+                  : String(r.status).replace("_", " ");
+              return (
+                <li key={r.id} className="hover:bg-surfaceAlt transition-colors">
+                  {/* DESKTOP */}
+                  <div
+                    className="hidden md:grid grid-cols-[90px_minmax(160px,1fr)_90px_130px_150px_190px] gap-3 items-center px-3 py-3 cursor-pointer"
+                    onClick={() => navigate(`/rooms/${r.roomNumber}`)}
+                  >
+                    <div className="font-mono text-base font-semibold text-ink">
+                      {r.roomNumber}
                     </div>
-                    <div className="flex items-center gap-2 text-inkMuted mt-0.5">
-                      {r.hasAc && (
-                        <span
-                          className="inline-flex items-center gap-1 text-[10px]"
-                          title="Air conditioning"
-                        >
-                          <Snowflake className="w-3 h-3" /> AC
-                        </span>
-                      )}
-                      {r.hasTv && (
-                        <span
-                          className="inline-flex items-center gap-1 text-[10px]"
-                          title="Television"
-                        >
-                          <Tv className="w-3 h-3" /> TV
-                        </span>
-                      )}
-                      {r.hasWifi && (
-                        <span
-                          className="inline-flex items-center gap-1 text-[10px]"
-                          title="Wi-Fi"
-                        >
-                          <Wifi className="w-3 h-3" /> Wi-Fi
-                        </span>
-                      )}
+                    <div className="min-w-0">
+                      <div className="text-[13.5px] text-inkBody capitalize truncate" title={typeLabel}>
+                        {typeLabel}
+                      </div>
+                      <RoomAmenities room={r} />
                     </div>
-                  </td>
-                  <td className="text-[13px] text-textSecondary">
-                    Floor {r.floor}
-                  </td>
-                  <td className="!text-right font-mono text-[13.5px] font-semibold text-ink">
-                    {inr(r.baseRate)}
-                  </td>
-                  <td>
-                    <span className="inline-flex items-center gap-1.5 text-[13px] font-semibold text-inkBody">
-                      <span
-                        className={`w-2 h-2 rounded-full ${chipDot(r.status)}`}
-                        aria-hidden="true"
-                      />
-                      <span className="capitalize">
-                        {r.status === "dirty"
-                          ? "Needs Cleaning"
-                          : String(r.status).replace("_", " ")}
+                    <div className="text-[13px] text-textSecondary">Floor {r.floor}</div>
+                    <div className="text-right font-mono text-[13.5px] font-semibold text-ink">
+                      {inr(r.baseRate)}
+                    </div>
+                    <div>
+                      <span className="inline-flex items-center gap-1.5 text-[13px] font-semibold text-inkBody">
+                        <span
+                          className={`w-2 h-2 rounded-full ${chipDot(r.status)}`}
+                          aria-hidden="true"
+                        />
+                        <span className="capitalize">{statusLabel}</span>
                       </span>
-                    </span>
-                  </td>
-                  <td className="!text-right whitespace-nowrap">
-                    <span
-                      className="inline-flex items-center gap-1.5"
+                    </div>
+                    <div
+                      className="flex justify-end items-center gap-1.5 whitespace-nowrap"
                       onClick={(e) => e.stopPropagation()}
                     >
                       <button
@@ -399,12 +374,69 @@ export default function Rooms() {
                         </button>
                       )}
                       <ChevronRight className="w-5 h-5 text-inkFaint" aria-hidden="true" />
-                    </span>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+                    </div>
+                  </div>
+
+                  {/* MOBILE */}
+                  <div className="md:hidden px-3 py-3">
+                    <button
+                      onClick={() => navigate(`/rooms/${r.roomNumber}`)}
+                      className="w-full min-h-[44px] flex items-start justify-between gap-3 text-left"
+                    >
+                      <div className="min-w-0 flex-1">
+                        <div className="font-mono text-base font-semibold text-ink">
+                          {r.roomNumber}
+                        </div>
+                        <div className="text-[13px] text-inkBody capitalize truncate">
+                          {typeLabel}
+                        </div>
+                        <div className="text-[11.5px] text-textSecondary mt-0.5">
+                          Floor {r.floor}
+                        </div>
+                        <RoomAmenities room={r} />
+                      </div>
+                      <div className="shrink-0 flex items-start gap-1">
+                        <div className="text-right">
+                          <div className="font-mono text-[13.5px] font-semibold text-ink">
+                            {inr(r.baseRate)}
+                          </div>
+                          <span className="inline-flex items-center gap-1.5 text-[12px] font-semibold text-inkBody mt-1">
+                            <span
+                              className={`w-2 h-2 rounded-full ${chipDot(r.status)}`}
+                              aria-hidden="true"
+                            />
+                            <span className="capitalize">{statusLabel}</span>
+                          </span>
+                        </div>
+                        <ChevronRight
+                          className="w-5 h-5 text-inkFaint mt-0.5"
+                          aria-hidden="true"
+                        />
+                      </div>
+                    </button>
+                    <div className="flex gap-2 mt-2.5">
+                      <button
+                        onClick={() => setQrRoom(r)}
+                        className="flex-1 min-h-[44px] inline-flex items-center justify-center gap-1.5 rounded-[9px] border border-borderControl bg-surface text-[13px] font-semibold text-inkBody"
+                        aria-label={`Room ${r.roomNumber} QR sticker`}
+                      >
+                        <QrCode className="w-4 h-4" /> QR
+                      </button>
+                      {profile?.role === "admin" && (
+                        <button
+                          onClick={() => setEditing(r)}
+                          className="flex-1 min-h-[44px] inline-flex items-center justify-center gap-1.5 rounded-[9px] border border-borderControl bg-surface text-[13px] font-semibold text-inkBody"
+                          aria-label={`Edit room ${r.roomNumber}`}
+                        >
+                          <Pencil className="w-4 h-4" /> Edit
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
         </div>
       )}
 
@@ -427,6 +459,31 @@ export default function Rooms() {
         />
       )}
       </>
+      )}
+    </div>
+  );
+}
+
+// Amenity icon strip — same markup in the desktop row and the mobile
+// card, so it lives here instead of being written twice.
+function RoomAmenities({ room }: { room: Room }) {
+  if (!room.hasAc && !room.hasTv && !room.hasWifi) return null;
+  return (
+    <div className="flex flex-wrap items-center gap-2 text-inkMuted mt-0.5">
+      {room.hasAc && (
+        <span className="inline-flex items-center gap-1 text-[10px]" title="Air conditioning">
+          <Snowflake className="w-3 h-3" /> AC
+        </span>
+      )}
+      {room.hasTv && (
+        <span className="inline-flex items-center gap-1 text-[10px]" title="Television">
+          <Tv className="w-3 h-3" /> TV
+        </span>
+      )}
+      {room.hasWifi && (
+        <span className="inline-flex items-center gap-1 text-[10px]" title="Wi-Fi">
+          <Wifi className="w-3 h-3" /> Wi-Fi
+        </span>
       )}
     </div>
   );
@@ -511,8 +568,8 @@ function RoomImagesManager({ roomId, roomNumber }: { roomId: string; roomNumber:
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-2">
-        <div>
+      <div className="flex items-center justify-between flex-wrap gap-2 mb-2">
+        <div className="min-w-0">
           <label className="label">Photos</label>
           <p className="text-[11px] text-textSecondary">
             Shown to guests on the booking QR. First (★) is the cover.
@@ -709,7 +766,7 @@ function RoomModal({ room, onClose }: { room: Room | null; onClose: () => void }
       onClick={onClose}
     >
       <div
-        className="bg-surface rounded-2xl shadow-modal w-full max-w-lg p-6 space-y-4 max-h-[90vh] overflow-y-auto"
+        className="bg-surface rounded-2xl shadow-modal w-full max-w-lg p-4 sm:p-6 space-y-4 max-h-[90vh] overflow-y-auto"
         onClick={(e) => e.stopPropagation()}
       >
         <h2 className="text-lg font-semibold text-ink">
@@ -736,25 +793,29 @@ function RoomModal({ room, onClose }: { room: Room | null; onClose: () => void }
               }}
             />
           </Field>
-          <Field label="Type">
-            {roomTypes.length === 0 ? (
-              <div className="text-xs text-danger">
-                No room types defined. Add some with the Room Types button first.
-              </div>
-            ) : (
-              <select
-                className="input"
-                value={form.roomType}
-                onChange={(e) => changeType(e.target.value)}
-              >
-                {roomTypes.map((t) => (
-                  <option key={t.id} value={t.slug}>
-                    {t.label}
-                  </option>
-                ))}
-              </select>
-            )}
-          </Field>
+          {/* Type gets the full width — its labels are long and would be
+              unreadable in a half column on a phone. */}
+          <div className="col-span-2">
+            <Field label="Type">
+              {roomTypes.length === 0 ? (
+                <div className="text-xs text-danger">
+                  No room types defined. Add some with the Room Types button first.
+                </div>
+              ) : (
+                <select
+                  className="input"
+                  value={form.roomType}
+                  onChange={(e) => changeType(e.target.value)}
+                >
+                  {roomTypes.map((t) => (
+                    <option key={t.id} value={t.slug}>
+                      {t.label}
+                    </option>
+                  ))}
+                </select>
+              )}
+            </Field>
+          </div>
         </div>
 
         {form.roomType && (
@@ -797,12 +858,12 @@ function RoomModal({ room, onClose }: { room: Room | null; onClose: () => void }
 
         {err && <div className="text-danger text-xs">{err}</div>}
 
-        <div className="flex justify-between items-center gap-2 pt-2">
+        <div className="flex flex-wrap justify-between items-center gap-3 pt-2">
           <div>
             {canDelete && (
               <button
                 type="button"
-                className="inline-flex items-center gap-1.5 text-xs text-danger hover:underline disabled:opacity-50"
+                className="inline-flex items-center gap-1.5 min-h-[44px] sm:min-h-0 text-xs text-danger hover:underline disabled:opacity-50"
                 onClick={confirmDelete}
                 disabled={del.isPending || impact.isLoading}
                 title={
@@ -859,7 +920,7 @@ function AmenityToggle({
       type="button"
       onClick={onClick}
       aria-pressed={active}
-      className={`inline-flex items-center gap-2 px-3 py-2 rounded-md border text-sm font-semibold transition ${
+      className={`inline-flex items-center gap-2 min-h-[44px] sm:min-h-0 px-3.5 py-2 rounded-md border text-sm font-semibold transition ${
         active
           ? "bg-brand text-white border-brand shadow-primary"
           : "bg-surface text-textSecondary border-borderControl hover:border-brand/50 hover:text-ink"

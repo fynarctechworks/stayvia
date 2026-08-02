@@ -168,9 +168,9 @@ export default function CalendarPage() {
             {totals.total} booking{totals.total === 1 ? "" : "s"} in {format(cursor, "MMMM yyyy")}.
           </div>
         </div>
-        <div className="flex items-center gap-2.5 flex-wrap justify-end">
+        <div className="flex items-center gap-2.5 flex-wrap sm:justify-end w-full sm:w-auto">
           {/* Prev / Today / Next as a single segmented pill. */}
-          <div className="inline-flex rounded-[11px] border border-borderControl overflow-hidden bg-surface shadow-card">
+          <div className="inline-flex rounded-[11px] border border-borderControl overflow-hidden bg-surface shadow-card shrink-0">
             <button
               onClick={() => setCursor((c) => subMonths(c, 1))}
               className="w-10 h-10 grid place-items-center text-textSecondary hover:bg-surfaceAlt transition-colors"
@@ -198,7 +198,7 @@ export default function CalendarPage() {
               the two controls visually pair up. */}
           <input
             type="month"
-            className="h-10 px-3 text-[13.5px] font-semibold rounded-[11px] border border-borderControl bg-surface text-ink shadow-card cursor-pointer hover:bg-surfaceAlt focus:outline-none focus:border-brand focus:ring-[3px] focus:ring-brand-soft transition-colors"
+            className="h-10 px-3 flex-1 min-w-0 sm:flex-none text-[13.5px] font-semibold rounded-[11px] border border-borderControl bg-surface text-ink shadow-card cursor-pointer hover:bg-surfaceAlt focus:outline-none focus:border-brand focus:ring-[3px] focus:ring-brand-soft transition-colors"
             value={monthParam}
             onChange={(e) => {
               if (!e.target.value) return;
@@ -208,7 +208,7 @@ export default function CalendarPage() {
           />
         </div>
       </div>
-      <div className="flex flex-wrap items-center gap-4">
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-2 sm:gap-4">
         {legendStatuses.map((s) => (
           <span key={s} className="inline-flex items-center gap-1.5 text-xs text-inkBody">
             <span className={`inline-block w-3 h-3 rounded-[4px] border ${statusStyle(s)}`} />
@@ -246,6 +246,12 @@ export default function CalendarPage() {
               const dayBookings = byDay.get(key) ?? [];
               const visible = dayBookings.slice(0, 3);
               const overflow = dayBookings.length - visible.length;
+              // Phone cells are ~50px wide — a text chip truncates to two
+              // characters there, so the same bookings render as status
+              // dots instead. Tapping the day opens the modal with the
+              // full list, so nothing is lost.
+              const dots = dayBookings.slice(0, 6);
+              const dotOverflow = dayBookings.length - dots.length;
               return (
                 <button
                   key={key}
@@ -272,7 +278,21 @@ export default function CalendarPage() {
                       </span>
                     )}
                   </div>
-                  <div className="flex flex-col gap-0.5 overflow-hidden">
+                  <div className="sm:hidden flex flex-wrap items-center gap-[3px] overflow-hidden">
+                    {dots.map((b) => (
+                      <span
+                        key={b.id}
+                        className={`w-2 h-2 rounded-full border ${statusStyle(b.status)}`}
+                        title={`${b.reservationNumber} · ${b.guestName}${b.roomNumbers ? ` · Room ${b.roomNumbers}` : ""}`}
+                      />
+                    ))}
+                    {dotOverflow > 0 && (
+                      <span className="text-[9px] leading-none text-inkMuted">
+                        +{dotOverflow}
+                      </span>
+                    )}
+                  </div>
+                  <div className="hidden sm:flex flex-col gap-0.5 overflow-hidden">
                     {visible.map((b) => (
                       <span
                         key={b.id}
@@ -304,20 +324,20 @@ export default function CalendarPage() {
           scroll to. Backdrop / X closes. */}
       {selectedDay && (
         <div
-          className="fixed inset-0 bg-inkDark/50 backdrop-blur-[3px] flex items-center justify-center z-50 p-4"
+          className="fixed inset-0 bg-inkDark/50 backdrop-blur-[3px] flex items-center justify-center z-50 p-3 sm:p-4"
           onClick={() => setSelectedDay(null)}
         >
           <div
             className="bg-surface rounded-2xl shadow-modal w-full max-w-3xl max-h-[85vh] flex flex-col overflow-hidden"
             onClick={(e) => e.stopPropagation()}
           >
-            <header className="flex items-center justify-between gap-3 px-6 py-4 border-b border-divider bg-surfaceAlt shrink-0">
-              <div className="flex items-center gap-3">
-                <span className="grid place-items-center w-10 h-10 rounded-md bg-brand text-white font-mono font-semibold">
+            <header className="flex items-center justify-between gap-3 px-4 sm:px-6 py-3.5 sm:py-4 border-b border-divider bg-surfaceAlt shrink-0">
+              <div className="flex items-center gap-3 min-w-0">
+                <span className="grid place-items-center w-10 h-10 shrink-0 rounded-md bg-brand text-white font-mono font-semibold">
                   {format(selectedDay, "d")}
                 </span>
-                <div>
-                  <h2 className="text-lg font-semibold text-ink leading-tight">
+                <div className="min-w-0">
+                  <h2 className="text-base sm:text-lg font-semibold text-ink leading-tight">
                     {format(selectedDay, "EEEE, d MMMM yyyy")}
                   </h2>
                   <div className="text-xs text-textSecondary">
@@ -329,13 +349,13 @@ export default function CalendarPage() {
               </div>
               <button
                 onClick={() => setSelectedDay(null)}
-                className="grid place-items-center w-8 h-8 rounded-md text-textSecondary hover:text-ink hover:bg-parchment transition-colors"
+                className="grid place-items-center w-11 h-11 sm:w-8 sm:h-8 shrink-0 rounded-md text-textSecondary hover:text-ink hover:bg-parchment transition-colors"
                 aria-label="Close"
               >
                 <X className="w-4 h-4" />
               </button>
             </header>
-            <div className="overflow-y-auto px-6 py-2">
+            <div className="overflow-y-auto px-4 sm:px-6 py-2">
               {selectedBookings.length === 0 ? (
                 <div className="py-12 text-center text-textSecondary">
                   <CalendarDays className="w-8 h-8 mx-auto mb-2 opacity-40" />
@@ -358,10 +378,13 @@ export default function CalendarPage() {
                       <li
                         key={b.id}
                         onClick={() => navigate(`/reservations/${b.reservationNumber}`)}
-                        className="group py-3.5 flex items-center gap-4 cursor-pointer hover:bg-surfaceAlt -mx-3 px-3 rounded-sm transition-colors"
+                        className="group py-3.5 flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4 cursor-pointer hover:bg-surfaceAlt -mx-2 sm:-mx-3 px-2 sm:px-3 rounded-sm transition-colors"
                       >
+                        {/* Phone stacks: pill on its own line, then guest +
+                            rooms, then the stay dates. Desktop keeps the
+                            single fixed-width-pill row. */}
                         <span
-                          className={`w-24 text-center text-[10px] font-semibold px-2 py-1 rounded-full border shrink-0 ${statusStyle(b.status)}`}
+                          className={`self-start sm:self-auto w-auto sm:w-24 text-center text-[10px] font-semibold px-2 py-1 rounded-full border shrink-0 ${statusStyle(b.status)}`}
                         >
                           {statusLabel(b.status)}
                         </span>
@@ -388,10 +411,12 @@ export default function CalendarPage() {
                             ))}
                           </div>
                         </div>
-                        <div className="text-xs text-textSecondary font-medium text-right shrink-0">
-                          {stayLabel}
+                        <div className="flex items-center justify-between gap-2 sm:gap-4 shrink-0">
+                          <div className="text-xs text-textSecondary font-medium sm:text-right">
+                            {stayLabel}
+                          </div>
+                          <ChevronRight className="w-4 h-4 text-inkFaint group-hover:text-brand-deep transition-colors shrink-0" />
                         </div>
-                        <ChevronRight className="w-4 h-4 text-inkFaint group-hover:text-brand-deep transition-colors shrink-0" />
                       </li>
                     );
                   })}

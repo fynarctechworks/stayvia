@@ -178,7 +178,7 @@ export default function GuestProfile() {
   return (
     <div className="space-y-5 w-full">
       <div className="flex items-start justify-between gap-4 flex-wrap">
-        <div className="flex items-start gap-4">
+        <div className="flex items-start gap-4 min-w-0 w-full sm:w-auto">
           {data.photoUrl ? (
             <img
               src={data.photoUrl}
@@ -190,8 +190,8 @@ export default function GuestProfile() {
               <User className="w-6 h-6" />
             </div>
           )}
-          <div>
-          <h1 className="text-2xl font-semibold tracking-tight text-ink">{data.fullName}</h1>
+          <div className="min-w-0">
+          <h1 className="text-xl sm:text-2xl font-semibold tracking-tight text-ink break-words">{data.fullName}</h1>
           <div className="text-sm text-inkMuted font-mono mt-0.5">{data.phone}</div>
           <div className="mt-2 flex flex-wrap items-center gap-2">
             {outstanding > 0 && (
@@ -210,10 +210,12 @@ export default function GuestProfile() {
           </div>
           </div>
         </div>
-        <div className="flex gap-2 shrink-0">
+        {/* Phone: the three actions wrap onto their own full-width row so
+            nothing gets squeezed under 44px. sm+: the original inline row. */}
+        <div className="flex flex-wrap gap-2 w-full sm:w-auto sm:shrink-0">
           <Can do="delete_guests">
             <button
-              className="btn-danger inline-flex items-center gap-2 disabled:text-textSecondary disabled:border-borderControl disabled:hover:bg-surface"
+              className="btn-danger inline-flex flex-1 sm:flex-none items-center justify-center gap-2 disabled:text-textSecondary disabled:border-borderControl disabled:hover:bg-surface"
               onClick={handleDelete}
               // Only allow deletion of guests with no stay history.
               // The server enforces the same rule, but disabling here
@@ -232,13 +234,13 @@ export default function GuestProfile() {
             </button>
           </Can>
           <button
-            className="btn-secondary inline-flex items-center gap-2"
+            className="btn-secondary inline-flex flex-1 sm:flex-none items-center justify-center gap-2"
             onClick={() => setEditing(true)}
           >
             <Pencil className="w-4 h-4" /> Edit
           </button>
           <button
-            className="btn-primary inline-flex items-center gap-2"
+            className="btn-primary inline-flex w-full sm:w-auto items-center justify-center gap-2"
             onClick={() => navigate(`/reservations/new?guestId=${data.id}`)}
           >
             <CalendarPlus className="w-4 h-4" /> New Booking
@@ -249,7 +251,10 @@ export default function GuestProfile() {
       {data.stats && <StatsRow stats={data.stats} />}
       {data.stats && data.stats.balanceDue > 0.009 && <BalanceBreakdown guestId={data.id} />}
 
-      <div className="flex gap-1 border-b border-borderc">
+      {/* The four underline tabs don't fit 390px side by side. Scroll this
+          strip on its own (-mx bleed so the tabs reach the screen edge)
+          rather than letting the page scroll sideways. */}
+      <div className="flex gap-1 border-b border-borderc overflow-x-auto no-scrollbar -mx-4 px-4 sm:mx-0 sm:px-0">
         <TabBtn active={tab === "profile"} onClick={() => setTab("profile")}>
           Profile
         </TabBtn>
@@ -353,8 +358,8 @@ function EditGuestModal({ guest, onClose }: { guest: Guest; onClose: () => void 
           </button>
         </div>
 
-        <div className="p-5 space-y-4 overflow-y-auto">
-          <div className="grid grid-cols-2 gap-3">
+        <div className="p-4 sm:p-5 space-y-4 overflow-y-auto">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <Field label="Full Name">
               <input
                 className="input"
@@ -454,7 +459,7 @@ function EditGuestModal({ guest, onClose }: { guest: Guest; onClose: () => void 
                 onChange={(e) => set("address", e.target.value)}
               />
             </Field>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <Field label="State">
                 <Combobox
                   value={form.state}
@@ -489,7 +494,7 @@ function EditGuestModal({ guest, onClose }: { guest: Guest; onClose: () => void 
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <Field label="Company">
               <input
                 className="input"
@@ -652,7 +657,7 @@ function BalanceBreakdown({ guestId }: { guestId: string }) {
 
   return (
     <div className="card border-dangerBorder">
-      <div className="flex items-center justify-between mb-3 pb-2 border-b border-divider">
+      <div className="flex items-center justify-between flex-wrap gap-x-3 gap-y-1 mb-3 pb-2 border-b border-divider">
         <div className="text-[10px] uppercase tracking-[0.14em] text-dangerFg font-bold">
           Balance due · breakdown
         </div>
@@ -669,7 +674,7 @@ function BalanceBreakdown({ guestId }: { guestId: string }) {
           <button
             key={it.key}
             onClick={() => navigate(it.href)}
-            className="w-full flex items-center justify-between gap-3 py-2 px-2 -mx-2 rounded-sm hover:bg-surfaceSubtle text-left transition-colors"
+            className="w-full min-h-[44px] flex items-center justify-between gap-3 py-2 px-2 -mx-2 rounded-sm hover:bg-surfaceSubtle text-left transition-colors"
           >
             <div className="min-w-0 flex-1">
               <div className="font-mono font-semibold text-brand-deep text-sm">{it.label}</div>
@@ -711,12 +716,12 @@ function Stat({
   const valueColor =
     tone === "danger" ? "text-dangerFg" : tone === "success" ? "text-success" : "text-ink";
   return (
-    <div className="card">
+    <div className="card min-w-0">
       <div className="label">{label}</div>
-      <div className={`text-xl font-bold mt-1.5 ${valueColor} ${mono ? "font-mono" : ""}`}>
+      <div className={`text-lg sm:text-xl font-bold mt-1.5 break-words ${valueColor} ${mono ? "font-mono" : ""}`}>
         {value}
       </div>
-      {sub && <div className="text-xs text-inkMuted mt-0.5">{sub}</div>}
+      {sub && <div className="text-xs text-inkMuted mt-0.5 break-words">{sub}</div>}
     </div>
   );
 }
@@ -725,7 +730,7 @@ function TabBtn({ active, onClick, children }: { active: boolean; onClick: () =>
   return (
     <button
       onClick={onClick}
-      className={`px-4 py-2 text-sm font-semibold border-b-2 -mb-px transition-colors ${
+      className={`shrink-0 whitespace-nowrap px-4 min-h-[44px] text-sm font-semibold border-b-2 -mb-px transition-colors ${
         active
           ? "border-brand text-brand-deep"
           : "border-transparent text-inkMuted hover:text-brand-deep"
@@ -835,8 +840,8 @@ function KycSection({ guestId, idProofType }: { guestId: string; idProofType: st
 
   return (
     <div className="card">
-      <div className="flex items-center justify-between mb-3 pb-2 border-b border-divider">
-        <div className="flex items-center gap-2">
+      <div className="flex items-center justify-between flex-wrap gap-2 mb-3 pb-2 border-b border-divider">
+        <div className="flex items-center gap-2 flex-wrap">
           <div className="text-[10px] uppercase tracking-[0.14em] text-brand-deep font-bold">
             KYC Documents
           </div>
@@ -848,7 +853,7 @@ function KycSection({ guestId, idProofType }: { guestId: string; idProofType: st
         </div>
         <button
           onClick={() => setShowUpload(true)}
-          className="text-xs font-semibold inline-flex items-center gap-1 px-2.5 py-1 rounded-sm border border-borderControl text-textSecondary hover:bg-surfaceAlt hover:text-brand-deep transition-colors"
+          className="text-xs font-semibold inline-flex items-center gap-1 px-3 min-h-[44px] sm:min-h-0 sm:py-1 rounded-sm border border-borderControl text-textSecondary hover:bg-surfaceAlt hover:text-brand-deep transition-colors"
         >
           <Upload className="w-3 h-3" />
           {data?.frontUrl ? "Replace" : "Upload"}
@@ -949,15 +954,15 @@ function KycThumb({
     return (
       <button
         onClick={onReplace}
-        className="border-2 border-dashed border-borderControl rounded-md p-4 flex items-center gap-2 text-textSecondary text-xs hover:border-brand hover:text-brand-deep transition-colors w-full text-left"
+        className="border-2 border-dashed border-borderControl rounded-md p-4 min-h-[56px] flex items-center gap-2 text-textSecondary text-xs hover:border-brand hover:text-brand-deep transition-colors w-full text-left"
       >
-        <Upload className="w-4 h-4 opacity-70" />
-        <span>{label} - click to upload</span>
+        <Upload className="w-4 h-4 opacity-70 shrink-0" />
+        <span className="min-w-0 break-words">{label} - click to upload</span>
       </button>
     );
   }
   return (
-    <div className="group relative block border border-borderc rounded-md overflow-hidden bg-surfaceAlt hover:border-borderControl hover:shadow-lift transition-all">
+    <div className="group relative block border border-borderc rounded-md overflow-hidden bg-surfaceAlt hover:border-borderControl hover:shadow-lift transition-all min-w-0">
       <button
         onClick={onPreview}
         className="block w-full text-left"
@@ -970,19 +975,22 @@ function KycThumb({
             className="w-full h-full object-cover group-hover:scale-[1.02] transition-transform"
           />
         </div>
-        <div className="px-2.5 py-1.5 text-[11px] font-semibold text-textSecondary group-hover:text-brand-deep">
+        <div className="px-2.5 py-1.5 text-[11px] font-semibold text-textSecondary group-hover:text-brand-deep truncate">
           {label}
         </div>
       </button>
-      <div className="absolute top-1.5 right-1.5 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+      {/* Touch has no hover: keep Remove / Edit visible on phone, keep the
+          reveal-on-hover treatment from sm+ where a pointer exists. */}
+      <div className="absolute top-1.5 right-1.5 flex gap-1 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
         {onRemove && (
           <button
             onClick={(e) => {
               e.stopPropagation();
               onRemove();
             }}
-            className="inline-flex items-center justify-center w-6 h-6 rounded-sm bg-danger/90 text-white backdrop-blur-sm hover:bg-danger"
+            className="inline-flex items-center justify-center w-9 h-9 sm:w-6 sm:h-6 rounded-sm bg-danger/90 text-white backdrop-blur-sm hover:bg-danger"
             title="Remove this document"
+            aria-label={`Remove ${label}`}
           >
             <X className="w-3.5 h-3.5" />
           </button>
@@ -992,8 +1000,9 @@ function KycThumb({
             e.stopPropagation();
             onReplace();
           }}
-          className="inline-flex items-center gap-1 text-[10px] font-semibold px-2 h-6 rounded-sm bg-brand-dark/90 text-cream backdrop-blur-sm hover:bg-brand-dark"
+          className="inline-flex items-center gap-1 text-[10px] font-semibold px-2.5 h-9 sm:h-6 rounded-sm bg-brand-dark/90 text-cream backdrop-blur-sm hover:bg-brand-dark"
           title="Replace this document"
+          aria-label={`Replace ${label}`}
         >
           <Pencil className="w-3 h-3" /> Edit
         </button>
@@ -1032,19 +1041,23 @@ function ImagePreview({
 
   return (
     <div
-      className="fixed inset-0 z-[160] grid place-items-center bg-brand-dark/60 p-4"
+      className="fixed inset-0 z-[160] grid place-items-center bg-brand-dark/60 p-2 sm:p-4"
       onMouseDown={(e) => {
         if (e.target === e.currentTarget) onClose();
       }}
     >
-      <div className="w-full max-w-4xl h-[90vh] bg-surface rounded-2xl shadow-modal border border-borderc flex flex-col overflow-hidden">
-        <div className="flex items-center justify-between gap-3 px-5 py-3 border-b border-borderc bg-surfaceAlt">
-          <div className="font-semibold text-ink truncate">{label ?? "KYC document"}</div>
-          <div className="flex items-center gap-1">
+      <div className="w-full max-w-4xl h-[92vh] sm:h-[90vh] bg-surface rounded-2xl shadow-modal border border-borderc flex flex-col overflow-hidden">
+        {/* Zoom / rotate / open / replace / close don't fit one 390px row —
+            the title takes the first line on phone and the controls wrap
+            under it. */}
+        <div className="flex items-center justify-between gap-2 flex-wrap px-3 sm:px-5 py-2.5 sm:py-3 border-b border-borderc bg-surfaceAlt">
+          <div className="font-semibold text-ink truncate min-w-0 flex-1">{label ?? "KYC document"}</div>
+          <div className="flex items-center gap-1 flex-wrap">
             <button
               onClick={() => setZoom((z) => Math.max(z - 0.25, 0.25))}
-              className="text-textSecondary hover:text-brand-dark px-2 h-8 inline-flex items-center font-mono text-sm"
+              className="text-textSecondary hover:text-brand-dark px-3 h-11 sm:h-8 inline-flex items-center font-mono text-sm"
               title="Zoom out (-)"
+              aria-label="Zoom out"
             >
               −
             </button>
@@ -1053,14 +1066,15 @@ function ImagePreview({
             </span>
             <button
               onClick={() => setZoom((z) => Math.min(z + 0.25, 4))}
-              className="text-textSecondary hover:text-brand-dark px-2 h-8 inline-flex items-center font-mono text-sm"
+              className="text-textSecondary hover:text-brand-dark px-3 h-11 sm:h-8 inline-flex items-center font-mono text-sm"
               title="Zoom in (+)"
+              aria-label="Zoom in"
             >
               +
             </button>
             <button
               onClick={() => setRotation((r) => (r + 90) % 360)}
-              className="text-textSecondary hover:text-brand-dark px-2 h-8 inline-flex items-center text-xs font-semibold"
+              className="text-textSecondary hover:text-brand-dark px-3 h-11 sm:h-8 inline-flex items-center text-xs font-semibold"
               title="Rotate"
             >
               Rotate
@@ -1069,7 +1083,7 @@ function ImagePreview({
               href={url}
               target="_blank"
               rel="noopener noreferrer"
-              className="text-xs font-semibold inline-flex items-center gap-1.5 px-2.5 h-8 rounded-sm border border-borderControl text-textSecondary hover:bg-surfaceAlt hover:text-brand-deep transition-colors"
+              className="text-xs font-semibold inline-flex items-center gap-1.5 px-2.5 h-11 sm:h-8 rounded-sm border border-borderControl text-textSecondary hover:bg-surfaceAlt hover:text-brand-deep transition-colors"
               title="Open in new tab"
             >
               <ExternalLink className="w-3.5 h-3.5" /> New tab
@@ -1080,7 +1094,7 @@ function ImagePreview({
                   onReplace();
                   onClose();
                 }}
-                className="text-xs font-semibold inline-flex items-center gap-1.5 px-2.5 h-8 rounded-sm bg-brand text-white hover:bg-brand-deep transition-colors"
+                className="text-xs font-semibold inline-flex items-center gap-1.5 px-2.5 h-11 sm:h-8 rounded-sm bg-brand text-white hover:bg-brand-deep transition-colors"
                 title="Replace this document"
               >
                 <Upload className="w-3.5 h-3.5" /> Replace
@@ -1088,8 +1102,9 @@ function ImagePreview({
             )}
             <button
               onClick={onClose}
-              className="ml-1 text-textSecondary hover:text-ink"
+              className="ml-1 w-11 h-11 sm:w-auto sm:h-auto inline-flex items-center justify-center text-textSecondary hover:text-ink"
               title="Close (Esc)"
+              aria-label="Close preview"
             >
               <X className="w-5 h-5" />
             </button>
@@ -1164,7 +1179,7 @@ function WalletSection({ guestId }: { guestId: string }) {
         </div>
         {balance > 0 && (
           <button
-            className="text-xs font-semibold inline-flex items-center gap-1 px-2.5 py-1 rounded-sm border border-borderControl text-textSecondary hover:bg-surfaceAlt hover:text-brand-deep transition-colors"
+            className="text-xs font-semibold inline-flex items-center gap-1 px-3 min-h-[44px] sm:min-h-0 sm:py-1 rounded-sm border border-borderControl text-textSecondary hover:bg-surfaceAlt hover:text-brand-deep transition-colors"
             onClick={() => setShowCashout(true)}
           >
             Cash out
@@ -1203,8 +1218,8 @@ function WalletSection({ guestId }: { guestId: string }) {
       )}
 
       {showCashout && (
-        <div className="fixed inset-0 bg-inkDark/50 flex items-center justify-center z-50" onClick={() => setShowCashout(false)}>
-          <div className="bg-surface rounded-2xl shadow-modal w-full max-w-md p-6 space-y-1" onClick={(e) => e.stopPropagation()}>
+        <div className="fixed inset-0 bg-inkDark/50 flex items-center justify-center z-50 p-4" onClick={() => setShowCashout(false)}>
+          <div className="bg-surface rounded-2xl shadow-modal w-full max-w-md p-5 sm:p-6 space-y-1 max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
             <h3 className="text-lg font-semibold text-ink mb-4">Cash out wallet credit</h3>
             <div className="text-sm text-textSecondary mb-3">Available: <strong>{inr(balance)}</strong></div>
             <div className="space-y-3">
@@ -1225,10 +1240,10 @@ function WalletSection({ guestId }: { guestId: string }) {
                 <input className="input" value={note} onChange={(e) => setNote(e.target.value)} placeholder="Cash refund handed at front desk" />
               </div>
               {err && <div className="text-danger text-sm">{err}</div>}
-              <div className="flex justify-end gap-2">
-                <button className="btn-secondary" onClick={() => setShowCashout(false)}>Cancel</button>
+              <div className="flex flex-wrap justify-end gap-2">
+                <button className="btn-secondary flex-1 sm:flex-none" onClick={() => setShowCashout(false)}>Cancel</button>
                 <button
-                  className="btn-primary"
+                  className="btn-primary flex-1 sm:flex-none"
                   disabled={!amount || Number(amount) <= 0 || Number(amount) > balance + 0.009 || cashout.isPending}
                   onClick={() => cashout.mutate()}
                 >
@@ -1351,8 +1366,8 @@ function StayCard({ r, onOpen }: { r: GuestReservation; onOpen: () => void }) {
       onClick={onOpen}
       className="card w-full text-left hover:border-borderControl hover:shadow-lift transition-all"
     >
-      <div className="flex items-center justify-between gap-3 mb-3 pb-2 border-b border-divider">
-        <div className="flex items-center gap-2 min-w-0">
+      <div className="flex items-start justify-between gap-3 mb-3 pb-2 border-b border-divider">
+        <div className="flex items-center gap-2 flex-wrap min-w-0">
           <span className="font-mono font-bold text-ink">{r.reservationNumber}</span>
           <span
             className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-[6px] ${statusTone}`}
@@ -1370,7 +1385,7 @@ function StayCard({ r, onOpen }: { r: GuestReservation; onOpen: () => void }) {
             </span>
           )}
         </div>
-        <ExternalLink className="w-4 h-4 text-inkFaint shrink-0" />
+        <ExternalLink className="w-4 h-4 text-inkFaint shrink-0 mt-0.5" />
       </div>
 
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-sm">
@@ -1411,7 +1426,7 @@ function StayCard({ r, onOpen }: { r: GuestReservation; onOpen: () => void }) {
           {r.rooms.map((rm) => (
             <span
               key={rm.id}
-              className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs border ${
+              className={`inline-flex items-center flex-wrap gap-x-1.5 gap-y-0.5 max-w-full px-2.5 py-1 rounded-lg text-xs border ${
                 rm.isThisGuest
                   ? "border-brand-soft bg-brand-soft text-brand-deep font-semibold"
                   : "border-borderc bg-surfaceSubtle text-textSecondary"
@@ -1522,7 +1537,9 @@ function FollowUpsTab({ guestId }: { guestId: string }) {
     <div className="space-y-3">
       <div className="card space-y-2">
         <label className="label">Add Follow-up</label>
-        <div className="grid grid-cols-[1fr_auto_auto] gap-2">
+        {/* Task / date / Add don't fit one 390px row — they stack on phone
+            and return to the inline 3-up grid from sm. */}
+        <div className="grid grid-cols-1 sm:grid-cols-[1fr_auto_auto] gap-2">
           <input
             className="input"
             placeholder="Call guest for feedback, send anniversary offer…"
@@ -1530,13 +1547,13 @@ function FollowUpsTab({ guestId }: { guestId: string }) {
             onChange={(e) => setTask(e.target.value)}
           />
           <input
-            className="input w-40"
+            className="input w-full sm:w-40"
             type="date"
             value={dueDate}
             onChange={(e) => setDueDate(e.target.value)}
           />
           <button
-            className="btn-primary inline-flex items-center gap-1.5"
+            className="btn-primary inline-flex items-center justify-center gap-1.5"
             disabled={!task.trim() || add.isPending}
             onClick={() => add.mutate()}
           >
@@ -1599,9 +1616,9 @@ function FollowUpRow({
   const overdue =
     item.status === "pending" && new Date(item.dueDate) < new Date(new Date().toDateString());
   return (
-    <li className="px-4 py-3 border-b border-divider last:border-b-0 flex items-center justify-between gap-3">
-      <div className="flex-1 min-w-0">
-        <div className={`text-sm ${item.status === "cancelled" ? "line-through text-textSecondary" : ""}`}>
+    <li className="px-4 py-3 border-b border-divider last:border-b-0 flex items-start sm:items-center justify-between gap-3 flex-wrap">
+      <div className="flex-1 min-w-[160px]">
+        <div className={`text-sm break-words ${item.status === "cancelled" ? "line-through text-textSecondary" : ""}`}>
           {item.task}
         </div>
         <div className={`text-xs mt-0.5 ${overdue ? "text-dangerFg font-semibold" : "text-inkMuted"}`}>
@@ -1614,18 +1631,19 @@ function FollowUpRow({
         </div>
       </div>
       {onDone && onCancel && (
-        <div className="flex gap-1">
+        <div className="flex gap-1 shrink-0">
           <button
             onClick={onDone}
-            className="btn-secondary !h-8 !px-2 inline-flex items-center gap-1 text-xs"
+            className="btn-secondary !h-11 sm:!h-8 !px-3 sm:!px-2 inline-flex items-center gap-1 text-xs"
             title="Mark done"
           >
             <CheckCircle2 className="w-3.5 h-3.5" /> Done
           </button>
           <button
             onClick={onCancel}
-            className="btn-danger !h-8 !px-2 text-xs"
+            className="btn-danger !h-11 sm:!h-8 !px-3 sm:!px-2 text-xs"
             title="Cancel"
+            aria-label="Cancel follow-up"
           >
             <Trash2 className="w-3.5 h-3.5" />
           </button>
@@ -1642,10 +1660,10 @@ function Row({ label, value }: { label: string; value: React.ReactNode }) {
     value === "" ||
     (typeof value === "string" && value.trim() === "");
   return (
-    <div>
+    <div className="min-w-0">
       <div className="label">{label}</div>
       <div
-        className={`mt-0.5 ${isEmpty ? "text-inkFaint italic" : "text-ink"}`}
+        className={`mt-0.5 break-words ${isEmpty ? "text-inkFaint italic" : "text-ink"}`}
       >
         {isEmpty ? "Not provided" : value}
       </div>

@@ -145,16 +145,16 @@ export default function Dashboard() {
     <div className="space-y-[22px]">
       <div className="flex items-end justify-between flex-wrap gap-4">
         {headerBlock}
-        <div className="flex items-center gap-2.5">
+        <div className="flex items-center gap-2.5 w-full sm:w-auto">
           <button
             onClick={() => navigate("/reservations/new?mode=booking")}
-            className="btn-secondary inline-flex items-center gap-2"
+            className="btn-secondary inline-flex items-center justify-center gap-2 flex-1 sm:flex-none"
           >
             <CalendarPlus className="w-4 h-4" /> Pre-booking
           </button>
           <button
             onClick={() => navigate("/reservations/new?mode=walkin")}
-            className="btn-primary inline-flex items-center gap-2"
+            className="btn-primary inline-flex items-center justify-center gap-2 flex-1 sm:flex-none"
           >
             <UserPlus className="w-4 h-4" /> New walk-in
           </button>
@@ -172,7 +172,7 @@ export default function Dashboard() {
           fetch. Dismissible; stays gone via localStorage. */}
       {data.occupancy.total === 0 && <GetStartedCard />}
 
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4">
         <KpiCard
           featured
           icon={<BedDouble className="w-4 h-4" />}
@@ -236,7 +236,7 @@ export default function Dashboard() {
             counters (no rupee values) and visible to everyone — they're
             the morning work queue for housekeeping and the front desk. */}
       {(data.revenue_kpis || data.operations_kpis) && (
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4">
           {data.revenue_kpis?.mtd_collected !== undefined && (
             <Can do="view_revenue">
               <KpiCard
@@ -366,7 +366,9 @@ export default function Dashboard() {
                     </span>
                   </div>
 
-                  <div className="grid grid-cols-[repeat(auto-fill,minmax(118px,1fr))] gap-[11px]">
+                  {/* Phone fits three ~105px tiles per row; sm+ keeps the
+                      original 118px minimum so tiles never look stretched. */}
+                  <div className="grid grid-cols-[repeat(auto-fill,minmax(100px,1fr))] sm:grid-cols-[repeat(auto-fill,minmax(118px,1fr))] gap-2 sm:gap-[11px]">
                     {floorGroup.rooms.map((r) => (
                       <RoomTile
                         key={r.id}
@@ -449,7 +451,7 @@ function TodayPanel({
 
   return (
     <div className="card !p-0 overflow-hidden">
-      <div className="px-[18px] py-4 border-b border-divider flex items-center justify-between gap-2.5">
+      <div className="px-3 sm:px-[18px] py-4 border-b border-divider flex flex-wrap items-center justify-between gap-2.5">
         <div className="flex items-center gap-2">
           <span
             className={`w-[30px] h-[30px] rounded-[9px] grid place-items-center ${
@@ -482,7 +484,7 @@ function TodayPanel({
       </div>
 
       {rows.length === 0 ? (
-        <div className="px-[18px] py-6 text-textSecondary text-sm">{emptyMessage}</div>
+        <div className="px-3 sm:px-[18px] py-6 text-textSecondary text-sm">{emptyMessage}</div>
       ) : (
         <ul className="divide-y divide-divider">
           {/* Pending first so they're visually prioritised, then the done rows. */}
@@ -548,7 +550,7 @@ function TodayRowItem({
     : [];
 
   return (
-    <li className="flex items-center gap-3 px-[18px] py-3 hover:bg-surfaceAlt transition-colors">
+    <li className="flex items-center gap-2.5 sm:gap-3 px-3 sm:px-[18px] py-3 hover:bg-surfaceAlt transition-colors">
       <span className="w-9 h-9 shrink-0 rounded-full bg-parchment text-inkBody grid place-items-center font-bold text-xs">
         {initialsOf(row.guestName)}
       </span>
@@ -576,7 +578,7 @@ function TodayRowItem({
 
       <button
         onClick={() => onOpen(row.reservationNumber || row.id)}
-        className={`inline-flex items-center gap-1.5 h-[34px] px-3 text-[12.5px] font-semibold rounded-sm border transition-colors shrink-0 ${
+        className={`inline-flex items-center gap-1.5 h-11 sm:h-[34px] px-2.5 sm:px-3 text-[12.5px] font-semibold rounded-sm border transition-colors shrink-0 ${
           actionTone === "primary"
             ? "bg-brand text-white border-brand hover:bg-brand-deep"
             : "bg-surface text-inkBody border-borderControl hover:bg-surfaceAlt"
@@ -670,7 +672,7 @@ function GetStartedCard() {
               <Link
                 key={s.label}
                 to={s.to}
-                className={`inline-flex items-center gap-1.5 border rounded-sm px-3 py-1.5 text-sm font-medium transition-colors ${
+                className={`inline-flex items-center gap-1.5 border rounded-sm px-3 py-1.5 min-h-[44px] sm:min-h-0 text-sm font-medium transition-colors ${
                   s.done
                     ? "border-successBorder bg-successBg text-success"
                     : "border-borderControl bg-surface text-ink hover:bg-surfaceAlt"
@@ -688,7 +690,7 @@ function GetStartedCard() {
             localStorage.setItem(ONBOARD_DISMISSED_KEY, "1");
             setDismissed(true);
           }}
-          className="p-1.5 -m-1 rounded text-textSecondary hover:text-ink hover:bg-surfaceSubtle shrink-0"
+          className="p-1.5 -m-1 rounded text-textSecondary hover:text-ink hover:bg-surfaceSubtle shrink-0 inline-flex items-center justify-center min-w-[44px] min-h-[44px] sm:min-w-0 sm:min-h-0"
           aria-label="Dismiss setup guide"
         >
           <X className="w-4 h-4" />
@@ -748,14 +750,14 @@ function TodaysCollections({
 
   return (
     <div className="card">
-      <div className="flex items-center justify-between mb-3">
-        <div>
+      <div className="flex items-start justify-between gap-3 mb-3">
+        <div className="min-w-0">
           <h2 className="text-[16px] font-semibold text-ink">Today's Collections by Method</h2>
           <p className="text-xs text-textSecondary mt-0.5">
             Money received today, split by payment mode - for the daily cash-up.
           </p>
         </div>
-        <Wallet className="w-5 h-5 text-inkMuted" />
+        <Wallet className="w-5 h-5 shrink-0 text-inkMuted" />
       </div>
 
       {rows.length === 0 ? (
@@ -811,8 +813,8 @@ function TodaysCollections({
         </div>
       )}
 
-      <div className="flex items-center justify-between mt-3 pt-3 border-t border-divider">
-        <span className="text-sm font-semibold text-ink">
+      <div className="flex items-center justify-between gap-3 mt-3 pt-3 border-t border-divider">
+        <span className="text-sm font-semibold text-ink min-w-0">
           {refunded > 0 ? "Net movement today" : "Total collected today"}
           {totalTxns > 0 && (
             <span className="text-textSecondary font-normal">
@@ -821,7 +823,7 @@ function TodaysCollections({
           )}
         </span>
         <span
-          className={`text-lg font-bold font-mono tabular-nums ${
+          className={`text-lg font-bold font-mono tabular-nums shrink-0 ${
             data.total_collected < 0 ? "text-danger" : "text-ink"
           }`}
         >
@@ -935,9 +937,14 @@ function RoomTile({
   const style =
     (showHoldHint ? STYLES.held : STYLES[room.status]) ?? STYLES.available!;
 
+  // Held tiles reserve extra bottom room: on a ~100px phone tile the
+  // "HELD 30 Jun → 02 Jul" ribbon can run to two lines and would
+  // otherwise ride up over the status row.
   const tile = (
     <div
-      className={`relative w-full min-h-[104px] rounded-[13px] border overflow-hidden px-2 pt-3.5 pb-3 flex flex-col items-center justify-center gap-1.5 cursor-pointer transition-all hover:-translate-y-0.5 hover:shadow-lift ${style.card}`}
+      className={`relative w-full min-h-[104px] rounded-[13px] border overflow-hidden px-2 pt-3.5 ${
+        showHoldHint ? "pb-6" : "pb-3"
+      } flex flex-col items-center justify-center gap-1.5 cursor-pointer transition-all hover:-translate-y-0.5 hover:shadow-lift ${style.card}`}
       title={
         room.relet_pending
           ? `Same-day re-let: walk-in checks out today, ${room.relet_pending.nextGuestName} arrives ${room.relet_pending.nextCheckIn}`

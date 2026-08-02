@@ -127,6 +127,27 @@ export default function Collections() {
     onError: (e: Error) => toast(e.message, "error"),
   });
 
+  // Shared by the desktop row button and the mobile card button so the
+  // prompt/mutate flow lives in exactly one place.
+  async function askAndMarkReceived(p: PendingPaymentRow) {
+    const chosen = await dialog.prompt({
+      title: "Mark payment received",
+      message: `Confirm collection of ${maskedInr(p.amount)} from ${p.guestName}.`,
+      okLabel: "Mark received",
+      tone: "success",
+      required: true,
+      defaultValue: "cash",
+      options: [
+        { value: "cash", label: "Cash" },
+        { value: "upi", label: "UPI" },
+        { value: "card", label: "Card" },
+        { value: "bank_transfer", label: "Bank transfer" },
+      ],
+    });
+    if (!chosen) return;
+    markReceived.mutate({ id: p.paymentId, method: chosen });
+  }
+
   const q = search.trim().toLowerCase();
   // The match predicate is inlined inside each useMemo (rather than
   // hoisted to a top-level `matches` function) so the memos depend
@@ -215,7 +236,7 @@ export default function Collections() {
           </p>
         </div>
         <input
-          className="input max-w-xs"
+          className="input w-full sm:w-auto sm:max-w-xs"
           placeholder="Search guest name or phone…"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
@@ -228,7 +249,7 @@ export default function Collections() {
           <div className="label">Total to collect</div>
           <Money
             value={totalAcrossStreams}
-            className="block text-2xl font-bold text-dangerFg font-mono mt-1.5"
+            className="block text-xl sm:text-2xl font-bold text-dangerFg font-mono mt-1.5 tabular-nums"
           />
           <div className="text-[11px] text-inkMuted mt-1">
             {totalGuestsOwing} guest{totalGuestsOwing === 1 ? "" : "s"} owing
@@ -243,7 +264,7 @@ export default function Collections() {
           <div className="label">Within 7 days</div>
           <Money
             value={ageCounts.fresh}
-            className="block text-2xl font-bold text-success font-mono mt-1.5"
+            className="block text-xl sm:text-2xl font-bold text-success font-mono mt-1.5 tabular-nums"
           />
           <div className="text-[11px] text-inkMuted mt-1">
             {ageCounts.fresh_count} guest{ageCounts.fresh_count === 1 ? "" : "s"}
@@ -253,7 +274,7 @@ export default function Collections() {
           <div className="label">8–30 days</div>
           <Money
             value={ageCounts.warm}
-            className="block text-2xl font-bold text-warnFg font-mono mt-1.5"
+            className="block text-xl sm:text-2xl font-bold text-warnFg font-mono mt-1.5 tabular-nums"
           />
           <div className="text-[11px] text-inkMuted mt-1">
             {ageCounts.warm_count} guest{ageCounts.warm_count === 1 ? "" : "s"}
@@ -263,7 +284,7 @@ export default function Collections() {
           <div className="label">Over 30 days</div>
           <Money
             value={ageCounts.old}
-            className="block text-2xl font-bold text-dangerFg font-mono mt-1.5"
+            className="block text-xl sm:text-2xl font-bold text-dangerFg font-mono mt-1.5 tabular-nums"
           />
           <div className="text-[11px] text-inkMuted mt-1">
             {ageCounts.old_count} guest{ageCounts.old_count === 1 ? "" : "s"}
@@ -295,60 +316,75 @@ export default function Collections() {
                 sub="Total balance per guest across every reservation and invoice."
                 count={filteredByGuest.length}
               />
-              <div className="card !p-0 overflow-x-auto">
-                <table className="table-base">
-                  <thead>
-                    <tr>
-                      <th>Guest</th>
-                      <th>Phone</th>
-                      <th>Oldest debt</th>
-                      <th className="text-right">Balance</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {filteredByGuest.map((g) => {
-                      const ageDays = daysSince(g.oldest);
-                      const bucket = ageBucket(ageDays);
-                      return (
-                        <tr
-                          key={g.guestId}
-                          role="button"
-                          tabIndex={0}
-                          className="cursor-pointer"
-                          onClick={() => navigate(`/guests/${g.guestPhone}`)}
-                        >
-                          <td>
-                            <div className="text-ink font-semibold">
+              <div className="card !p-0 overflow-hidden">
+                <div className="hidden md:grid grid-cols-[minmax(180px,1fr)_150px_210px_140px] gap-3 px-3 py-2.5 text-[10px] font-bold uppercase tracking-[0.06em] text-inkMuted bg-surfaceAlt border-b border-divider">
+                  <div>Guest</div>
+                  <div>Phone</div>
+                  <div>Oldest debt</div>
+                  <div className="text-right">Balance</div>
+                </div>
+                <ul className="divide-y divide-divider">
+                  {filteredByGuest.map((g) => {
+                    const ageDays = daysSince(g.oldest);
+                    const bucket = ageBucket(ageDays);
+                    const agePill = `px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider border ${
+                      bucket === "fresh"
+                        ? "bg-successBg text-success border-successBorder"
+                        : bucket === "warm"
+                          ? "bg-warnBg text-warnFg border-warnBorder"
+                          : "bg-dangerBg text-dangerFg border-dangerBorder"
+                    }`;
+                    return (
+                      <li
+                        key={g.guestId}
+                        role="button"
+                        tabIndex={0}
+                        className="cursor-pointer hover:bg-surfaceAlt transition-colors"
+                        onClick={() => navigate(`/guests/${g.guestPhone}`)}
+                      >
+                        {/* DESKTOP */}
+                        <div className="hidden md:grid grid-cols-[minmax(180px,1fr)_150px_210px_140px] gap-3 items-center px-3 py-2.5">
+                          <div className="min-w-0 text-ink font-semibold truncate">
+                            {g.guestName}
+                          </div>
+                          <div className="font-mono text-xs text-inkMuted truncate">
+                            {g.guestPhone}
+                          </div>
+                          <div className="text-xs">
+                            {format(new Date(g.oldest), "dd MMM yyyy")}
+                            <span className={`ml-1.5 ${agePill}`}>{ageDays}d</span>
+                          </div>
+                          <div className="text-right font-mono text-dangerFg font-bold">
+                            {inr(g.balance)}
+                          </div>
+                        </div>
+
+                        {/* MOBILE */}
+                        <div className="md:hidden flex items-start justify-between gap-2 px-3 py-3">
+                          <div className="min-w-0 flex-1">
+                            <div className="text-sm text-ink font-semibold truncate">
                               {g.guestName}
                             </div>
-                          </td>
-                          <td>
-                            <div className="font-mono text-xs text-inkMuted">
+                            <div className="font-mono text-[11px] text-inkMuted mt-0.5 truncate">
                               {g.guestPhone}
                             </div>
-                          </td>
-                          <td className="text-xs">
-                            {format(new Date(g.oldest), "dd MMM yyyy")}
-                            <span
-                              className={`ml-1.5 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider border ${
-                                bucket === "fresh"
-                                  ? "bg-successBg text-success border-successBorder"
-                                  : bucket === "warm"
-                                    ? "bg-warnBg text-warnFg border-warnBorder"
-                                    : "bg-dangerBg text-dangerFg border-dangerBorder"
-                              }`}
-                            >
+                            <div className="text-[11px] text-inkFaint mt-1">
+                              oldest {format(new Date(g.oldest), "dd MMM yyyy")}
+                            </div>
+                          </div>
+                          <div className="text-right shrink-0">
+                            <div className="font-mono text-sm text-dangerFg font-bold">
+                              {inr(g.balance)}
+                            </div>
+                            <span className={`inline-block mt-1 ${agePill}`}>
                               {ageDays}d
                             </span>
-                          </td>
-                          <td className="text-right font-mono text-dangerFg font-bold">
-                            {inr(g.balance)}
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
+                          </div>
+                        </div>
+                      </li>
+                    );
+                  })}
+                </ul>
               </div>
             </section>
           )}
@@ -363,66 +399,99 @@ export default function Collections() {
                 sub="Bookings with a balance that haven't been checked out / invoiced yet."
                 count={filteredPreInvoice.length}
               />
-              <div className="card !p-0 overflow-x-auto">
-                <table className="table-base">
-                  <thead>
-                    <tr>
-                      <th>Reservation</th>
-                      <th>Guest</th>
-                      <th>Stay</th>
-                      <th>Status</th>
-                      <th className="text-right">Total</th>
-                      <th className="text-right">Advance Paid</th>
-                      <th className="text-right">Balance</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {filteredPreInvoice.map((r) => (
-                      <tr
-                        key={r.reservationId}
-                        role="button"
-                        tabIndex={0}
-                        className="cursor-pointer"
-                        onClick={() =>
-                          navigate(`/reservations/${r.reservationNumber}`)
-                        }
-                      >
-                        <td>
-                          <span className="font-mono text-xs font-semibold text-brand-deep hover:underline">
-                            {r.reservationNumber}
-                          </span>
-                        </td>
-                        <td>
-                          <div className="text-ink font-medium">
+              <div className="card !p-0 overflow-hidden">
+                <div className="hidden md:grid grid-cols-[130px_minmax(160px,1fr)_170px_110px_110px_120px_120px] gap-3 px-3 py-2.5 text-[10px] font-bold uppercase tracking-[0.06em] text-inkMuted bg-surfaceAlt border-b border-divider">
+                  <div>Reservation</div>
+                  <div>Guest</div>
+                  <div>Stay</div>
+                  <div>Status</div>
+                  <div className="text-right">Total</div>
+                  <div className="text-right">Advance Paid</div>
+                  <div className="text-right">Balance</div>
+                </div>
+                <ul className="divide-y divide-divider">
+                  {filteredPreInvoice.map((r) => (
+                    <li
+                      key={r.reservationId}
+                      role="button"
+                      tabIndex={0}
+                      className="cursor-pointer hover:bg-surfaceAlt transition-colors"
+                      onClick={() =>
+                        navigate(`/reservations/${r.reservationNumber}`)
+                      }
+                    >
+                      {/* DESKTOP */}
+                      <div className="hidden md:grid grid-cols-[130px_minmax(160px,1fr)_170px_110px_110px_120px_120px] gap-3 items-center px-3 py-2.5">
+                        <div className="font-mono text-xs font-semibold text-brand-deep hover:underline truncate">
+                          {r.reservationNumber}
+                        </div>
+                        <div className="min-w-0">
+                          <div className="text-ink font-medium truncate">
                             {r.guestName}
                           </div>
-                          <div className="text-xs text-inkMuted font-mono">
+                          <div className="text-xs text-inkMuted font-mono truncate">
                             {r.guestPhone}
                           </div>
-                        </td>
-                        <td className="text-xs">
+                        </div>
+                        <div className="text-xs">
                           {format(new Date(r.checkInDate), "dd MMM")} →{" "}
                           {format(new Date(r.checkOutDate), "dd MMM yyyy")}
                           <div className="text-[10px] text-inkFaint">
                             booked {daysSince(r.createdAt)}d ago
                           </div>
-                        </td>
-                        <td className="text-xs capitalize">
+                        </div>
+                        <div className="text-xs capitalize">
                           {r.status.replace(/_/g, " ")}
-                        </td>
-                        <td className="text-right font-mono">
+                        </div>
+                        <div className="text-right font-mono text-sm">
                           {inr(r.grandTotal)}
-                        </td>
-                        <td className="text-right font-mono text-success">
+                        </div>
+                        <div className="text-right font-mono text-sm text-success">
                           {inr(r.advancePaid)}
-                        </td>
-                        <td className="text-right font-mono text-dangerFg font-bold">
+                        </div>
+                        <div className="text-right font-mono text-sm text-dangerFg font-bold">
                           {inr(r.balanceDue)}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+                        </div>
+                      </div>
+
+                      {/* MOBILE */}
+                      <div className="md:hidden px-3 py-3">
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="min-w-0 flex-1">
+                            <div className="font-mono text-xs font-semibold text-brand-deep truncate">
+                              {r.reservationNumber}
+                            </div>
+                            <div className="text-sm text-ink font-medium truncate mt-0.5">
+                              {r.guestName}
+                            </div>
+                            <div className="text-[11px] text-inkMuted font-mono truncate">
+                              {r.guestPhone}
+                            </div>
+                            <div className="text-[11px] text-inkFaint mt-1">
+                              {format(new Date(r.checkInDate), "dd MMM")} →{" "}
+                              {format(new Date(r.checkOutDate), "dd MMM yyyy")} ·
+                              booked {daysSince(r.createdAt)}d ago
+                            </div>
+                          </div>
+                          <div className="text-right shrink-0">
+                            <div className="font-mono text-sm text-dangerFg font-bold">
+                              {inr(r.balanceDue)}
+                            </div>
+                            <div className="text-[10px] text-inkMuted font-mono mt-0.5">
+                              of {inr(r.grandTotal)}
+                            </div>
+                            <div className="text-[10px] text-success font-mono">
+                              paid {inr(r.advancePaid)}
+                            </div>
+                          </div>
+                        </div>
+                        <div className="text-[11px] text-inkMuted capitalize mt-1.5">
+                          {r.status.replace(/_/g, " ")}
+                        </div>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
               </div>
             </section>
           )}
@@ -437,67 +506,97 @@ export default function Collections() {
                 sub="Bills already printed. Age shown is days since the invoice was issued."
                 count={filteredInvoices.length}
               />
-              <div className="card !p-0 overflow-x-auto">
-                <table className="table-base">
-                  <thead>
-                    <tr>
-                      <th>Invoice</th>
-                      <th>Reservation</th>
-                      <th>Guest</th>
-                      <th>Issued</th>
-                      <th className="text-right">Total</th>
-                      <th className="text-right">Paid</th>
-                      <th className="text-right">Balance</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {filteredInvoices.map((r) => (
-                      <tr
-                        key={r.invoiceId}
-                        role="button"
-                        tabIndex={0}
-                        className="cursor-pointer"
-                        onClick={() =>
-                          navigate(`/reservations/${r.reservationNumber}`)
-                        }
-                      >
-                        <td>
-                          <span className="font-mono text-xs font-semibold text-brand-deep">
-                            {r.invoiceNumber}
-                          </span>
-                        </td>
-                        <td>
-                          <span className="font-mono text-xs text-accentBlue">
-                            {r.reservationNumber}
-                          </span>
-                        </td>
-                        <td>
-                          <div className="text-ink font-medium">
+              <div className="card !p-0 overflow-hidden">
+                <div className="hidden md:grid grid-cols-[140px_130px_minmax(160px,1fr)_140px_110px_120px_120px] gap-3 px-3 py-2.5 text-[10px] font-bold uppercase tracking-[0.06em] text-inkMuted bg-surfaceAlt border-b border-divider">
+                  <div>Invoice</div>
+                  <div>Reservation</div>
+                  <div>Guest</div>
+                  <div>Issued</div>
+                  <div className="text-right">Total</div>
+                  <div className="text-right">Paid</div>
+                  <div className="text-right">Balance</div>
+                </div>
+                <ul className="divide-y divide-divider">
+                  {filteredInvoices.map((r) => (
+                    <li
+                      key={r.invoiceId}
+                      role="button"
+                      tabIndex={0}
+                      className="cursor-pointer hover:bg-surfaceAlt transition-colors"
+                      onClick={() =>
+                        navigate(`/reservations/${r.reservationNumber}`)
+                      }
+                    >
+                      {/* DESKTOP */}
+                      <div className="hidden md:grid grid-cols-[140px_130px_minmax(160px,1fr)_140px_110px_120px_120px] gap-3 items-center px-3 py-2.5">
+                        <div className="font-mono text-xs font-semibold text-brand-deep truncate">
+                          {r.invoiceNumber}
+                        </div>
+                        <div className="font-mono text-xs text-accentBlue truncate">
+                          {r.reservationNumber}
+                        </div>
+                        <div className="min-w-0">
+                          <div className="text-ink font-medium truncate">
                             {r.guestName}
                           </div>
-                          <div className="text-xs text-inkMuted font-mono">
+                          <div className="text-xs text-inkMuted font-mono truncate">
                             {r.guestPhone}
                           </div>
-                        </td>
-                        <td className="text-xs">
+                        </div>
+                        <div className="text-xs">
                           {format(new Date(r.issuedAt), "dd MMM yyyy")}
                           <div className="text-[10px] text-inkFaint">
                             {daysSince(r.issuedAt)}d ago
                           </div>
-                        </td>
-                        <td className="text-right font-mono">
+                        </div>
+                        <div className="text-right font-mono text-sm">
                           {inr(r.grandTotal)}
-                        </td>
-                        <td className="text-right font-mono text-success">
+                        </div>
+                        <div className="text-right font-mono text-sm text-success">
                           {inr(r.totalPaid)}
-                        </td>
-                        <td className="text-right font-mono text-dangerFg font-bold">
+                        </div>
+                        <div className="text-right font-mono text-sm text-dangerFg font-bold">
                           {inr(r.balanceDue)}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+                        </div>
+                      </div>
+
+                      {/* MOBILE */}
+                      <div className="md:hidden px-3 py-3">
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="min-w-0 flex-1">
+                            <div className="font-mono text-xs font-semibold text-brand-deep truncate">
+                              {r.invoiceNumber}
+                            </div>
+                            <div className="text-sm text-ink font-medium truncate mt-0.5">
+                              {r.guestName}
+                            </div>
+                            <div className="text-[11px] text-inkMuted font-mono truncate">
+                              {r.guestPhone}
+                            </div>
+                            <div className="font-mono text-[11px] text-accentBlue mt-1 truncate">
+                              {r.reservationNumber}
+                            </div>
+                            <div className="text-[11px] text-inkFaint mt-0.5">
+                              issued {format(new Date(r.issuedAt), "dd MMM yyyy")} ·{" "}
+                              {daysSince(r.issuedAt)}d ago
+                            </div>
+                          </div>
+                          <div className="text-right shrink-0">
+                            <div className="font-mono text-sm text-dangerFg font-bold">
+                              {inr(r.balanceDue)}
+                            </div>
+                            <div className="text-[10px] text-inkMuted font-mono mt-0.5">
+                              of {inr(r.grandTotal)}
+                            </div>
+                            <div className="text-[10px] text-success font-mono">
+                              paid {inr(r.totalPaid)}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
               </div>
             </section>
           )}
@@ -513,86 +612,104 @@ export default function Collections() {
                 sub="Specific amounts the guest promised at check-out. Mark each as received once the cash arrives."
                 count={filteredPending.length}
               />
-              <div className="card !p-0 overflow-x-auto">
-                <table className="table-base">
-                  <thead>
-                    <tr>
-                      <th>Reservation</th>
-                      <th>Guest</th>
-                      <th>Reason</th>
-                      <th>Promised</th>
-                      <th className="text-right">Amount</th>
-                      <th className="text-right">Action</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {filteredPending.map((p) => (
-                      <tr key={p.paymentId}>
-                        <td>
+              <div className="card !p-0 overflow-hidden">
+                <div className="hidden md:grid grid-cols-[120px_minmax(150px,1fr)_minmax(140px,1fr)_160px_110px_150px] gap-3 px-3 py-2.5 text-[10px] font-bold uppercase tracking-[0.06em] text-inkMuted bg-surfaceAlt border-b border-divider">
+                  <div>Reservation</div>
+                  <div>Guest</div>
+                  <div>Reason</div>
+                  <div>Promised</div>
+                  <div className="text-right">Amount</div>
+                  <div className="text-right">Action</div>
+                </div>
+                <ul className="divide-y divide-divider">
+                  {filteredPending.map((p) => (
+                    <li key={p.paymentId}>
+                      {/* DESKTOP */}
+                      <div className="hidden md:grid grid-cols-[120px_minmax(150px,1fr)_minmax(140px,1fr)_160px_110px_150px] gap-3 items-center px-3 py-2.5">
+                        <div className="min-w-0">
                           <button
-                            className="font-mono text-xs font-semibold text-brand-deep hover:underline"
+                            className="font-mono text-xs font-semibold text-brand-deep hover:underline truncate block"
                             onClick={() =>
                               navigate(`/reservations/${p.reservationNumber}`)
                             }
                           >
                             {p.reservationNumber}
                           </button>
-                        </td>
-                        <td>
-                          <div className="text-ink font-semibold">{p.guestName}</div>
-                          <div className="text-xs text-inkMuted font-mono">
+                        </div>
+                        <div className="min-w-0">
+                          <div className="text-ink font-semibold truncate">{p.guestName}</div>
+                          <div className="text-xs text-inkMuted font-mono truncate">
                             {p.guestPhone}
                           </div>
-                        </td>
-                        <td className="text-xs text-inkMuted">
+                        </div>
+                        <div className="text-xs text-inkMuted break-words">
                           {p.notes ?? ""}
-                        </td>
-                        <td>
+                        </div>
+                        <div className="text-sm">
                           {format(new Date(p.promisedAt), "dd MMM yyyy")}{" "}
                           <span className="text-xs text-inkFaint">
                             · {daysSince(p.promisedAt)}d ago
                           </span>
-                        </td>
-                        <td className="text-right font-mono text-dangerFg font-bold">
+                        </div>
+                        <div className="text-right font-mono text-dangerFg font-bold">
                           <Money value={p.amount} />
-                        </td>
-                        <td className="text-right">
+                        </div>
+                        <div className="text-right">
                           <button
                             className="!h-7 !px-2.5 text-xs font-semibold rounded-sm bg-success text-white border border-success hover:opacity-90 disabled:opacity-50 inline-flex items-center gap-1"
-                            onClick={async () => {
-                              const chosen = await dialog.prompt({
-                                title: "Mark payment received",
-                                message: `Confirm collection of ${maskedInr(p.amount)} from ${p.guestName}.`,
-                                okLabel: "Mark received",
-                                tone: "success",
-                                required: true,
-                                defaultValue: "cash",
-                                options: [
-                                  { value: "cash", label: "Cash" },
-                                  { value: "upi", label: "UPI" },
-                                  { value: "card", label: "Card" },
-                                  {
-                                    value: "bank_transfer",
-                                    label: "Bank transfer",
-                                  },
-                                ],
-                              });
-                              if (!chosen) return;
-                              markReceived.mutate({
-                                id: p.paymentId,
-                                method: chosen,
-                              });
-                            }}
+                            onClick={() => askAndMarkReceived(p)}
                             disabled={markReceived.isPending}
                           >
                             <CheckCircle2 className="w-3.5 h-3.5" />
                             Mark Received
                           </button>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+                        </div>
+                      </div>
+
+                      {/* MOBILE */}
+                      <div className="md:hidden px-3 py-3">
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="min-w-0 flex-1">
+                            <button
+                              className="font-mono text-xs font-semibold text-brand-deep hover:underline inline-flex items-center min-h-[24px] truncate"
+                              onClick={() =>
+                                navigate(`/reservations/${p.reservationNumber}`)
+                              }
+                            >
+                              {p.reservationNumber}
+                            </button>
+                            <div className="text-sm text-ink font-semibold truncate">
+                              {p.guestName}
+                            </div>
+                            <div className="text-[11px] text-inkMuted font-mono truncate">
+                              {p.guestPhone}
+                            </div>
+                            <div className="text-[11px] text-inkFaint mt-1">
+                              promised {format(new Date(p.promisedAt), "dd MMM yyyy")} ·{" "}
+                              {daysSince(p.promisedAt)}d ago
+                            </div>
+                            {p.notes && (
+                              <div className="text-[11px] text-inkMuted mt-0.5 break-words">
+                                {p.notes}
+                              </div>
+                            )}
+                          </div>
+                          <div className="text-right shrink-0 font-mono text-sm text-dangerFg font-bold">
+                            <Money value={p.amount} />
+                          </div>
+                        </div>
+                        <button
+                          className="mt-2.5 w-full min-h-[44px] text-xs font-semibold rounded-sm bg-success text-white border border-success hover:opacity-90 disabled:opacity-50 inline-flex items-center justify-center gap-1.5"
+                          onClick={() => askAndMarkReceived(p)}
+                          disabled={markReceived.isPending}
+                        >
+                          <CheckCircle2 className="w-4 h-4" />
+                          Mark Received
+                        </button>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
               </div>
             </section>
           )}
