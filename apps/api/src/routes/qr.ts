@@ -606,7 +606,7 @@ router.post(
       // three before inserting or the unique indexes reject the booking.
       const hash = idProofHash(body.idProofNumber);
       const matches = await tx
-        .select({ id: guests.id, phone: guests.phone })
+        .select({ id: guests.id, phone: guests.phone, kycVerifiedAt: guests.kycVerifiedAt })
         .from(guests)
         .where(
           and(
@@ -618,8 +618,15 @@ router.post(
         )
         .limit(1);
       let guestId: string;
+      // Whether this booking may attach ID photos to the guest row. Only a
+      // brand-new guest, or one matched by the OTP-VERIFIED phone and not
+      // already desk-verified, qualifies. A match on email or ID number
+      // alone proves nothing (neither is verified anywhere in this flow),
+      // so it must never grant write access to that guest's documents.
+      let mayUploadKyc: boolean;
       if (matches[0]) {
         guestId = matches[0].id;
+        mayUploadKyc = matches[0].phone === body.phone && !matches[0].kycVerifiedAt;
       } else {
         const inserted = await tx
           .insert(guests)
@@ -641,6 +648,7 @@ router.post(
           })
           .returning({ id: guests.id });
         guestId = inserted[0]!.id;
+        mayUploadKyc = true;
       }
 
       const seq = await nextDocNumber(tx, propertyId, "reservation");
@@ -682,7 +690,7 @@ router.post(
           status: "confirmed" as const,
         })),
       );
-      return { reservationId, resNumber, holdExpiresAt, guestId };
+      return { reservationId, resNumber, holdExpiresAt, guestId, mayUploadKyc };
     });
 
     await db.update(otps).set({ consumedAt: new Date() }).where(eq(otps.id, otpRow.id));
@@ -705,12 +713,17 @@ router.post(
       grandTotal: money.grandTotal,
       holdExpiresAt: result.holdExpiresAt.toISOString(),
       // Lets the guest attach ID photos right after booking (see /kyc
-      // below). Dies with the hold.
-      kycUploadKey: mintKycKey(
-        result.guestId,
-        result.reservationId,
-        Math.floor(result.holdExpiresAt.getTime() / 1000),
-      ),
+      // below). Dies with the hold. Omitted when this booking resolved to
+      // an existing guest that the submitted phone does not own, or one the
+      // desk already verified — the page then simply skips the upload and
+      // the desk captures documents at check-in.
+      kycUploadKey: result.mayUploadKyc
+        ? mintKycKey(
+            result.guestId,
+            result.reservationId,
+            Math.floor(result.holdExpiresAt.getTime() / 1000),
+          )
+        : undefined,
       message:
         "Show this screen at the front desk. They'll confirm your booking and take payment.",
     });
@@ -721,14 +734,26 @@ router.post(
 // /book (OTP-verified phone, bound to that guest+reservation, expires with
 // the hold). Photos are stored but NOT marked verified — the desk verifies
 // identity in person when confirming.
+const kycUploadFields = kycUpload.fields([
+  { name: "photo", maxCount: 1 },
+  { name: "front", maxCount: 1 },
+  { name: "back", maxCount: 1 },
+]);
+
 router.post(
   "/hotel/:token/kyc",
   qrWriteLimiter,
-  kycUpload.fields([
-    { name: "photo", maxCount: 1 },
-    { name: "front", maxCount: 1 },
-    { name: "back", maxCount: 1 },
-  ]),
+  // Multer rejections (wrong mime, too large) surface as thrown errors —
+  // trap them into a readable 400 instead of the generic 500 handler.
+  (req: Request, res: Response, next: (err?: unknown) => void) => {
+    kycUploadFields(req, res, (err?: unknown) => {
+      if (err) {
+        const msg = err instanceof Error ? err.message : "Invalid upload";
+        return fail(res, 400, "INVALID_FILE", msg);
+      }
+      next();
+    });
+  },
   async (req: Request, res: Response) => {
     const ctx = await loadHotelByToken(req.params.token);
     if (!ctx) return fail(res, 404, "NOT_FOUND", "Unknown code");
@@ -742,6 +767,17 @@ router.post(
       .where(and(eq(guests.id, proof.guestId), eq(guests.propertyId, ctx.property.id)))
       .limit(1);
     if (!g) return fail(res, 404, "NOT_FOUND", "Unknown booking");
+    // Never let a guest overwrite documents the desk already verified —
+    // that would leave kycVerifiedAt standing over images no staff member
+    // ever saw, which the check-in gate then trusts.
+    if (g.kycVerifiedAt) {
+      return fail(
+        res,
+        409,
+        "KYC_ALREADY_VERIFIED",
+        "Your ID is already verified. The front desk will handle any changes.",
+      );
+    }
 
     const files = req.files as Record<string, Express.Multer.File[]> | undefined;
     const photo = files?.photo?.[0];
@@ -755,9 +791,16 @@ router.post(
     }
 
     const folder = storageFolderLabel(g.fullName, g.phone?.replace(/\D/g, "") || g.id.slice(0, 8));
-    const photoPath = photo ? await uploadKycPhoto(ctx.property.id, folder, "photo", photo) : null;
-    const frontPath = front ? await uploadKycPhoto(ctx.property.id, folder, "front", front) : null;
-    const backPath = back ? await uploadKycPhoto(ctx.property.id, folder, "back", back) : null;
+    // Sharp re-encoding rejects corrupt/hostile images by THROWING — turn
+    // that into a readable 400 so the guest just retakes the photo.
+    let photoPath: string | null, frontPath: string | null, backPath: string | null;
+    try {
+      photoPath = photo ? await uploadKycPhoto(ctx.property.id, folder, "photo", photo) : null;
+      frontPath = front ? await uploadKycPhoto(ctx.property.id, folder, "front", front) : null;
+      backPath = back ? await uploadKycPhoto(ctx.property.id, folder, "back", back) : null;
+    } catch {
+      return fail(res, 400, "INVALID_FILE", "That image could not be read. Please retake the photo and try again.");
+    }
 
     await db
       .update(guests)
@@ -765,9 +808,20 @@ router.post(
         guestPhoto: photoPath ?? g.guestPhoto,
         idProofPhotoFront: frontPath ?? g.idProofPhotoFront,
         idProofPhotoBack: backPath ?? g.idProofPhotoBack,
+        // Guest-supplied documents are never self-verifying. Belt and
+        // braces alongside the guard above.
+        kycVerifiedAt: null,
+        kycVerifiedBy: null,
         updatedAt: new Date(),
       })
-      .where(and(eq(guests.id, g.id), eq(guests.propertyId, ctx.property.id)));
+      .where(
+        and(
+          eq(guests.id, g.id),
+          eq(guests.propertyId, ctx.property.id),
+          // Lost race: the desk verified between our read and this write.
+          isNull(guests.kycVerifiedAt),
+        ),
+      );
 
     logger.info({ guestId: g.id, reservationId: proof.reservationId }, "QR guest uploaded KYC");
     return ok(res, { uploaded: true });

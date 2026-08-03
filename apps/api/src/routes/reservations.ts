@@ -2925,11 +2925,27 @@ router.post(
       );
     }
 
+    let confirmed = true;
     await db.transaction(async (tx) => {
-      await tx
+      // Guard on status inside the write: between the read above and here a
+      // decline (/cancel) or the expiry sweep can have moved this row, and a
+      // WHERE-id-only update would resurrect a cancelled booking as
+      // 'confirmed' — double-selling the room.
+      const flipped = await tx
         .update(reservations)
         .set({ status: "confirmed", holdExpiresAt: null, updatedAt: new Date() })
-        .where(eq(reservations.id, id));
+        .where(
+          and(
+            eq(reservations.id, id),
+            eq(reservations.propertyId, req.propertyId),
+            eq(reservations.status, "hold"),
+          ),
+        )
+        .returning({ id: reservations.id });
+      if (!flipped.length) {
+        confirmed = false;
+        return;
+      }
       // Confirming a QR hold means the desk checked the guest's identity
       // against the self-uploaded documents — stamp the verification the
       // check-in gate requires. Guests without photos stay unverified and
@@ -2964,6 +2980,15 @@ router.post(
           );
       }
     });
+
+    if (!confirmed) {
+      return fail(
+        res,
+        409,
+        "INVALID_STATUS",
+        "This request was just declined or expired. Refresh the queue.",
+      );
+    }
 
     await logActivity({
       propertyId: req.propertyId,
