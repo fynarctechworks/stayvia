@@ -34,10 +34,30 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   return body.data as T;
 }
 
+// Multipart variant — no Content-Type header so the browser sets the
+// boundary itself. Same envelope/error handling as request().
+async function requestForm<T>(path: string, form: FormData): Promise<T> {
+  const res = await fetch(`${BASE}${path}`, { method: "POST", body: form });
+  const body = (await res.json().catch(() => ({}))) as {
+    success?: boolean;
+    data?: T;
+    error?: { code?: string; message?: string };
+  };
+  if (!res.ok || body.success === false) {
+    throw new PublicApiError(
+      res.status,
+      body.error?.code ?? "ERROR",
+      body.error?.message ?? "Something went wrong",
+    );
+  }
+  return body.data as T;
+}
+
 export const publicQr = {
   get: <T>(path: string) => request<T>(path),
   post: <T>(path: string, payload: unknown) =>
     request<T>(path, { method: "POST", body: JSON.stringify(payload) }),
+  upload: <T>(path: string, form: FormData) => requestForm<T>(path, form),
 };
 
 export interface QrHotelCard {

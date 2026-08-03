@@ -32,6 +32,7 @@ import {
   type QrUnlockInput,
 } from "@stayvia/shared";
 import { addDays, format, parseISO } from "date-fns";
+import multer from "multer";
 import { and, asc, eq, gt, inArray, isNull, lt, sql } from "drizzle-orm";
 import { Router, type Request, type Response } from "express";
 import { env } from "../config/env.js";
@@ -45,6 +46,11 @@ import { rooms } from "../db/schema/rooms.js";
 import { roomTypes, settings } from "../db/schema/settings.js";
 import { findAvailableRooms } from "../lib/availability.js";
 import { encrypt, idProofHash, last4 } from "../lib/crypto.js";
+import {
+  storageFolderLabel,
+  uploadKycPhoto,
+  validateKycFile,
+} from "../lib/storage.js";
 import { calcGstBreakdown, getGstRate } from "../lib/gst.js";
 import { logger } from "../lib/logger.js";
 import { dispatchNotification, notifyGuestSms } from "../lib/notify.js";
@@ -146,6 +152,52 @@ function verifyUnlockKey(key: string, roomId: string): { reservationId: string }
   if (rid !== roomId) return null;
   if (Number(expStr) * 1000 < Date.now()) return null;
   return { reservationId: resId };
+}
+
+// KYC uploads from the guest's phone right after a QR self-booking. Same
+// cheap mime filter as the staff route; Sharp re-encoding in storage.ts is
+// the real validation.
+const KYC_UPLOAD_MIMES = new Set(["image/jpeg", "image/png", "image/webp"]);
+const kycUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 8 * 1024 * 1024, files: 3, fields: 5 },
+  fileFilter: (_req, file, cb) => {
+    if (!KYC_UPLOAD_MIMES.has(file.mimetype)) {
+      cb(new Error("Only JPEG, PNG, or WEBP images are accepted"));
+      return;
+    }
+    cb(null, true);
+  },
+});
+
+// Upload key handed back by /book: proves this phone just completed the
+// OTP-verified booking, so it may attach ID photos to THAT guest — and
+// nothing else. HMAC-bound to guest+reservation, dies with the hold.
+function mintKycKey(guestId: string, reservationId: string, expUnix: number): string {
+  const payload = `qrkyc.${guestId}.${reservationId}.${expUnix}`;
+  const sig = createHmac("sha256", unlockSecret()).update(payload).digest("hex").slice(0, 32);
+  return Buffer.from(payload).toString("base64url") + "." + sig;
+}
+
+function verifyKycKey(key: string): { guestId: string; reservationId: string } | null {
+  const dot = key.lastIndexOf(".");
+  if (dot < 0) return null;
+  const [b64, sig] = [key.slice(0, dot), key.slice(dot + 1)];
+  let payload: string;
+  try {
+    payload = Buffer.from(b64, "base64url").toString();
+  } catch {
+    return null;
+  }
+  const expect = createHmac("sha256", unlockSecret()).update(payload).digest("hex").slice(0, 32);
+  const a = Buffer.from(sig);
+  const b = Buffer.from(expect);
+  if (a.length !== b.length || !timingSafeEqual(a, b)) return null;
+  const parts = payload.split(".");
+  if (parts.length !== 4 || parts[0] !== "qrkyc") return null;
+  const [, guestId, reservationId, expStr] = parts as [string, string, string, string];
+  if (Number(expStr) * 1000 < Date.now()) return null;
+  return { guestId, reservationId };
 }
 
 // Haversine distance in metres — advisory geofence logging only.
@@ -630,7 +682,7 @@ router.post(
           status: "confirmed" as const,
         })),
       );
-      return { reservationId, resNumber, holdExpiresAt };
+      return { reservationId, resNumber, holdExpiresAt, guestId };
     });
 
     await db.update(otps).set({ consumedAt: new Date() }).where(eq(otps.id, otpRow.id));
@@ -652,9 +704,73 @@ router.post(
       reservationNumber: result.resNumber,
       grandTotal: money.grandTotal,
       holdExpiresAt: result.holdExpiresAt.toISOString(),
+      // Lets the guest attach ID photos right after booking (see /kyc
+      // below). Dies with the hold.
+      kycUploadKey: mintKycKey(
+        result.guestId,
+        result.reservationId,
+        Math.floor(result.holdExpiresAt.getTime() / 1000),
+      ),
       message:
         "Show this screen at the front desk. They'll confirm your booking and take payment.",
     });
+  },
+);
+
+// Guest KYC photos for a just-made QR booking. Auth = the HMAC key from
+// /book (OTP-verified phone, bound to that guest+reservation, expires with
+// the hold). Photos are stored but NOT marked verified — the desk verifies
+// identity in person when confirming.
+router.post(
+  "/hotel/:token/kyc",
+  qrWriteLimiter,
+  kycUpload.fields([
+    { name: "photo", maxCount: 1 },
+    { name: "front", maxCount: 1 },
+    { name: "back", maxCount: 1 },
+  ]),
+  async (req: Request, res: Response) => {
+    const ctx = await loadHotelByToken(req.params.token);
+    if (!ctx) return fail(res, 404, "NOT_FOUND", "Unknown code");
+    const key = typeof req.body?.key === "string" ? req.body.key : "";
+    const proof = verifyKycKey(key);
+    if (!proof) return fail(res, 403, "BAD_KEY", "Upload window has expired. The desk will take your documents at check-in.");
+
+    const [g] = await db
+      .select()
+      .from(guests)
+      .where(and(eq(guests.id, proof.guestId), eq(guests.propertyId, ctx.property.id)))
+      .limit(1);
+    if (!g) return fail(res, 404, "NOT_FOUND", "Unknown booking");
+
+    const files = req.files as Record<string, Express.Multer.File[]> | undefined;
+    const photo = files?.photo?.[0];
+    const front = files?.front?.[0];
+    const back = files?.back?.[0];
+    if (!photo && !front && !back) return fail(res, 400, "NO_FILE", "No file provided");
+    for (const f of [photo, front, back]) {
+      if (!f) continue;
+      const err = validateKycFile(f);
+      if (err) return fail(res, 400, "INVALID_FILE", err);
+    }
+
+    const folder = storageFolderLabel(g.fullName, g.phone?.replace(/\D/g, "") || g.id.slice(0, 8));
+    const photoPath = photo ? await uploadKycPhoto(ctx.property.id, folder, "photo", photo) : null;
+    const frontPath = front ? await uploadKycPhoto(ctx.property.id, folder, "front", front) : null;
+    const backPath = back ? await uploadKycPhoto(ctx.property.id, folder, "back", back) : null;
+
+    await db
+      .update(guests)
+      .set({
+        guestPhoto: photoPath ?? g.guestPhoto,
+        idProofPhotoFront: frontPath ?? g.idProofPhotoFront,
+        idProofPhotoBack: backPath ?? g.idProofPhotoBack,
+        updatedAt: new Date(),
+      })
+      .where(and(eq(guests.id, g.id), eq(guests.propertyId, ctx.property.id)));
+
+    logger.info({ guestId: g.id, reservationId: proof.reservationId }, "QR guest uploaded KYC");
+    return ok(res, { uploaded: true });
   },
 );
 

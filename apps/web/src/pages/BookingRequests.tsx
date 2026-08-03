@@ -9,6 +9,7 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { BedDouble, CheckCircle2, ChevronRight, Loader2, QrCode, Users, X } from "@/lib/micons";
 import { useDialog } from "@/components/Dialog";
+import { KycModal } from "@/components/KycModal";
 import { EmptyState, ListSkeleton, PageHeader } from "@/components/kit";
 import { useToast } from "@/components/Toast";
 import { ApiError, api, getList } from "@/lib/api";
@@ -50,6 +51,8 @@ export default function BookingRequests() {
   const { toast } = useToast();
   const qc = useQueryClient();
   const now = useNowTick();
+  // Card under desk review - opens the full-detail overlay.
+  const [review, setReview] = useState<HoldRow | null>(null);
 
   const q = useQuery({
     queryKey: ["reservations", { status: "hold" }],
@@ -69,6 +72,7 @@ export default function BookingRequests() {
     onSuccess: (_d, id) => {
       toast("Booking confirmed - rooms reserved. Open it to check the guest in.", "success");
       void qc.invalidateQueries({ queryKey: ["reservations"] });
+      setReview(null);
       const row = items.find((r) => r.id === id);
       if (row) navigate(`/reservations/${row.reservationNumber}`);
     },
@@ -85,6 +89,7 @@ export default function BookingRequests() {
       }),
     onSuccess: () => {
       toast("Request declined", "success");
+      setReview(null);
       void qc.invalidateQueries({ queryKey: ["reservations"] });
     },
     onError: (e) => {
@@ -135,8 +140,8 @@ export default function BookingRequests() {
                 <div className="flex items-start justify-between gap-2">
                   <button
                     className="min-w-0 text-left group"
-                    onClick={() => navigate(`/reservations/${r.reservationNumber}`)}
-                    title="View full reservation"
+                    onClick={() => setReview(r)}
+                    title="Review this request"
                   >
                     <div className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-[0.1em] text-brand-deep">
                       <QrCode className="w-3.5 h-3.5" /> QR booking
@@ -211,13 +216,339 @@ export default function BookingRequests() {
                 </div>
                 <button
                   className="btn-secondary w-full inline-flex items-center justify-center gap-1.5"
-                  onClick={() => navigate(`/reservations/${r.reservationNumber}`)}
+                  onClick={() => setReview(r)}
                 >
                   View reservation <ChevronRight className="w-4 h-4" />
                 </button>
               </div>
             );
           })}
+        </div>
+      )}
+
+      {review && (
+        <RequestReviewOverlay
+          row={review}
+          minsLeft={minutesLeft(review.holdExpiresAt, now)}
+          confirming={confirm.isPending && confirm.variables === review.id}
+          declining={decline.isPending && decline.variables === review.id}
+          onConfirm={() => confirm.mutate(review.id)}
+          onDecline={() => onDecline(review)}
+          onClose={() => setReview(null)}
+        />
+      )}
+    </div>
+  );
+}
+
+// ---- desk review overlay ---------------------------------------------------
+
+interface ReviewDetail {
+  id: string;
+  reservationNumber: string;
+  guestId: string;
+  checkInDate: string;
+  checkOutDate: string;
+  numAdults: number;
+  numChildren: number;
+  subtotal: string;
+  gstAmount: string;
+  gstRate: string;
+  grandTotal: string;
+  specialRequests?: string | null;
+  rooms: {
+    id: string;
+    roomNumber: string;
+    displayType: string;
+    ratePerNight: string;
+  }[];
+  guest: {
+    id: string;
+    fullName: string;
+    phone: string;
+    idProofType: string | null;
+    idProofLast4: string | null;
+    kycVerifiedAt: string | null;
+  };
+}
+
+interface FullGuest {
+  email: string | null;
+  gender: string | null;
+  nationality: string | null;
+  address: string | null;
+  city: string | null;
+  state: string | null;
+  gstin: string | null;
+}
+
+interface KycStatus {
+  verified: boolean;
+  photoUrl: string | null;
+  frontUrl: string | null;
+  backUrl: string | null;
+}
+
+// Full-detail review: everything the guest typed, the ID photos they
+// uploaded from their phone, and the money - so the desk can approve
+// without leaving the queue. Confirm stamps KYC verification server-side
+// when photos exist, then jumps to the reservation to finish check-in.
+function RequestReviewOverlay({
+  row,
+  minsLeft,
+  confirming,
+  declining,
+  onConfirm,
+  onDecline,
+  onClose,
+}: {
+  row: HoldRow;
+  minsLeft: number | null;
+  confirming: boolean;
+  declining: boolean;
+  onConfirm: () => void;
+  onDecline: () => void;
+  onClose: () => void;
+}) {
+  const qc = useQueryClient();
+  const [kycOpen, setKycOpen] = useState(false);
+
+  const detailQ = useQuery({
+    queryKey: ["reservation", row.id],
+    queryFn: () => api.get<ReviewDetail>(`/reservations/${row.id}`),
+  });
+  const d = detailQ.data;
+
+  const guestQ = useQuery({
+    queryKey: ["guest", d?.guestId],
+    queryFn: () => api.get<FullGuest>(`/guests/${d!.guestId}`),
+    enabled: !!d?.guestId,
+  });
+  const g = guestQ.data;
+
+  const kycQ = useQuery({
+    queryKey: ["guest-kyc", d?.guestId],
+    queryFn: () => api.get<KycStatus>(`/guests/${d!.guestId}/kyc`),
+    enabled: !!d?.guestId,
+  });
+  const kyc = kycQ.data;
+
+  const field = (label: string, value: string | null | undefined, mono = false) => (
+    <div>
+      <div className="text-[10px] font-bold uppercase tracking-[0.06em] text-inkMuted">{label}</div>
+      <div className={`text-sm text-ink mt-0.5 ${mono ? "font-mono" : ""}`}>
+        {value?.trim() ? value : <span className="text-inkFaint">-</span>}
+      </div>
+    </div>
+  );
+
+  const doc = (label: string, url: string | null | undefined) => (
+    <div className="min-w-0">
+      <div className="text-[10px] font-bold uppercase tracking-[0.06em] text-inkMuted mb-1">{label}</div>
+      {url ? (
+        <a href={url} target="_blank" rel="noreferrer" className="block">
+          <img
+            src={url}
+            alt={label}
+            className="w-full aspect-[4/5] object-cover rounded-lg border border-borderc hover:opacity-90 transition-opacity"
+          />
+        </a>
+      ) : (
+        <div className="w-full aspect-[4/5] rounded-lg border-2 border-dashed border-borderControl grid place-items-center text-[10px] text-inkFaint text-center p-1">
+          Not uploaded
+        </div>
+      )}
+    </div>
+  );
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-start md:items-center justify-center bg-inkDark/50 backdrop-blur-[2px] p-3 md:p-6 overflow-y-auto"
+      onClick={onClose}
+    >
+      <div
+        className="bg-surface rounded-2xl shadow-modal w-full max-w-2xl my-auto overflow-hidden"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Header */}
+        <div className="flex items-center justify-between gap-2 px-5 py-3.5 border-b border-divider bg-surfaceAlt">
+          <div className="min-w-0">
+            <div className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-[0.1em] text-brand-deep">
+              <QrCode className="w-3.5 h-3.5" /> QR booking request
+            </div>
+            <div className="font-mono text-sm font-semibold mt-0.5">{row.reservationNumber}</div>
+          </div>
+          <div className="flex items-center gap-2 shrink-0">
+            {minsLeft !== null && (
+              <span
+                className={`inline-flex items-center rounded-full border px-2.5 py-1 text-[11px] font-bold tabular-nums ${
+                  minsLeft <= 5
+                    ? "bg-dangerBg text-dangerFg border-dangerBorder animate-pulse"
+                    : "bg-warnBg text-warnFg border-warnBorder"
+                }`}
+              >
+                {minsLeft} min left
+              </span>
+            )}
+            <button
+              onClick={onClose}
+              aria-label="Close"
+              className="w-9 h-9 rounded-full grid place-items-center hover:bg-parchment transition-colors"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
+        </div>
+
+        <div className="max-h-[calc(100vh-220px)] overflow-y-auto px-5 py-4 space-y-5">
+          {detailQ.isLoading ? (
+            <div className="py-10 grid place-items-center">
+              <Loader2 className="w-6 h-6 animate-spin text-brand-deep" />
+            </div>
+          ) : !d ? (
+            <div className="py-8 text-center text-sm text-textSecondary">
+              Could not load the reservation.
+            </div>
+          ) : (
+            <>
+              {/* Guest identity - everything they typed on their phone */}
+              <section>
+                <h3 className="text-[11px] font-bold uppercase tracking-[0.1em] text-inkMuted mb-2.5">
+                  Guest details
+                </h3>
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-4 gap-y-3">
+                  {field("Full name", d.guest.fullName)}
+                  {field("Phone", d.guest.phone, true)}
+                  {field("Email", g?.email)}
+                  {field("Gender", g?.gender)}
+                  {field(
+                    "ID proof",
+                    d.guest.idProofType
+                      ? `${d.guest.idProofType.replace(/_/g, " ")} ****${d.guest.idProofLast4 ?? ""}`
+                      : null,
+                    true,
+                  )}
+                  {field("Nationality", g?.nationality)}
+                  {field("State", g?.state)}
+                  {field("City", g?.city)}
+                  {field("GSTIN", g?.gstin, true)}
+                </div>
+                <div className="mt-3">{field("Address", g?.address)}</div>
+                {d.specialRequests && (
+                  <div className="mt-3">{field("Special requests", d.specialRequests)}</div>
+                )}
+              </section>
+
+              {/* Documents the guest uploaded from their phone */}
+              <section>
+                <div className="flex items-center justify-between mb-2.5">
+                  <h3 className="text-[11px] font-bold uppercase tracking-[0.1em] text-inkMuted">
+                    ID documents
+                  </h3>
+                  <button
+                    className="text-xs font-semibold text-brand-deep hover:text-brand transition-colors"
+                    onClick={() => setKycOpen(true)}
+                  >
+                    {kyc?.photoUrl || kyc?.frontUrl ? "Replace..." : "Capture at desk..."}
+                  </button>
+                </div>
+                {kycQ.isLoading ? (
+                  <div className="py-6 grid place-items-center">
+                    <Loader2 className="w-5 h-5 animate-spin text-brand-deep" />
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-3 gap-3">
+                    {doc("Guest photo", kyc?.photoUrl)}
+                    {doc("ID front", kyc?.frontUrl)}
+                    {doc("ID back", kyc?.backUrl)}
+                  </div>
+                )}
+                <p className="text-[11px] text-textSecondary mt-2">
+                  Match the photo and ID against the guest in front of you. Confirming marks
+                  KYC as verified.
+                </p>
+              </section>
+
+              {/* Stay + money */}
+              <section>
+                <h3 className="text-[11px] font-bold uppercase tracking-[0.1em] text-inkMuted mb-2.5">
+                  Stay & bill
+                </h3>
+                <div className="grid grid-cols-3 gap-x-4 gap-y-3 mb-3">
+                  {field("Check-in", d.checkInDate, true)}
+                  {field("Check-out", d.checkOutDate, true)}
+                  {field(
+                    "Guests",
+                    `${d.numAdults} adult${d.numAdults === 1 ? "" : "s"}${
+                      d.numChildren > 0 ? ` + ${d.numChildren} child${d.numChildren === 1 ? "" : "ren"}` : ""
+                    }`,
+                  )}
+                </div>
+                <div className="divide-y divide-divider border-t border-divider">
+                  {d.rooms.map((rm) => (
+                    <div key={rm.id} className="flex items-center justify-between py-2 text-sm">
+                      <span>
+                        <span className="font-mono font-semibold">{rm.roomNumber}</span>{" "}
+                        <span className="text-textSecondary">- {rm.displayType}</span>
+                      </span>
+                      <span className="font-mono">{inr(rm.ratePerNight)}/night</span>
+                    </div>
+                  ))}
+                </div>
+                <div className="space-y-1 border-t border-divider pt-2.5 text-sm">
+                  <div className="flex justify-between text-textSecondary">
+                    <span>Subtotal</span>
+                    <span className="font-mono">{inr(d.subtotal)}</span>
+                  </div>
+                  <div className="flex justify-between text-textSecondary">
+                    <span>GST ({Number(d.gstRate)}%)</span>
+                    <span className="font-mono">{inr(d.gstAmount)}</span>
+                  </div>
+                  <div className="flex justify-between font-semibold pt-1 border-t border-divider">
+                    <span>To collect at the desk</span>
+                    <span className="font-mono font-bold">{inr(d.grandTotal)}</span>
+                  </div>
+                </div>
+              </section>
+            </>
+          )}
+        </div>
+
+        {/* Actions */}
+        <div className="flex flex-col sm:flex-row gap-2 px-5 py-3.5 border-t border-divider bg-surfaceAlt">
+          <button
+            className="btn-primary flex-1 inline-flex items-center justify-center gap-1.5 disabled:opacity-60"
+            disabled={confirming || declining || !d}
+            onClick={onConfirm}
+          >
+            {confirming ? (
+              <Loader2 className="w-4 h-4 animate-spin" />
+            ) : (
+              <CheckCircle2 className="w-4 h-4" />
+            )}
+            Confirm booking
+          </button>
+          <button
+            className="btn-danger inline-flex items-center justify-center gap-1.5 disabled:opacity-60"
+            disabled={confirming || declining}
+            onClick={onDecline}
+          >
+            {declining ? <Loader2 className="w-4 h-4 animate-spin" /> : <X className="w-4 h-4" />}
+            Decline
+          </button>
+        </div>
+      </div>
+
+      {kycOpen && d && (
+        <div onClick={(e) => e.stopPropagation()}>
+          <KycModal
+            guestId={d.guestId}
+            onClose={() => setKycOpen(false)}
+            onUploaded={() => {
+              setKycOpen(false);
+              void qc.invalidateQueries({ queryKey: ["guest-kyc", d.guestId] });
+            }}
+          />
         </div>
       )}
     </div>

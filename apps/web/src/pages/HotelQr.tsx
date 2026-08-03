@@ -91,6 +91,12 @@ export default function HotelQr() {
   const [address, setAddress] = useState("");
   const [gstin, setGstin] = useState("");
   const [specialRequests, setSpecialRequests] = useState("");
+  // KYC photos captured on the guest's phone. Photo + ID front are required
+  // (same rule as the staff walk-in form); back is optional.
+  const [kycPhoto, setKycPhoto] = useState<File | null>(null);
+  const [kycFront, setKycFront] = useState<File | null>(null);
+  const [kycBack, setKycBack] = useState<File | null>(null);
+  const [kycNote, setKycNote] = useState("");
 
   const [otpCode, setOtpCode] = useState("");
   const [devCode, setDevCode] = useState("");
@@ -167,7 +173,9 @@ export default function HotelQr() {
     nationality.trim() !== "" &&
     state.trim() !== "" &&
     city.trim() !== "" &&
-    address.trim() !== "";
+    address.trim() !== "" &&
+    kycPhoto !== null &&
+    kycFront !== null;
 
   async function sendOtp() {
     setError("");
@@ -194,6 +202,7 @@ export default function HotelQr() {
         reservationNumber: string;
         grandTotal: number;
         holdExpiresAt: string;
+        kycUploadKey?: string;
       }>(`/public/qr/hotel/${token}/book`, {
         phone,
         otpCode,
@@ -213,6 +222,21 @@ export default function HotelQr() {
         roomIds: selected,
         ...(specialRequests.trim() ? { specialRequests: specialRequests.trim() } : {}),
       });
+      // Attach the ID photos to the booking. Failure is non-fatal — the
+      // hold exists either way; the desk captures documents at check-in.
+      if (r.kycUploadKey && (kycPhoto || kycFront || kycBack)) {
+        try {
+          const form = new FormData();
+          form.append("key", r.kycUploadKey);
+          if (kycPhoto) form.append("photo", kycPhoto);
+          if (kycFront) form.append("front", kycFront);
+          if (kycBack) form.append("back", kycBack);
+          await publicQr.upload(`/public/qr/hotel/${token}/kyc`, form);
+          setKycNote("ID documents received.");
+        } catch {
+          setKycNote("Documents could not be uploaded - the desk will take them at check-in.");
+        }
+      }
       setResult(r);
       setStep("done");
     } catch (e) {
@@ -571,6 +595,19 @@ export default function HotelQr() {
                 onChange={(e) => setAddress(e.target.value)}
               />
             </QrField>
+            <div>
+              <div className="text-[12px] font-medium text-textPrimary">ID photos</div>
+              <p className="text-[11px] text-textSecondary mt-0.5 mb-2">
+                A photo of you and the front of your ID. The desk matches them
+                at check-in.
+              </p>
+              <div className="grid grid-cols-3 gap-2">
+                <QrUploadTile label="Your photo" required file={kycPhoto} onPick={setKycPhoto} />
+                <QrUploadTile label="ID front" required file={kycFront} onPick={setKycFront} />
+                <QrUploadTile label="ID back" file={kycBack} onPick={setKycBack} />
+              </div>
+            </div>
+
             <QrField label="GSTIN (optional)">
               <input
                 className={`${qrInputClass} font-mono`}
@@ -654,6 +691,9 @@ export default function HotelQr() {
               </div>
               <div className="text-[11px] text-textSecondary">payable at the front desk</div>
             </div>
+            {kycNote && (
+              <p className="text-[11px] text-textSecondary -mt-2">{kycNote}</p>
+            )}
             <p className="text-sm text-textSecondary leading-relaxed">
               <strong className="text-textPrimary">Show this screen at the front desk.</strong> They'll
               verify your ID, take payment, and confirm the booking. This request expires in about
@@ -1091,6 +1131,64 @@ function RoomDetailSheet({
         </div>
       </div>
     </div>
+  );
+}
+
+// Camera/gallery picker tile for the guest's KYC photos. Shows a preview
+// thumbnail once picked; tapping again re-picks. capture-friendly input so
+// phones offer the camera directly.
+function QrUploadTile({
+  label,
+  file,
+  onPick,
+  required = false,
+}: {
+  label: string;
+  file: File | null;
+  onPick: (f: File | null) => void;
+  required?: boolean;
+}) {
+  const [preview, setPreview] = useState<string | null>(null);
+  useEffect(() => {
+    if (!file) {
+      setPreview(null);
+      return;
+    }
+    const url = URL.createObjectURL(file);
+    setPreview(url);
+    return () => URL.revokeObjectURL(url);
+  }, [file]);
+  return (
+    <label
+      className={`relative block rounded-xl border-2 border-dashed overflow-hidden cursor-pointer aspect-[4/5] ${
+        file ? "border-brand" : "border-borderc hover:border-brand/60"
+      }`}
+    >
+      <input
+        type="file"
+        accept="image/jpeg,image/png,image/webp"
+        className="sr-only"
+        onChange={(e) => onPick(e.target.files?.[0] ?? null)}
+      />
+      {preview ? (
+        <>
+          <img src={preview} alt={label} className="absolute inset-0 w-full h-full object-cover" />
+          <span className="absolute bottom-0 inset-x-0 bg-brand-dark/70 text-cream text-[9px] font-semibold text-center py-1">
+            {label} ✓
+          </span>
+        </>
+      ) : (
+        <span className="absolute inset-0 grid place-items-center p-1.5 text-center">
+          <span>
+            <Plus className="w-4 h-4 mx-auto text-brand-deep" />
+            <span className="block text-[10px] font-medium text-textPrimary mt-1 leading-tight">
+              {label}
+              {required && <span className="text-dangerFg"> *</span>}
+            </span>
+          </span>
+        </span>
+      )}
+    </label>
   );
 }
 

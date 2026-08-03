@@ -2927,6 +2927,26 @@ router.post(
         .update(reservations)
         .set({ status: "confirmed", holdExpiresAt: null, updatedAt: new Date() })
         .where(eq(reservations.id, id));
+      // Confirming a QR hold means the desk checked the guest's identity
+      // against the self-uploaded documents — stamp the verification the
+      // check-in gate requires. Guests without photos stay unverified and
+      // get captured at the desk via the normal KYC modal.
+      const [g] = await tx
+        .select({
+          id: guests.id,
+          guestPhoto: guests.guestPhoto,
+          front: guests.idProofPhotoFront,
+          kycVerifiedAt: guests.kycVerifiedAt,
+        })
+        .from(guests)
+        .where(and(eq(guests.id, r.guestId), eq(guests.propertyId, req.propertyId)))
+        .limit(1);
+      if (g && !g.kycVerifiedAt && g.guestPhoto && g.front) {
+        await tx
+          .update(guests)
+          .set({ kycVerifiedAt: new Date(), kycVerifiedBy: req.user!.id, updatedAt: new Date() })
+          .where(eq(guests.id, g.id));
+      }
       // Mirror the walk-in create: reserved tonight's rooms show on the grid.
       if (roomIds.length) {
         await tx
