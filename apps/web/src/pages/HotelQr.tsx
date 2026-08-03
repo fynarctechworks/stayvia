@@ -120,6 +120,31 @@ export default function HotelQr() {
   const perNight = chosenRooms.reduce((a, r) => a + r.baseRate, 0);
   const total = perNight * nights;
 
+  // GST preview — mirrors the server's /book math exactly (slab from the
+  // AVERAGE nightly rate, then the property's mode; see apps/api/src/lib/
+  // gst.ts + routes/qr.ts). Inclusive mode: GST is a straight % OF the
+  // gross and the quoted price already contains it. Exclusive: added on top.
+  const gst = useMemo(() => {
+    if (!catalog || chosenRooms.length === 0) return null;
+    const { gstSlabs: sl, gstMode } = catalog.hotel;
+    const avgRate = perNight / chosenRooms.length;
+    const rate =
+      avgRate < sl.exemptBelow ? 0 : avgRate <= sl.lowMax ? sl.lowRate : sl.highRate;
+    const gross = +(perNight * nights).toFixed(2);
+    let subtotal: number, gstAmount: number, grandTotal: number;
+    if (gstMode === "inclusive") {
+      grandTotal = gross;
+      gstAmount = +(grandTotal * (rate / 100)).toFixed(2);
+      subtotal = +(grandTotal - gstAmount).toFixed(2);
+    } else {
+      subtotal = gross;
+      gstAmount = +(subtotal * (rate / 100)).toFixed(2);
+      grandTotal = +(subtotal + gstAmount).toFixed(2);
+    }
+    const cgst = +(gstAmount / 2).toFixed(2);
+    return { rate, mode: gstMode, subtotal, gstAmount, cgst, sgst: +(gstAmount - cgst).toFixed(2), grandTotal };
+  }, [catalog, chosenRooms.length, perNight, nights]);
+
   // Toggle one specific room. Global cap 3 rooms per booking. Picking a
   // room pops the stay-options sheet right away (nights/guests/total);
   // deselecting never does.
@@ -395,13 +420,34 @@ export default function HotelQr() {
               ))}
             </div>
 
-            <div className="flex items-center justify-between border-t border-borderc pt-2.5">
-              <span className="text-sm font-semibold">Total before GST</span>
-              <span className="font-mono font-bold text-lg text-textPrimary">{inr0(total)}</span>
-            </div>
+            {gst && (
+              <div className="border-t border-borderc pt-2.5 space-y-1.5 text-sm">
+                <div className="flex items-center justify-between text-textSecondary">
+                  <span>Room charges{gst.mode === "inclusive" ? " (before tax)" : ""}</span>
+                  <span className="font-mono">{inr(gst.subtotal)}</span>
+                </div>
+                <div className="flex items-center justify-between text-textSecondary">
+                  <span>CGST @ {gst.rate / 2}%</span>
+                  <span className="font-mono">{inr(gst.cgst)}</span>
+                </div>
+                <div className="flex items-center justify-between text-textSecondary">
+                  <span>SGST @ {gst.rate / 2}%</span>
+                  <span className="font-mono">{inr(gst.sgst)}</span>
+                </div>
+                <div className="flex items-center justify-between border-t border-borderc pt-2 mt-1">
+                  <span className="font-semibold">Total to pay</span>
+                  <span className="font-mono font-bold text-lg text-textPrimary">
+                    {inr(gst.grandTotal)}
+                  </span>
+                </div>
+              </div>
+            )}
             <p className="text-[11px] text-textSecondary leading-snug">
-              GST is added when the front desk confirms your booking. Nothing is
-              charged online — you pay at the hotel.
+              {gst?.mode === "inclusive"
+                ? "Room prices include GST."
+                : "GST added as shown."}{" "}
+              Nothing is charged online — you pay at the hotel when the desk
+              confirms your booking.
             </p>
           </Card>
 

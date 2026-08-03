@@ -47,6 +47,15 @@ export interface QrHotelCard {
   logoUrl: string | null;
   checkInTime: string;
   checkOutTime: string;
+  // Public GST config — lets the booking page preview the exact tax the
+  // desk will charge (mirrors the server's slab + mode).
+  gstMode: "exclusive" | "inclusive";
+  gstSlabs: {
+    exemptBelow: number;
+    lowRate: number;
+    lowMax: number;
+    highRate: number;
+  };
 }
 
 export interface QrRoomBrochure {

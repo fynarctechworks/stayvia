@@ -200,6 +200,16 @@ function hotelCard(ctx: HotelCtx) {
     logoUrl: propertySettings.hotelLogoUrl ?? null,
     checkInTime: property.defaultCheckInTime,
     checkOutTime: property.defaultCheckOutTime,
+    // Public GST config so the booking page can show the guest the exact
+    // tax the desk will charge (same slab + mode the /book endpoint uses).
+    // Nothing secret here — these numbers print on every invoice.
+    gstMode: propertySettings.gstMode ?? "exclusive",
+    gstSlabs: {
+      exemptBelow: Number(propertySettings.gstSlabExemptBelow),
+      lowRate: Number(propertySettings.gstSlabLowRate),
+      lowMax: Number(propertySettings.gstSlabLowMax),
+      highRate: Number(propertySettings.gstSlabHighRate),
+    },
   };
 }
 
