@@ -1047,14 +1047,17 @@ function RoomCard({
 // oversized mono watermark. Reads as intentional, never "missing image".
 function EmptyRoomArt({ roomNumber, label }: { roomNumber: string; label: string }) {
   return (
-    <div className="absolute inset-0 bg-gradient-to-br from-brand-dark via-brand-deep to-brand overflow-hidden grid place-items-center">
-      <div className="absolute inset-0 opacity-[0.10] [background-image:radial-gradient(circle_at_1px_1px,#fff_1px,transparent_0)] [background-size:14px_14px]" />
-      <span className="absolute -bottom-3 -right-1 font-mono font-bold text-[7rem] leading-none text-cream/10 select-none">
+    // Mid-jade plate, not near-black: the dark type pill and the photo-count
+    // chip that overlay this tile are themselves dark, so a near-black
+    // background left them (and the label) reading dark-on-dark.
+    <div className="absolute inset-0 bg-gradient-to-br from-brand-deep via-brand to-brand-deep overflow-hidden grid place-items-center">
+      <div className="absolute inset-0 opacity-[0.14] [background-image:radial-gradient(circle_at_1px_1px,#fff_1px,transparent_0)] [background-size:14px_14px]" />
+      <span className="absolute -bottom-3 -right-1 font-mono font-bold text-[7rem] leading-none text-white/20 select-none">
         {roomNumber}
       </span>
-      <div className="relative flex flex-col items-center gap-1.5 text-cream/80">
+      <div className="relative flex flex-col items-center gap-1.5 text-white drop-shadow-sm">
         <BedDouble className="w-9 h-9" />
-        <span className="text-[11px] font-medium tracking-wide capitalize">{label}</span>
+        <span className="text-[11px] font-semibold tracking-wide capitalize">{label}</span>
       </div>
     </div>
   );
