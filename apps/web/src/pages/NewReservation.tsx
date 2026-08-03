@@ -1286,6 +1286,13 @@ export default function NewReservation() {
   const extraBedCapacity = selectedRooms.reduce((a, r) => a + r.extraBeds, 0);
   const effectiveCapacity = baseCapacity + extraBedCapacity;
   const capacityShortfall = Math.max(0, adults - effectiveCapacity);
+  // The per-room "Extra persons" stepper only renders when the room type
+  // carries an extraPersonRate > 0 (0 means the type doesn't offer beds).
+  // The shortfall banner has to know that, or it tells staff to add an
+  // extra person to a room whose stepper it has hidden — a dead end.
+  const anyRoomAllowsExtraBed = selectedRooms.some(
+    (r) => extraBedRateForType(r.soldAsType ?? r.nativeType) > 0,
+  );
   // Only gate once rooms are picked — before that the Rooms section
   // already tells staff to select rooms.
   const capacityOk = selectedRooms.length === 0 || capacityShortfall === 0;
@@ -2141,8 +2148,24 @@ export default function NewReservation() {
                   {adults} adult{adults === 1 ? "" : "s"}, but the selected room{selectedRooms.length === 1 ? "'s" : "s'"} guest limit is {effectiveCapacity}.
                 </div>
                 <div className="text-inkBody mt-0.5">
-                  Add an extra person to a room below, or select another room -{" "}
-                  space for <strong>{capacityShortfall}</strong> more guest{capacityShortfall === 1 ? "" : "s"} needed.
+                  {anyRoomAllowsExtraBed ? (
+                    <>
+                      Add an extra person to a room below, or select another room -{" "}
+                      space for <strong>{capacityShortfall}</strong> more guest
+                      {capacityShortfall === 1 ? "" : "s"} needed.
+                    </>
+                  ) : (
+                    <>
+                      Space for <strong>{capacityShortfall}</strong> more guest
+                      {capacityShortfall === 1 ? "" : "s"} needed. These room types don't
+                      allow an extra person, so select another room - or set an
+                      extra-person rate in{" "}
+                      <Link to="/rooms?tab=types" className="underline font-medium">
+                        Room Types
+                      </Link>{" "}
+                      to enable extra beds for them.
+                    </>
+                  )}
                 </div>
               </div>
             </div>
