@@ -74,6 +74,7 @@ export default function HotelQr() {
   const [nights, setNights] = useState(1);
   const [numAdults, setNumAdults] = useState(1);
   const [detailRoom, setDetailRoom] = useState<QrCatalogRoom | null>(null);
+  const [showStayOptions, setShowStayOptions] = useState(false);
   const [activeType, setActiveType] = useState<string>("all");
 
   const [fullName, setFullName] = useState("");
@@ -337,41 +338,6 @@ export default function HotelQr() {
                 );
               })()}
 
-            {selected.length > 0 && (
-              <Card className="space-y-4">
-                <div className="flex items-center justify-between">
-                  <span className="text-sm font-medium">Nights</span>
-                  <div className="flex items-center gap-1.5">
-                    {[1, 2, 3].map((n) => (
-                      <button
-                        key={n}
-                        onClick={() => setNights(n)}
-                        className={`h-10 w-10 rounded-md font-semibold transition ${
-                          nights === n
-                            ? "bg-brand text-white"
-                            : "bg-white text-textPrimary border border-borderc"
-                        }`}
-                      >
-                        {n}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-                <div className="h-px bg-borderc/60" />
-                <div className="flex items-center justify-between">
-                  <span className="text-sm font-medium">Guests</span>
-                  <div className="flex items-center gap-3">
-                    <RoundBtn disabled={numAdults <= 1} onClick={() => setNumAdults((v) => v - 1)}>
-                      −
-                    </RoundBtn>
-                    <span className="min-w-6 text-center font-semibold">{numAdults}</span>
-                    <RoundBtn disabled={numAdults >= 6} onClick={() => setNumAdults((v) => v + 1)}>
-                      +
-                    </RoundBtn>
-                  </div>
-                </div>
-              </Card>
-            )}
           </>
         )}
 
@@ -588,9 +554,86 @@ export default function HotelQr() {
                 {nights === 1 ? "" : "s"} · + GST
               </div>
             </div>
-            <PrimaryButton className="!w-auto px-6" onClick={() => setStep("details")}>
+            <PrimaryButton className="!w-auto px-6" onClick={() => setShowStayOptions(true)}>
               Continue
             </PrimaryButton>
+          </div>
+        </div>
+      )}
+
+      {/* Stay options — bottom-sheet overlay for nights + guests. Opens
+          from Continue; confirming proceeds to the details step. */}
+      {showStayOptions && (
+        <div
+          className="fixed inset-0 z-50 flex flex-col justify-end bg-black/50 animate-in fade-in"
+          onClick={() => setShowStayOptions(false)}
+        >
+          <div
+            className="bg-white rounded-t-2xl animate-in slide-in-from-bottom-4"
+            style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between px-4 pt-3 pb-1">
+              <div className="w-9" />
+              <div className="w-10 h-1 rounded-full bg-borderc" />
+              <button
+                onClick={() => setShowStayOptions(false)}
+                className="w-9 h-9 rounded-full grid place-items-center hover:bg-bg"
+                aria-label="Close"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="max-w-md mx-auto w-full px-5 pb-5 space-y-4">
+              <div className="text-lg font-semibold">Your stay</div>
+              <div className="flex items-center justify-between">
+                <span className="text-sm font-medium">Nights</span>
+                <div className="flex items-center gap-1.5">
+                  {[1, 2, 3].map((n) => (
+                    <button
+                      key={n}
+                      onClick={() => setNights(n)}
+                      className={`h-10 w-10 rounded-md font-semibold transition ${
+                        nights === n
+                          ? "bg-brand text-white"
+                          : "bg-white text-textPrimary border border-borderc"
+                      }`}
+                    >
+                      {n}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div className="h-px bg-borderc/60" />
+              <div className="flex items-center justify-between">
+                <span className="text-sm font-medium">Guests</span>
+                <div className="flex items-center gap-3">
+                  <RoundBtn disabled={numAdults <= 1} onClick={() => setNumAdults((v) => v - 1)}>
+                    −
+                  </RoundBtn>
+                  <span className="min-w-6 text-center font-semibold">{numAdults}</span>
+                  <RoundBtn disabled={numAdults >= 6} onClick={() => setNumAdults((v) => v + 1)}>
+                    +
+                  </RoundBtn>
+                </div>
+              </div>
+              <div className="h-px bg-borderc/60" />
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-textSecondary">
+                  {selected.length} room{selected.length === 1 ? "" : "s"} · {nights} night
+                  {nights === 1 ? "" : "s"} · + GST
+                </span>
+                <span className="font-mono font-bold text-textPrimary">{inr0(total)}</span>
+              </div>
+              <PrimaryButton
+                onClick={() => {
+                  setShowStayOptions(false);
+                  setStep("details");
+                }}
+              >
+                Continue
+              </PrimaryButton>
+            </div>
           </div>
         </div>
       )}
