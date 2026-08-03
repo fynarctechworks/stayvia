@@ -9,6 +9,7 @@ import { ArrivalAlerts } from "./ArrivalAlerts";
 import { BottomNav } from "./BottomNav";
 import { CheckoutAlerts } from "./CheckoutAlerts";
 import { CommandPalette } from "./CommandPalette";
+import { GuestRequestAlert } from "./GuestRequestAlert";
 import { Sidebar, initials } from "./Sidebar";
 import { useNotificationToasts } from "./Toast";
 
@@ -120,6 +121,12 @@ export function AppShell({ children }: { children: ReactNode }) {
           t.isContentEditable)
       )
         return;
+      // Not while a modal owns the screen. A dialog that parks focus on its
+      // own panel (a tabIndex={-1} div, e.g. GuestRequestAlert) passes the
+      // text-field guard above, so a bare "f" would silently reconfigure the
+      // shell underneath it — and persist that to localStorage.
+      if (document.querySelector('[aria-modal="true"]')) return;
+      if (t?.closest?.('[role="dialog"], [role="alertdialog"]')) return;
       if (e.metaKey || e.ctrlKey || e.altKey) return;
       e.preventDefault();
       toggleFocusMode({ requestBrowserFullscreen: e.shiftKey });
@@ -170,6 +177,11 @@ export function AppShell({ children }: { children: ReactNode }) {
   return (
     <div className="min-h-screen bg-bg">
       <CommandPalette />
+      {/* Centered overlay when a guest raises an in-room QR request. Mounted
+          here (not on a page) so it reaches staff wherever they are working.
+          Fixed-position and self-gating — renders nothing until there is a
+          genuinely new request and the moment is safe to interrupt. */}
+      <GuestRequestAlert />
 
       {/* Sidebar:
           - desktop (md+): fixed left Parchment rail, width depends on `collapsed`
