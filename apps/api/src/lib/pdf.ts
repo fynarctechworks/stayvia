@@ -12,6 +12,7 @@ import { rooms } from "../db/schema/rooms.js";
 import { roomTypes } from "../db/schema/settings.js";
 import type { Settings } from "../db/schema/settings.js";
 import { env } from "../config/env.js";
+import { FYN_ARC_LOGO_DATA_URI, STAYVIA_LOGO_DATA_URI } from "./brandAssets.js";
 import { logger } from "./logger.js";
 import { combinedRoomTypeLabel } from "./roomTypeLabel.js";
 
@@ -284,6 +285,25 @@ async function inlineLogo(logoUrl: string | null): Promise<string | null> {
     );
     return logoUrl;
   }
+}
+
+// The mark printed in the hotel-identity slot. A property that hasn't
+// uploaded a logo gets the Stayvia mark so documents never print with a
+// bare text header.
+function docLogo(L: DocLayout): string {
+  return L.logoUrl ?? STAYVIA_LOGO_DATA_URI;
+}
+
+// "Powered by" credit closing every document. Muted so it reads as a
+// footer mark, never competing with the hotel's own identity above.
+function poweredByFooter(): string {
+  return `
+    <div class="powered-by">
+      <span>Powered by Stayvia</span>
+      <span class="pb-sep">&middot;</span>
+      <img src="${FYN_ARC_LOGO_DATA_URI}" alt="" />
+      <span>FYN ARC Techworks</span>
+    </div>`;
 }
 
 function commonStyles(L: DocLayout) {
@@ -582,6 +602,19 @@ function commonStyles(L: DocLayout) {
       letter-spacing: 0.2em;
       text-transform: uppercase;
     }
+    .powered-by {
+      position: absolute;
+      left: 32px; right: 32px; bottom: 26px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      color: #B0B4AA;
+      font-size: 8.5px;
+      letter-spacing: 0.06em;
+    }
+    .powered-by img { height: 10px; width: auto; opacity: 0.75; }
+    .powered-by .pb-sep { opacity: 0.6; }
     .doc-id-strip {
       position: absolute;
       left: 32px; right: 32px; bottom: 12px;
@@ -605,7 +638,7 @@ function brandHeader(
   const phones = [hotelPhone, ownerPhone].filter((p): p is string => !!p && p.trim() !== "");
   return `
     <div class="brand">
-      ${L.showLogo && L.logoUrl ? `<div class="logo-tile"><img src="${esc(L.logoUrl)}" alt="logo" /></div>` : ""}
+      ${L.showLogo ? `<div class="logo-tile"><img src="${esc(docLogo(L))}" alt="logo" /></div>` : ""}
       <div>
         <h1>${esc(hotelName)}</h1>
         ${L.tagline.trim() ? `<div class="tagline">${esc(L.tagline)}</div>` : ""}
@@ -832,7 +865,7 @@ function renderInvoiceHtml(data: {
 <html><head><meta charset="utf-8"><style>${commonStyles(L)}</style></head>
 <body>
 
-${L.showLogo && L.logoUrl ? `<div class="watermark"><img src="${esc(L.logoUrl)}" alt="" /></div>` : ""}
+${L.showLogo ? `<div class="watermark"><img src="${esc(docLogo(L))}" alt="" /></div>` : ""}
 
 <div class="page">
   <div class="top-rule"></div>
@@ -1043,6 +1076,7 @@ ${L.showLogo && L.logoUrl ? `<div class="watermark"><img src="${esc(L.logoUrl)}"
     ${L.showSignature ? `<div class="sign"><div class="line">${esc(L.signatoryLabel)}</div></div>` : ""}
   </div>
 
+  ${poweredByFooter()}
   <div class="doc-id-strip">${esc(invoice.invoiceNumber)} &middot; ${formatIstDateTime24(new Date())}</div>
 </div>
 
@@ -1309,14 +1343,14 @@ function renderReceiptHtml(data: {
 </style></head>
 <body>
 
-${L.showLogo && L.logoUrl ? `<div class="watermark"><img src="${esc(L.logoUrl)}" alt="" /></div>` : ""}
+${L.showLogo ? `<div class="watermark"><img src="${esc(docLogo(L))}" alt="" /></div>` : ""}
 
 <div class="page slip">
   <div class="top-rule"></div>
 
   <div class="slip-header">
     <div class="hotel">
-      ${L.showLogo && L.logoUrl ? `<img class="hotel-logo" src="${esc(L.logoUrl)}" alt="" />` : ""}
+      ${L.showLogo ? `<img class="hotel-logo" src="${esc(docLogo(L))}" alt="" />` : ""}
       <div>
         <div class="hotel-name">${esc(settings.hotelName)}</div>
         <div class="hotel-sub">${esc(settings.hotelAddress)}${
@@ -1544,6 +1578,7 @@ ${L.showLogo && L.logoUrl ? `<div class="watermark"><img src="${esc(L.logoUrl)}"
         </div>`
       : ""
   }
+  ${poweredByFooter()}
 </div>
 
 </body></html>`;
