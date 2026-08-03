@@ -23,6 +23,7 @@ import {
   LogOut,
   MessageSquare,
   MessageSquareFill,
+  QrCode,
   Receipt,
   ReceiptFill,
   Settings,
@@ -56,7 +57,7 @@ interface NavItem {
   // which the API guards with requireRole('admin').
   adminOnly?: boolean;
   // Live indicator rendered at the right edge when expanded.
-  indicator?: "collections" | "messages" | "notifications";
+  indicator?: "collections" | "messages" | "notifications" | "requests";
 }
 
 // Warm Concierge grouped nav. Same items + permissions as before, now
@@ -67,6 +68,9 @@ const NAV_SECTIONS: { title: string; items: NavItem[] }[] = [
     items: [
       { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard, iconFill: LayoutDashboardFill, permission: "view_dashboard" },
       { to: "/reservations", label: "Reservations", icon: CalendarCheck, iconFill: CalendarCheckFill, permission: "view_reservations" },
+      // QR self-bookings waiting for desk confirmation. Same icon for both
+      // states (no fill variant needed for a code glyph).
+      { to: "/requests", label: "Booking Requests", icon: QrCode, iconFill: QrCode, permission: "view_reservations", indicator: "requests" },
       { to: "/rooms", label: "Rooms", icon: DoorOpen, iconFill: DoorOpenFill, permission: "view_rooms" },
       { to: "/housekeeping", label: "Housekeeping", icon: SprayCan, iconFill: SprayCanFill, permission: "view_housekeeping" },
       { to: "/calendar", label: "Calendar", icon: CalendarDays, iconFill: CalendarDaysFill, permission: "view_reservations" },
@@ -157,6 +161,19 @@ export function Sidebar({
   });
   const owingCount = collectionsQ.data ?? 0;
 
+  // Pending QR booking requests (holds). 15s poll — these expire in 30
+  // minutes, so the badge has to feel live.
+  const requestsQ = useQuery({
+    queryKey: ["reservations", { status: "hold" }, "count"],
+    queryFn: () =>
+      api
+        .get<{ total: number }>("/reservations", { status: "hold", per_page: 1 })
+        .then((d) => d.total),
+    refetchInterval: 15_000,
+    enabled: !!profile && can("view_reservations"),
+  });
+  const pendingRequests = requestsQ.data ?? 0;
+
   // Messages badge — sum of per-thread unread counts. Same polling
   // cadence as collections so the sidebar stays cheap.
   const messagesQ = useQuery({
@@ -181,6 +198,16 @@ export function Sidebar({
           aria-label={`${owingCount} guest(s) owing`}
         >
           {owingCount}
+        </span>
+      );
+    }
+    if (kind === "requests" && pendingRequests > 0) {
+      return (
+        <span
+          className="shrink-0 min-w-[19px] h-[19px] px-1.5 rounded-full bg-gold text-white text-[11px] font-bold tabular-nums inline-flex items-center justify-center"
+          aria-label={`${pendingRequests} booking request${pendingRequests === 1 ? "" : "s"} waiting`}
+        >
+          {pendingRequests}
         </span>
       );
     }
