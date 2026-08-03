@@ -2286,13 +2286,16 @@ export default function NewReservation() {
                             <Users className="w-3 h-3" /> Sleeps {r.maxOccupancy}
                           </span>
                         )}
-                      </div>
-                      <div
-                        className={`text-[12.5px] font-semibold capitalize mt-1.5 ${
-                          sel ? "text-white/80" : "text-textSecondary"
-                        }`}
-                      >
-                        {r.roomType.replace(/_/g, " ")} · Floor {r.floor}
+                        {/* Type + floor ride the same line as the number and
+                            chips; flex-wrap drops them to the next row only
+                            when the tile genuinely runs out of width. */}
+                        <span
+                          className={`text-[12.5px] font-semibold capitalize whitespace-nowrap ${
+                            sel ? "text-white/80" : "text-textSecondary"
+                          }`}
+                        >
+                          {r.roomType.replace(/_/g, " ")} · Floor {r.floor}
+                        </span>
                       </div>
                     </div>
                     <div className="flex items-start gap-2 shrink-0">
