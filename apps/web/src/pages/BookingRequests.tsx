@@ -63,13 +63,24 @@ export default function BookingRequests() {
   });
 
   // Past QR bookings - everything that came through the QR that is no
-  // longer a live hold. Same 30s-ish freshness as the pending list.
+  // longer a live hold. Paged so the full history is reachable.
+  const HISTORY_PER_PAGE = 20;
+  const [historyPage, setHistoryPage] = useState(1);
   const historyQ = useQuery({
-    queryKey: ["reservations", { source: "qr" }, "history"],
-    queryFn: () => getList<HoldRow>("/reservations", { source: "qr", per_page: 20 }),
+    queryKey: ["reservations", { source: "qr" }, "history", historyPage],
+    queryFn: () =>
+      getList<HoldRow>("/reservations", {
+        source: "qr",
+        page: historyPage,
+        per_page: HISTORY_PER_PAGE,
+      }),
     refetchInterval: 30_000,
   });
+  // Live holds render above as cards; the server count still includes
+  // them, so the page count is approximate by at most one page.
   const history = (historyQ.data?.data ?? []).filter((r) => r.status !== "hold");
+  const historyTotal = historyQ.data?.meta.total ?? 0;
+  const historyPages = Math.max(1, Math.ceil(historyTotal / HISTORY_PER_PAGE));
 
   // The server sweep cancels expired holds on its own cadence; hide anything
   // already past its expiry so the desk never acts on a dead request.
@@ -248,13 +259,13 @@ export default function BookingRequests() {
       )}
 
       {/* History - every QR booking that already left the queue. */}
-      {history.length > 0 && (
+      {historyTotal > 0 && (
         <section className="space-y-2.5">
           <h2 className="text-[11px] font-bold uppercase tracking-[0.1em] text-inkMuted px-1 pt-2">
             History
             <span className="font-normal normal-case tracking-normal text-textSecondary">
               {" "}
-              · last {history.length} QR booking{history.length === 1 ? "" : "s"}
+              · {historyTotal} QR booking{historyTotal === 1 ? "" : "s"}
             </span>
           </h2>
           <div className="card !p-0 overflow-hidden">
@@ -283,6 +294,27 @@ export default function BookingRequests() {
                 </li>
               ))}
             </ul>
+            {historyPages > 1 && (
+              <div className="flex items-center justify-between px-4 py-2.5 border-t border-divider bg-surfaceAlt">
+                <button
+                  className="btn-secondary !h-9 !px-3 text-xs disabled:opacity-40"
+                  disabled={historyPage <= 1}
+                  onClick={() => setHistoryPage((p) => p - 1)}
+                >
+                  Previous
+                </button>
+                <span className="text-xs text-textSecondary tabular-nums">
+                  Page {historyPage} of {historyPages}
+                </span>
+                <button
+                  className="btn-secondary !h-9 !px-3 text-xs disabled:opacity-40"
+                  disabled={historyPage >= historyPages}
+                  onClick={() => setHistoryPage((p) => p + 1)}
+                >
+                  Next
+                </button>
+              </div>
+            )}
           </div>
         </section>
       )}
