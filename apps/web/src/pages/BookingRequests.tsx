@@ -11,7 +11,7 @@ import { BedDouble, CheckCircle2, Loader2, QrCode, Users, X } from "@/lib/micons
 import { useDialog } from "@/components/Dialog";
 import { EmptyState, ListSkeleton, PageHeader } from "@/components/kit";
 import { useToast } from "@/components/Toast";
-import { ApiError, api } from "@/lib/api";
+import { ApiError, api, getList } from "@/lib/api";
 import { inr } from "@/lib/utils";
 
 interface HoldRow {
@@ -53,17 +53,13 @@ export default function BookingRequests() {
 
   const q = useQuery({
     queryKey: ["reservations", { status: "hold" }],
-    queryFn: () =>
-      api.get<{ items: HoldRow[]; total: number }>("/reservations", {
-        status: "hold",
-        per_page: 50,
-      }),
+    queryFn: () => getList<HoldRow>("/reservations", { status: "hold", per_page: 50 }),
     refetchInterval: 10_000,
   });
 
   // The server sweep cancels expired holds on its own cadence; hide anything
   // already past its expiry so the desk never acts on a dead request.
-  const items = (q.data?.items ?? []).filter((r) => {
+  const items = (q.data?.data ?? []).filter((r) => {
     const m = minutesLeft(r.holdExpiresAt, now);
     return m === null || m > 0;
   });

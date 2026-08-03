@@ -42,7 +42,7 @@ import {
 import { NavLink } from "react-router-dom";
 import { useAuth } from "@/auth/AuthContext";
 import { useDialog } from "@/components/Dialog";
-import { api } from "@/lib/api";
+import { api, getList } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
 interface NavItem {
@@ -166,9 +166,9 @@ export function Sidebar({
   const requestsQ = useQuery({
     queryKey: ["reservations", { status: "hold" }, "count"],
     queryFn: () =>
-      api
-        .get<{ total: number }>("/reservations", { status: "hold", per_page: 1 })
-        .then((d) => d.total),
+      getList("/reservations", { status: "hold", per_page: 1 }).then(
+        (d) => d.meta.total,
+      ),
     refetchInterval: 15_000,
     enabled: !!profile && can("view_reservations"),
   });
