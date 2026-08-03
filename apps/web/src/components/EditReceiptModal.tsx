@@ -1,4 +1,5 @@
 import { useMutation } from "@tanstack/react-query";
+import { ReceiptPrintStyles } from "./ReceiptPrintStyles";
 import { format } from "date-fns";
 import { Printer, X } from "@/lib/micons";
 import { useEffect, useState } from "react";
@@ -93,6 +94,7 @@ export function EditReceiptModal({
 
   return (
     <div className="print-portal fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-inkDark/50 backdrop-blur-[3px] p-4 print:bg-white print:p-0 print:static print:overflow-visible print:block">
+      <ReceiptPrintStyles />
       <div
         className="checkin-receipt my-auto w-full max-w-md bg-surface rounded-[14px] overflow-hidden shadow-modal print:max-w-full print:my-0 print:shadow-none"
         role="dialog"

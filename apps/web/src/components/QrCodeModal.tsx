@@ -42,7 +42,7 @@ export default function QrCodeModal({ open, onClose, url, title, subtitle }: Pro
     const w = window.open("", "_blank", "width=420,height=560");
     if (!w) return;
     w.document.write(`<!doctype html><html><head><title>${title}</title>
-      <style>body{font-family:sans-serif;text-align:center;padding:32px}
+      <style>@page{size:A4 portrait;margin:12mm}body{font-family:sans-serif;text-align:center;padding:32px}
       h1{font-size:20px;margin:0 0 4px}p{color:#555;margin:0 0 20px;font-size:13px}
       img{width:260px;height:260px}</style></head><body>
       <h1>${title}</h1>${subtitle ? `<p>${subtitle}</p>` : ""}

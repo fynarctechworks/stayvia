@@ -101,7 +101,7 @@ export const settings = pgTable("settings", {
   // Receipts default to A5 — they're a single-stay slip, not a full
   // tax-invoice document. A4 leaves a lot of empty space at the bottom
   // when printed.
-  docReceiptPageSize: text("doc_receipt_page_size").notNull().default("A5"),
+  docReceiptPageSize: text("doc_receipt_page_size").notNull().default("A4"),
   docShowLogo: boolean("doc_show_logo").notNull().default(true),
   docShowGstin: boolean("doc_show_gstin").notNull().default(true),
   docShowTerms: boolean("doc_show_terms").notNull().default(false),
