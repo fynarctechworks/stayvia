@@ -97,6 +97,16 @@ export default function BookingRequests() {
     },
   });
 
+  async function onConfirm(r: HoldRow) {
+    const ok = await dialog.confirm({
+      title: `Confirm ${r.reservationNumber}?`,
+      message: `Confirms ${r.guestName}'s booking and marks their ID as verified - only do this after matching the documents against the guest and collecting ${inr(r.grandTotal)} at the desk. The rooms become reserved immediately.`,
+      okLabel: "Yes, confirm booking",
+      cancelLabel: "Not yet",
+    });
+    if (ok) confirm.mutate(r.id);
+  }
+
   async function onDecline(r: HoldRow) {
     const ok = await dialog.confirm({
       title: `Decline ${r.reservationNumber}?`,
@@ -196,7 +206,7 @@ export default function BookingRequests() {
                   <button
                     className="btn-primary flex-1 inline-flex items-center justify-center gap-1.5 disabled:opacity-60"
                     disabled={confirming || declining}
-                    onClick={() => confirm.mutate(r.id)}
+                    onClick={() => onConfirm(r)}
                   >
                     {confirming ? (
                       <Loader2 className="w-4 h-4 animate-spin" />
@@ -232,7 +242,7 @@ export default function BookingRequests() {
           minsLeft={minutesLeft(review.holdExpiresAt, now)}
           confirming={confirm.isPending && confirm.variables === review.id}
           declining={decline.isPending && decline.variables === review.id}
-          onConfirm={() => confirm.mutate(review.id)}
+          onConfirm={() => onConfirm(review)}
           onDecline={() => onDecline(review)}
           onClose={() => setReview(null)}
         />
