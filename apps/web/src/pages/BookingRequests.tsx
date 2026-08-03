@@ -7,7 +7,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { BedDouble, CheckCircle2, Loader2, QrCode, Users, X } from "@/lib/micons";
+import { BedDouble, CheckCircle2, ChevronRight, Loader2, QrCode, Users, X } from "@/lib/micons";
 import { useDialog } from "@/components/Dialog";
 import { EmptyState, ListSkeleton, PageHeader } from "@/components/kit";
 import { useToast } from "@/components/Toast";
@@ -133,12 +133,19 @@ export default function BookingRequests() {
             return (
               <div key={r.id} className="card !p-[18px] space-y-3">
                 <div className="flex items-start justify-between gap-2">
-                  <div className="min-w-0">
+                  <button
+                    className="min-w-0 text-left group"
+                    onClick={() => navigate(`/reservations/${r.reservationNumber}`)}
+                    title="View full reservation"
+                  >
                     <div className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-[0.1em] text-brand-deep">
                       <QrCode className="w-3.5 h-3.5" /> QR booking
                     </div>
-                    <div className="font-mono text-sm font-semibold mt-1">{r.reservationNumber}</div>
-                  </div>
+                    <div className="font-mono text-sm font-semibold mt-1 inline-flex items-center gap-1 group-hover:text-brand-deep transition-colors">
+                      {r.reservationNumber}
+                      <ChevronRight className="w-3.5 h-3.5 text-inkFaint group-hover:text-brand-deep" />
+                    </div>
+                  </button>
                   {mins !== null && (
                     <span
                       className={`shrink-0 inline-flex items-center rounded-full border px-2.5 py-1 text-[11px] font-bold tabular-nums ${
@@ -202,6 +209,12 @@ export default function BookingRequests() {
                     Decline
                   </button>
                 </div>
+                <button
+                  className="w-full inline-flex items-center justify-center gap-1 text-xs font-semibold text-brand-deep hover:text-brand transition-colors min-h-[32px]"
+                  onClick={() => navigate(`/reservations/${r.reservationNumber}`)}
+                >
+                  View full details <ChevronRight className="w-3.5 h-3.5" />
+                </button>
               </div>
             );
           })}
