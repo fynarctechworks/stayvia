@@ -2433,11 +2433,11 @@ export default function NewReservation() {
                     // controls (select / inputs / stepper buttons) swallow
                     // the click, so tapping blank space in this panel still
                     // bubbles to the card and deselects the room.
-                    <div className="mt-3 pt-3 border-t border-white/20 space-y-2.5">
+                    <div className="mt-3.5 pt-3.5 border-t border-white/20 space-y-3.5">
                       <div>
-                        <label className="label block mb-1 !text-white/70">Sell as</label>
+                        <label className="label block mb-1.5 !text-white/70">Sell as</label>
                         <select
-                          className="input !min-h-[34px] !h-[34px] !py-0 text-sm"
+                          className="input !min-h-[38px] !h-[38px] !py-0 text-sm"
                           value={selected.soldAsType ?? ""}
                           onClick={(e) => e.stopPropagation()}
                           onChange={(e) => {
@@ -2466,11 +2466,11 @@ export default function NewReservation() {
                         </select>
                       </div>
                       <div>
-                        <label className="label block mb-1 !text-white/70">
+                        <label className="label block mb-1.5 !text-white/70">
                           {isShortStay ? `Rate for ${hrsLabel}` : "Rate/night"}
                         </label>
                         <input
-                          className="input !min-h-[34px] !h-[34px] !py-0 text-sm font-mono"
+                          className="input !min-h-[38px] !h-[38px] !py-0 text-sm font-mono"
                           type="number"
                           value={selected.ratePerNight || ""}
                           placeholder="0"
@@ -2484,68 +2484,72 @@ export default function NewReservation() {
                           rate but editable per-booking. Capped at +3 over
                           base; each bed raises effective capacity. */}
                       {extraBedRateForType(selected.soldAsType ?? selected.nativeType) > 0 && (
-                        <div>
-                          <label className="label block mb-1 !text-white/70">Extra persons</label>
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <button
-                              type="button"
-                              className="h-8 w-8 grid place-items-center rounded-[8px] border border-white/30 text-white hover:bg-white/15 disabled:opacity-40 transition-colors"
-                              disabled={selected.extraBeds <= 0}
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                updateExtraBeds(r.id, selected.extraBeds - 1);
-                              }}
-                              aria-label="Remove extra person"
-                            >
-                              <Minus className="w-3.5 h-3.5" />
-                            </button>
-                            <span className="min-w-8 text-center font-mono font-semibold text-white">
-                              {selected.extraBeds}
-                            </span>
-                            <button
-                              type="button"
-                              className="h-8 w-8 grid place-items-center rounded-[8px] border border-white/30 text-white hover:bg-white/15 disabled:opacity-40 transition-colors"
-                              // Only allow adding a bed while guests are
-                              // still uncovered. Once the selected rooms'
-                              // total capacity meets the adult headcount,
-                              // there's no one left to seat — block the +.
-                              disabled={capacityShortfall <= 0}
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                updateExtraBeds(r.id, selected.extraBeds + 1);
-                              }}
-                              aria-label="Add extra person"
-                            >
-                              <Plus className="w-3.5 h-3.5" />
-                            </button>
-                            <span className="text-[11px] text-white/70">
-                              sleeps {selected.maxOccupancy + selected.extraBeds}
-                            </span>
+                        <div className="pt-3.5 border-t border-white/20">
+                          <div className="flex items-center justify-between gap-2">
+                            <label className="label !mb-0 !text-white/70">Extra persons</label>
+                            <div className="flex items-center gap-2">
+                              <button
+                                type="button"
+                                className="h-9 w-9 grid place-items-center rounded-[10px] border border-white/30 text-white hover:bg-white/15 disabled:opacity-40 transition-colors"
+                                disabled={selected.extraBeds <= 0}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  updateExtraBeds(r.id, selected.extraBeds - 1);
+                                }}
+                                aria-label="Remove extra person"
+                              >
+                                <Minus className="w-3.5 h-3.5" />
+                              </button>
+                              <span className="min-w-8 text-center font-mono font-semibold text-white">
+                                {selected.extraBeds}
+                              </span>
+                              <button
+                                type="button"
+                                className="h-9 w-9 grid place-items-center rounded-[10px] border border-white/30 text-white hover:bg-white/15 disabled:opacity-40 transition-colors"
+                                // Only allow adding a bed while guests are
+                                // still uncovered. Once the selected rooms'
+                                // total capacity meets the adult headcount,
+                                // there's no one left to seat — block the +.
+                                disabled={capacityShortfall <= 0}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  updateExtraBeds(r.id, selected.extraBeds + 1);
+                                }}
+                                aria-label="Add extra person"
+                              >
+                                <Plus className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          </div>
+                          <div className="text-[11px] text-white/70 mt-1.5 text-right">
+                            sleeps {selected.maxOccupancy + selected.extraBeds}
                           </div>
                           {/* Editable per-bed, per-night fee. Defaults to the
                               room type's rate; staff can change it for this
-                              booking. */}
-                          <div className="flex items-center gap-1.5 mt-1.5">
-                            <span className="text-[11px] text-white/70 whitespace-nowrap">
-                              ₹/person/night
-                            </span>
-                            <input
-                              className="input !min-h-[34px] !h-[34px] !py-0 text-sm font-mono !w-28"
-                              type="number"
-                              min={0}
-                              value={selected.extraBedRate || ""}
-                              placeholder="0"
-                              onClick={(e) => e.stopPropagation()}
-                              onChange={(e) =>
-                                updateExtraBedRate(r.id, Number(e.target.value))
-                              }
-                            />
-                          </div>
+                              booking. Only relevant once a person is added. */}
+                          {selected.extraBeds > 0 && (
+                            <div className="mt-2.5">
+                              <label className="label block mb-1.5 !text-white/70">
+                                ₹/person/night
+                              </label>
+                              <input
+                                className="input !min-h-[38px] !h-[38px] !py-0 text-sm font-mono"
+                                type="number"
+                                min={0}
+                                value={selected.extraBedRate || ""}
+                                placeholder="0"
+                                onClick={(e) => e.stopPropagation()}
+                                onChange={(e) =>
+                                  updateExtraBedRate(r.id, Number(e.target.value))
+                                }
+                              />
+                            </div>
+                          )}
                           {/* Running extra-bed charge for THIS room so staff
                               see the total (rate × beds × units) without
                               scrolling to the summary. 0 beds → no charge. */}
                           {selected.extraBeds > 0 && selected.extraBedRate > 0 && (
-                            <div className="text-[11px] text-white/70 mt-1.5">
+                            <div className="text-[11px] text-white/70 mt-2">
                               Extra-person charge:{" "}
                               <span className="font-mono font-semibold text-white">
                                 {inr(
