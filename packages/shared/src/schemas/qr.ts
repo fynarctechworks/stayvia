@@ -62,6 +62,7 @@ export const qrBookSchema = z
     gstin: z.string().regex(gstinRegex, "Invalid GSTIN format").optional().or(z.literal("")),
     nights: z.number().int().min(1).max(3),
     numAdults: z.number().int().min(1).max(6),
+    numChildren: z.number().int().min(0).max(6).default(0),
     roomIds: z.array(z.string().uuid()).min(1).max(3),
     specialRequests: z.string().max(300).optional(),
   })

@@ -42,6 +42,7 @@ import {
   qrFormatTime,
   qrInputClass,
 } from "@/components/qrKit";
+import { citiesForState } from "@/lib/indianCities";
 import { INDIAN_STATES, INDIAN_UNION_TERRITORIES } from "@/lib/indianStates";
 import { EmailInput } from "@/components/EmailInput";
 import { ID_PROOF_SPECS, inr, inr0, sanitizeIdProofNumber } from "@/lib/utils";
@@ -73,6 +74,7 @@ export default function HotelQr() {
   const [selected, setSelected] = useState<string[]>([]);
   const [nights, setNights] = useState(1);
   const [numAdults, setNumAdults] = useState(1);
+  const [numChildren, setNumChildren] = useState(0);
   const [detailRoom, setDetailRoom] = useState<QrCatalogRoom | null>(null);
   const [showStayOptions, setShowStayOptions] = useState(false);
   const [activeType, setActiveType] = useState<string>("all");
@@ -207,6 +209,7 @@ export default function HotelQr() {
         gstin: gstin.trim(),
         nights,
         numAdults,
+        numChildren,
         roomIds: selected,
         ...(specialRequests.trim() ? { specialRequests: specialRequests.trim() } : {}),
       });
@@ -394,8 +397,11 @@ export default function HotelQr() {
               <div className="rounded-md bg-bg border border-borderc/60 px-3 py-2">
                 <div className="text-[10px] uppercase tracking-wider text-textSecondary">Stay</div>
                 <div className="font-semibold mt-0.5">
-                  {nights} night{nights === 1 ? "" : "s"} · {numAdults} guest
+                  {nights} night{nights === 1 ? "" : "s"} · {numAdults} adult
                   {numAdults === 1 ? "" : "s"}
+                  {numChildren > 0
+                    ? ` · ${numChildren} child${numChildren === 1 ? "" : "ren"}`
+                    : ""}
                 </div>
               </div>
             </div>
@@ -541,7 +547,20 @@ export default function HotelQr() {
               </QrField>
             </div>
             <QrField label="City">
-              <input className={qrInputClass} value={city} onChange={(e) => setCity(e.target.value)} />
+              <input
+                className={qrInputClass}
+                value={city}
+                onChange={(e) => setCity(e.target.value)}
+                list="qr-city-suggestions"
+                placeholder={state ? `Cities in ${state}…` : "Pick a state first"}
+              />
+              {/* Native datalist keeps the public page dependency-free while
+                  matching the walk-in form's state-aware city suggestions. */}
+              <datalist id="qr-city-suggestions">
+                {citiesForState(state).map((c) => (
+                  <option key={c} value={c} />
+                ))}
+              </datalist>
             </QrField>
             <QrField label="Address">
               <textarea
@@ -715,13 +734,26 @@ export default function HotelQr() {
               </div>
               <div className="h-px bg-borderc/60" />
               <div className="flex items-center justify-between">
-                <span className="text-sm font-medium">Guests</span>
+                <span className="text-sm font-medium">Adults</span>
                 <div className="flex items-center gap-3">
                   <RoundBtn disabled={numAdults <= 1} onClick={() => setNumAdults((v) => v - 1)}>
                     −
                   </RoundBtn>
                   <span className="min-w-6 text-center font-semibold">{numAdults}</span>
                   <RoundBtn disabled={numAdults >= 6} onClick={() => setNumAdults((v) => v + 1)}>
+                    +
+                  </RoundBtn>
+                </div>
+              </div>
+              <div className="h-px bg-borderc/60" />
+              <div className="flex items-center justify-between">
+                <span className="text-sm font-medium">Children</span>
+                <div className="flex items-center gap-3">
+                  <RoundBtn disabled={numChildren <= 0} onClick={() => setNumChildren((v) => v - 1)}>
+                    −
+                  </RoundBtn>
+                  <span className="min-w-6 text-center font-semibold">{numChildren}</span>
+                  <RoundBtn disabled={numChildren >= 6} onClick={() => setNumChildren((v) => v + 1)}>
                     +
                   </RoundBtn>
                 </div>

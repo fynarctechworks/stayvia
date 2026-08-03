@@ -604,6 +604,7 @@ router.post(
           checkInDate: checkIn,
           checkOutDate: checkOut,
           numAdults: body.numAdults,
+          numChildren: body.numChildren ?? 0,
           ratePerNight: String(perNight),
           subtotal: String(money.subtotal),
           gstRate: String(gstRate),
