@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import {
   ArrowRight,
   BedDouble,
@@ -369,24 +369,153 @@ function DashboardMock() {
 
 /* Proof strip --------------------------------------------------------- */
 
-function ProofStrip() {
-  const items: [string, string][] = [
-    ["Built for", "10–50 room hotels run by the owner"],
-    ["Instead of", "a register, a diary and three WhatsApp groups"],
-    ["Set up in", "an afternoon, from a phone if you like"],
-    ["Costs", "₹999 a month — flat, every room included"],
-  ];
+// The one DARK band in the upper page. Above it the hero's white product mock
+// ends on paper; below it Features is eight white cards on paper. A third pale
+// slab would stack three card-coloured layers in a row, so the strip inverts
+// instead — and it inverts as flat, unlit forest-deep with ruled typography:
+// no gradient, no hatch, no radius, no fill, no shadow, no card. That is what
+// keeps it a different KIND of object from the hero pane (a lit jade radial)
+// rather than a second helping of it.
+//
+// The four facts are not peers. 01–03 qualify the reader; 04 closes. So 01–03
+// are ledger line items and the price is the invoice total: its own rule
+// weight (brass, not cream), a dot leader that drags the eye across the band,
+// and ~3.3x the type size of anything else.
+//
+// Contrast, computed against tailwind.config.ts (WCAG 2.1 relative luminance),
+// all on bg-forest-deep #0B281F:
+//   cream          13.64:1   the price
+//   cream/90       11.26:1   fact values
+//   cream/70        7.32:1   "/ month" and the price qualifier
+//   brass #C6A15B   6.46:1   eyebrow, index numerals, italic "Flat"
+//   cream/60        5.75:1   micro-labels
+//   cream/40        3.36:1   hairline rules  (non-text, clears 1.4.11's 3:1)
+//   brass/60        3.20:1   band edge + total rule (ditto)
+// Every text pair clears 4.5:1, so nothing leans on the large-text exemption.
+// Deliberately REFUSED: brass on forest-light #1A4A3A (4.15:1) and gold on
+// parchment (2.69:1) — neither appears here, which is why the band is flat
+// forest-deep with no lifted inner panel.
+const PROOF_FACTS: { n: string; label: string; value: ReactNode }[] = [
+  {
+    n: "01",
+    label: "Built for",
+    value: (
+      <>
+        <span className="font-mono text-[0.93em] font-semibold tabular-nums">10–50</span> room
+        hotels run by the owner
+      </>
+    ),
+  },
+  { n: "02", label: "Instead of", value: "a register, a diary and three WhatsApp groups" },
+  { n: "03", label: "Set up in", value: "an afternoon, from a phone if you like" },
+];
+
+// Index mark + micro-label on one baseline. The numeral is a decorative
+// ordinal, so it is aria-hidden — but it also clears 6.46:1 on its own, so
+// the band never depends on that exemption.
+function LedgerTag({ n, label }: { n: string; label: string }) {
   return (
-    <section className="border-y border-borderc bg-surfaceAlt">
-      <div className={`${SHELL} py-8 grid sm:grid-cols-2 lg:grid-cols-4 gap-px bg-borderc`}>
-        {items.map(([k, v]) => (
-          <div key={k} className="bg-surfaceAlt sm:px-6 first:pl-0 py-2">
-            <div className="text-[10.5px] font-bold uppercase tracking-[0.1em] text-inkMuted">
-              {k}
-            </div>
-            <div className="mt-1.5 text-[15px] font-medium leading-snug text-ink">{v}</div>
+    <>
+      <span
+        aria-hidden
+        className="font-mono text-[12px] font-bold leading-none tabular-nums text-brass"
+      >
+        {n}
+      </span>
+      <span className="text-[10.5px] font-bold uppercase leading-none tracking-[0.16em] text-cream/60">
+        {label}
+      </span>
+    </>
+  );
+}
+
+function ProofStrip() {
+  return (
+    // A strip of paper first. Hero's mock has no bottom spacing, so without
+    // this the band's edge cuts across the white card's rounded corner and
+    // eats its shadow-lift — the card ends up standing on a shelf.
+    <section aria-labelledby="proof-heading" className="bg-bg pt-12 sm:pt-14 md:pt-16">
+      {/* The dark plate is the <section>'s own child, so it is full-bleed by
+          construction. No negative margins anywhere: nothing in this band is
+          coupled to SHELL's px-5/sm:px-8/md:px-12/xl:px-20 scale, so a future
+          edit to SHELL cannot silently break the bleed. */}
+      <div className="overflow-hidden bg-forest-deep">
+        <div aria-hidden className="h-px bg-brass/60" />
+
+        <div className={`${SHELL} py-6 xl:py-7`}>
+          {/* House eyebrow: short rule + 11px uppercase, matching SectionHead.
+              A real <h2> so the band lands in the document outline. */}
+          <div className="flex items-center gap-2">
+            <span aria-hidden className="h-px w-5 shrink-0 bg-brass" />
+            <h2
+              id="proof-heading"
+              className="text-[11px] font-bold uppercase tracking-[0.16em] text-brass"
+            >
+              At a glance
+            </h2>
           </div>
-        ))}
+
+          {/* Line items. divide-y stacked, flipped to divide-x when the row
+              goes three-across, so a hairline exists between every fact at
+              EVERY width — no gap-px background trick. There is never a
+              2-column state, so the third cell can never indent against the
+              first, and below md every item sits flush on the SHELL rail.
+              Note: first:pt-0 / last:pb-0 compile at specificity 0,2,0 and so
+              outrank md:py-0 (0,1,0) inside the md query — harmless only
+              because both resolve to 0 there. md:first:pl-0 / md:last:pr-0 are
+              stated at 0,2,0 on purpose so they keep beating lg:px-6. */}
+          <dl className="mt-4 grid divide-y divide-cream/40 md:mt-5 md:grid-cols-3 md:divide-x md:divide-y-0">
+            {PROOF_FACTS.map((f) => (
+              <div
+                key={f.n}
+                className="min-w-0 py-4 first:pt-0 last:pb-0 md:px-5 md:py-0 md:first:pl-0 md:last:pr-0 lg:px-6"
+              >
+                <dt className="flex items-baseline gap-2.5">
+                  <LedgerTag n={f.n} label={f.label} />
+                </dt>
+                <dd className="mt-2.5 max-w-[38ch] text-[14.5px] leading-[1.45] text-cream/90 xl:text-[15px]">
+                  {f.value}
+                </dd>
+              </div>
+            ))}
+          </dl>
+
+          {/* The total line. Brass rule instead of a cream hairline, a dotted
+              leader carrying the eye across the band, and the only large type
+              on the page between the hero and Pricing. DOM order is label →
+              price → qualifier, so a screen reader hears "What it costs:
+              ₹999 / month. Flat — every room included." */}
+          <dl className="mt-4 flex flex-col gap-3 border-t border-brass/60 pt-4 sm:flex-row sm:items-baseline sm:gap-6 md:mt-5">
+            <dt className="flex min-w-0 items-baseline gap-2.5 sm:flex-1">
+              <LedgerTag n="04" label="What it costs" />
+              {/* Uncapped on purpose. A capped leader stops dead a thousand
+                  pixels short of the price on a wide screen and points at
+                  nothing; an invoice leader has to actually reach the total.
+                  The dots are quiet enough (cream/30) to run long. */}
+              <span
+                aria-hidden
+                className="hidden h-0 flex-1 border-b border-dotted border-cream/30 sm:block"
+              />
+            </dt>
+
+            <dd className="sm:shrink-0 sm:text-right">
+              <span className="flex items-baseline gap-2.5 sm:justify-end">
+                <span className="font-mono text-[clamp(38px,6vw,48px)] font-bold leading-[0.85] tracking-[-0.02em] tabular-nums text-cream">
+                  ₹999
+                </span>
+                <span className="text-[13px] font-semibold text-cream/70">/ month</span>
+              </span>
+              <span className="mt-2 block text-[13px] leading-snug text-cream/70">
+                <span className="font-[Georgia,serif] italic text-brass">Flat</span> — every room
+                included.
+              </span>
+            </dd>
+          </dl>
+        </div>
+
+        {/* Matches the hero pane's own bottom hairline, so both dark surfaces
+            close the same way. */}
+        <div aria-hidden className="h-px bg-brass/25" />
       </div>
     </section>
   );
