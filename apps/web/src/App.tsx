@@ -13,6 +13,7 @@ const RoomDetail = lazy(() => import("@/pages/RoomDetail"));
 const CalendarPage = lazy(() => import("@/pages/Calendar"));
 const Reservations = lazy(() => import("@/pages/Reservations"));
 const BookingRequests = lazy(() => import("@/pages/BookingRequests"));
+const QrBookingHistory = lazy(() => import("@/pages/QrBookingHistory"));
 const NewReservation = lazy(() => import("@/pages/NewReservation"));
 const ReservationDetail = lazy(() => import("@/pages/ReservationDetail"));
 const Guests = lazy(() => import("@/pages/Guests"));
@@ -137,6 +138,18 @@ export default function App() {
               <AppShell>
                 <PermissionGuard any={["view_reservations"]}>
                   <BookingRequests />
+                </PermissionGuard>
+              </AppShell>
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/requests/history"
+          element={
+            <ProtectedRoute>
+              <AppShell>
+                <PermissionGuard any={["view_reservations"]}>
+                  <QrBookingHistory />
                 </PermissionGuard>
               </AppShell>
             </ProtectedRoute>
