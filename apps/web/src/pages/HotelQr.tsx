@@ -120,11 +120,16 @@ export default function HotelQr() {
   const perNight = chosenRooms.reduce((a, r) => a + r.baseRate, 0);
   const total = perNight * nights;
 
-  // Toggle one specific room. Global cap 3 rooms per booking.
+  // Toggle one specific room. Global cap 3 rooms per booking. Picking a
+  // room pops the stay-options sheet right away (nights/guests/total);
+  // deselecting never does.
   function toggleRoom(id: string) {
+    const adding = !selected.includes(id);
+    if (adding && selected.length >= 3) return;
     setSelected((prev) =>
-      prev.includes(id) ? prev.filter((x) => x !== id) : prev.length < 3 ? [...prev, id] : prev,
+      adding ? [...prev, id] : prev.filter((x) => x !== id),
     );
+    if (adding) setShowStayOptions(true);
   }
 
   const detailsValid =
