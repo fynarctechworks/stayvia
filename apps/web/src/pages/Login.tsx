@@ -9,6 +9,7 @@ import {
   Mail,
   ShieldCheck,
 } from "@/lib/micons";
+import { AuthLiquidBackdrop } from "@/components/AuthLiquidBackdrop";
 import { useAuth } from "@/auth/AuthContext";
 import { useDialog } from "@/components/Dialog";
 import { api } from "@/lib/api";
@@ -211,6 +212,9 @@ export default function Login() {
         {/* Forest radial glow + faint diagonal stripes (spec: special surfaces). */}
         <div aria-hidden className="absolute inset-0" style={forestGlow} />
         <div aria-hidden className="absolute inset-0 opacity-50" style={forestStripes} />
+        {/* GPU fluid sim, layered over the static gradient. Lazy-loaded and
+            skipped entirely for reduced-motion / narrow viewports. */}
+        <AuthLiquidBackdrop />
         <div aria-hidden className="absolute inset-y-0 right-0 w-px" style={brassHairline} />
 
         {/* Logo + name, top-left. */}

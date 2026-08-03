@@ -19,6 +19,7 @@ import {
   User,
 } from "@/lib/micons";
 import { signupFormSchema, type SignupOtpChannel } from "@stayvia/shared";
+import { AuthLiquidBackdrop } from "@/components/AuthLiquidBackdrop";
 import { useAuth } from "@/auth/AuthContext";
 import { EmailInput } from "@/components/EmailInput";
 import { ApiError, api } from "@/lib/api";
@@ -265,6 +266,9 @@ export default function Signup() {
         {/* Forest radial glow + faint diagonal stripes (spec: special surfaces). */}
         <div aria-hidden className="absolute inset-0" style={forestGlow} />
         <div aria-hidden className="absolute inset-0 opacity-50" style={forestStripes} />
+        {/* GPU fluid sim, layered over the static gradient. Lazy-loaded and
+            skipped entirely for reduced-motion / narrow viewports. */}
+        <AuthLiquidBackdrop />
         <div aria-hidden className="absolute inset-y-0 right-0 w-px" style={brassHairline} />
 
         <div className="absolute top-10 left-10 xl:left-14 flex items-center gap-3 pointer-events-none">
