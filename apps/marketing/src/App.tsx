@@ -188,7 +188,7 @@ function Hero() {
           560px pane left the cream text sitting on paper with ~10px to
           spare — one longer word from being unreadable. */}
       <div
-        className="relative overflow-hidden bg-forest pb-24 sm:pb-28 md:pb-32"
+        className="relative overflow-hidden bg-forest pb-24 sm:pb-32 md:pb-40"
         style={{
           backgroundImage:
             "radial-gradient(120% 90% at 20% 0%, #1A4A3A 0%, #10352A 45%, #0B281F 100%)",
@@ -235,8 +235,11 @@ function Hero() {
       </div>
 
       {/* Mock straddles the pane edge: pulled up over the forest, ending on
-          paper. Negative margin is proportional to the pane's bottom pad. */}
-      <div className={`${SHELL} relative -mt-16 sm:-mt-20 md:-mt-24`}>
+          paper. The pull must stay smaller than the pane's bottom padding —
+          the difference is the band of bare forest under the copy. Keep the
+          mock itself margin-free, or its top margin collapses with this one
+          and eats most of the overlap. */}
+      <div className={`${SHELL} relative -mt-14 sm:-mt-20 md:-mt-24`}>
         <DashboardMock />
       </div>
     </section>
@@ -247,7 +250,7 @@ function Hero() {
 // crisply at any width.
 function DashboardMock() {
   return (
-    <div className="mt-12 md:mt-14 rounded-2xl border border-borderc bg-surface shadow-lift overflow-hidden">
+    <div className="rounded-2xl border border-borderc bg-surface shadow-lift overflow-hidden">
       <div className="flex items-center gap-2 px-4 h-11 bg-surfaceAlt border-b border-divider">
         <span className="w-2.5 h-2.5 rounded-full bg-borderControl" />
         <span className="w-2.5 h-2.5 rounded-full bg-borderControl" />
