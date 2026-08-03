@@ -1,3 +1,4 @@
+import { useState } from "react";
 import {
   ArrowRight,
   BedDouble,
@@ -5,6 +6,7 @@ import {
   Check,
   FileText,
   Lock,
+  Menu,
   MessageCircle,
   QrCode,
   Receipt,
@@ -12,6 +14,7 @@ import {
   Sparkles,
   Users,
   Wifi,
+  X,
 } from "./micons";
 
 // Where the product lives. Point at the deployed app in production via
@@ -88,11 +91,19 @@ function PrimaryCta({ children = "Start your free 14-day trial", className = "" 
 
 /* Nav ----------------------------------------------------------------- */
 
+const NAV_LINKS: [string, string][] = [
+  ["#features", "Features"],
+  ["#how", "How it works"],
+  ["#pricing", "Pricing"],
+  ["#faq", "FAQ"],
+];
+
 function Nav() {
+  const [open, setOpen] = useState(false);
   return (
     <header className="sticky top-0 z-40 bg-paper/85 backdrop-blur-[10px] border-b border-borderc">
-      <div className={`${SHELL} h-16 flex items-center gap-6`}>
-        <a href="#" className="flex items-center gap-2.5 shrink-0">
+      <div className={`${SHELL} h-16 flex items-center gap-4 sm:gap-6`}>
+        <a href="#" className="flex items-center gap-2.5 shrink-0 min-h-[44px]">
           <img src="/logo.png" alt="" className="w-9 h-9 rounded-[11px] object-contain" />
           <span className="leading-none">
             <span className="block font-bold text-[17px] tracking-tight text-ink">Stayvia</span>
@@ -101,27 +112,64 @@ function Nav() {
             </span>
           </span>
         </a>
+
         <nav className="hidden md:flex items-center gap-7 text-sm font-medium text-textSecondary ml-4">
-          <a href="#features" className="hover:text-ink transition-colors">Features</a>
-          <a href="#how" className="hover:text-ink transition-colors">How it works</a>
-          <a href="#pricing" className="hover:text-ink transition-colors">Pricing</a>
-          <a href="#faq" className="hover:text-ink transition-colors">FAQ</a>
+          {NAV_LINKS.map(([href, label]) => (
+            <a key={href} href={href} className="hover:text-ink transition-colors">
+              {label}
+            </a>
+          ))}
         </nav>
-        <div className="ml-auto flex items-center gap-3">
+
+        <div className="ml-auto flex items-center gap-2 sm:gap-3">
           <a
             href={LOGIN}
-            className="hidden sm:inline-flex items-center h-10 px-4 rounded-md border border-borderControl bg-surface text-sm font-semibold text-ink hover:bg-surfaceAlt transition-colors"
+            className="hidden sm:inline-flex items-center h-11 px-4 rounded-md border border-borderControl bg-surface text-sm font-semibold text-ink hover:bg-surfaceAlt transition-colors"
           >
             Sign in
           </a>
           <a
             href={SIGNUP}
-            className="inline-flex items-center h-10 px-4 rounded-md bg-brand text-white text-sm font-semibold shadow-primary hover:bg-brand-deep transition-colors"
+            className="inline-flex items-center h-11 px-4 rounded-md bg-brand text-white text-sm font-semibold shadow-primary hover:bg-brand-deep transition-colors"
           >
             Start free
           </a>
+          {/* Below md the section links have nowhere to live, so they get a
+              real menu instead of vanishing. */}
+          <button
+            type="button"
+            onClick={() => setOpen((v) => !v)}
+            aria-expanded={open}
+            aria-label={open ? "Close menu" : "Open menu"}
+            className="md:hidden w-11 h-11 grid place-items-center rounded-md border border-borderControl bg-surface text-ink"
+          >
+            {open ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
+          </button>
         </div>
       </div>
+
+      {open && (
+        <div className="md:hidden border-t border-borderc bg-paper/95 backdrop-blur-[10px]">
+          <nav className={`${SHELL} py-2 flex flex-col`}>
+            {NAV_LINKS.map(([href, label]) => (
+              <a
+                key={href}
+                href={href}
+                onClick={() => setOpen(false)}
+                className="flex items-center min-h-[48px] text-[15px] font-medium text-ink border-b border-divider last:border-0"
+              >
+                {label}
+              </a>
+            ))}
+            <a
+              href={LOGIN}
+              className="flex items-center min-h-[48px] text-[15px] font-semibold text-brand-deep"
+            >
+              Sign in
+            </a>
+          </nav>
+        </div>
+      )}
     </header>
   );
 }
@@ -130,55 +178,65 @@ function Nav() {
 
 function Hero() {
   return (
-    <section className="relative overflow-hidden">
+    <section className="relative">
       {/* Forest brand pane — the one dark surface Stayvia already owns (it
           backs the product's auth screens), so the site and the app share a
-          signature instead of just a hue. */}
+          signature instead of just a hue.
+
+          The pane WRAPS the copy rather than being a fixed-height layer
+          behind it: at 320px the headline is tall enough that a fixed
+          560px pane left the cream text sitting on paper with ~10px to
+          spare — one longer word from being unreadable. */}
       <div
-        className="absolute inset-x-0 top-0 h-[560px] md:h-[600px] bg-forest"
+        className="relative overflow-hidden bg-forest pb-24 sm:pb-28 md:pb-32"
         style={{
           backgroundImage:
             "radial-gradient(120% 90% at 20% 0%, #1A4A3A 0%, #10352A 45%, #0B281F 100%)",
         }}
       >
         <div
+          aria-hidden
           className="absolute inset-0 opacity-[0.05]"
           style={{
             backgroundImage:
               "repeating-linear-gradient(135deg, #fff 0 1px, transparent 1px 12px)",
           }}
         />
-        <div className="absolute inset-x-0 bottom-0 h-px bg-brass/25" />
-      </div>
+        <div aria-hidden className="absolute inset-x-0 bottom-0 h-px bg-brass/25" />
 
-      <div className={`${SHELL} relative pt-16 pb-14 md:pt-20 md:pb-16`}>
-        <div className="max-w-[860px]">
+        <div className={`${SHELL} relative pt-12 sm:pt-16 md:pt-20`}>
+          <div className="max-w-[860px]">
           <span className="inline-flex items-center gap-2 rounded-full border border-brass/35 bg-white/[0.06] px-3.5 py-1.5 text-[11px] font-bold uppercase tracking-[0.18em] text-brass">
             Front office suite
           </span>
-          <h1 className="mt-6 text-[clamp(34px,6vw,58px)] font-semibold leading-[1.06] tracking-[-1px] text-cream">
+          <h1 className="mt-5 sm:mt-6 text-[clamp(30px,7vw,58px)] font-semibold leading-[1.06] tracking-[-1px] text-cream">
             Run your hotel from{" "}
             <span className="font-[Georgia,serif] italic text-brass">one desk.</span>
           </h1>
-          <p className="mt-5 text-[17px] md:text-[19px] leading-relaxed text-cream/70 max-w-[680px]">
+          <p className="mt-4 sm:mt-5 text-[15.5px] sm:text-[17px] md:text-[19px] leading-relaxed text-cream/70 max-w-[680px]">
             Reservations, GST invoices, guest KYC, housekeeping, WhatsApp updates and
             contactless QR check-in — one calm workspace built for independent Indian
             hotels.
           </p>
-          <div className="mt-8 flex flex-wrap items-center gap-3">
-            <PrimaryCta />
-            <a
-              href="#pricing"
-              className="inline-flex items-center justify-center h-12 px-6 rounded-md border border-cream/25 text-cream font-semibold hover:border-brass hover:text-brass transition-colors"
-            >
-              See pricing
-            </a>
+          <div className="mt-7 sm:mt-8 flex flex-col sm:flex-row sm:flex-wrap items-stretch sm:items-center gap-3">
+              <PrimaryCta />
+              <a
+                href="#pricing"
+                className="inline-flex items-center justify-center h-12 px-6 rounded-md border border-cream/25 text-cream font-semibold hover:border-brass hover:text-brass transition-colors"
+              >
+                See pricing
+              </a>
+            </div>
+            <p className="mt-5 text-[13px] sm:text-sm text-cream/45">
+              ₹999/month · No card required · Cancel anytime
+            </p>
           </div>
-          <p className="mt-5 text-sm text-cream/45">
-            ₹999/month · No card required · Cancel anytime
-          </p>
         </div>
+      </div>
 
+      {/* Mock straddles the pane edge: pulled up over the forest, ending on
+          paper. Negative margin is proportional to the pane's bottom pad. */}
+      <div className={`${SHELL} relative -mt-16 sm:-mt-20 md:-mt-24`}>
         <DashboardMock />
       </div>
     </section>
@@ -780,11 +838,18 @@ function Footer() {
             </div>
           </div>
         </div>
-        <div className="flex items-center gap-5">
-          <a href="#features" className="hover:text-cream transition-colors">Features</a>
-          <a href="#pricing" className="hover:text-cream transition-colors">Pricing</a>
-          <a href="#faq" className="hover:text-cream transition-colors">FAQ</a>
-          <a href={LOGIN} className="hover:text-cream transition-colors">Sign in</a>
+        <div className="flex flex-wrap items-center justify-center gap-x-5">
+          {[...NAV_LINKS.filter(([h]) => h !== "#how"), [LOGIN, "Sign in"] as [string, string]].map(
+            ([href, label]) => (
+              <a
+                key={label}
+                href={href}
+                className="inline-flex items-center min-h-[44px] px-1 hover:text-cream transition-colors"
+              >
+                {label}
+              </a>
+            ),
+          )}
         </div>
         <div className="flex items-center gap-2 text-xs text-cream/45">
           <ShieldCheck className="w-4 h-4 text-brass" />
