@@ -2210,7 +2210,7 @@ export default function NewReservation() {
               // translucent-white instead of their light-surface tones.
               const sel = !!selected;
               const pill = (tone: string) =>
-                `inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full border text-[10px] font-semibold ${
+                `inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full border text-[10px] font-semibold shrink-0 ${
                   sel ? "bg-white/15 text-white border-white/25" : tone
                 }`;
               return (
@@ -2236,11 +2236,13 @@ export default function NewReservation() {
                     toggleRoom(r);
                   }}
                 >
-                  <div className="flex justify-between items-start gap-2">
-                    <div className="min-w-0">
-                      <div className="flex items-center gap-1.5 flex-wrap">
+                  {/* Row 1 — number, chips and type·floor on ONE line; the
+                      meta truncates before anything wraps. Row 2 below
+                      carries the price + selection controls. */}
+                  <div>
+                    <div className="flex items-center gap-1.5 min-w-0">
                         <div
-                          className={`font-mono text-lg font-semibold leading-none mr-0.5 ${
+                          className={`font-mono text-lg font-semibold leading-none mr-0.5 shrink-0 ${
                             sel ? "text-white" : "text-ink"
                           }`}
                         >
@@ -2286,22 +2288,20 @@ export default function NewReservation() {
                             <Users className="w-3 h-3" /> Sleeps {r.maxOccupancy}
                           </span>
                         )}
-                        {/* Type + floor ride the same line as the number and
-                            chips; flex-wrap drops them to the next row only
-                            when the tile genuinely runs out of width. */}
+                        {/* Type + floor complete the single header line; the
+                            meta truncates (never wraps) when width runs out. */}
                         <span
-                          className={`text-[12.5px] font-semibold capitalize whitespace-nowrap ${
+                          className={`text-[12.5px] font-semibold capitalize truncate min-w-0 ${
                             sel ? "text-white/80" : "text-textSecondary"
                           }`}
                         >
                           {r.roomType.replace(/_/g, " ")} · Floor {r.floor}
                         </span>
-                      </div>
                     </div>
-                    <div className="flex items-start gap-2 shrink-0">
-                      {sel && <CheckCircle2 className="w-5 h-5 text-white/90 mt-0.5" />}
+                    {/* Row 2 — price left, selection tick + collapse right. */}
+                    <div className="flex items-center justify-between gap-2 mt-2">
                       <div
-                        className={`text-[13px] font-mono font-semibold ${
+                        className={`text-[15px] font-mono font-semibold ${
                           sel ? "text-white" : "text-ink"
                         }`}
                       >
@@ -2312,29 +2312,32 @@ export default function NewReservation() {
                             in the picker grid. */}
                         {selected ? inr(selected.ratePerNight) : inr(r.baseRate)}
                       </div>
-                      {/* Collapse / expand the controls panel — behaves
-                          like a dropdown. Selection is unaffected; the
-                          room stays in the booking. Stop propagation so
-                          the click doesn't hit the card's select handler. */}
-                      {selected && (
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            toggleRoomCollapsed(r.id);
-                          }}
-                          className="inline-flex items-center justify-center rounded-[8px] border border-white/30 w-6 h-6 text-white hover:bg-white/15 transition-colors"
-                          title={collapsedRooms.has(r.id) ? "Expand" : "Collapse"}
-                          aria-label={collapsedRooms.has(r.id) ? "Expand room options" : "Collapse room options"}
-                          aria-expanded={!collapsedRooms.has(r.id)}
-                        >
-                          <ChevronDown
-                            className={`w-4 h-4 transition-transform ${
-                              collapsedRooms.has(r.id) ? "-rotate-90" : ""
-                            }`}
-                          />
-                        </button>
-                      )}
+                      <div className="flex items-center gap-2 shrink-0">
+                        {sel && <CheckCircle2 className="w-5 h-5 text-white/90" />}
+                        {/* Collapse / expand the controls panel — behaves
+                            like a dropdown. Selection is unaffected; the
+                            room stays in the booking. Stop propagation so
+                            the click doesn't hit the card's select handler. */}
+                        {selected && (
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              toggleRoomCollapsed(r.id);
+                            }}
+                            className="inline-flex items-center justify-center rounded-[8px] border border-white/30 w-6 h-6 text-white hover:bg-white/15 transition-colors"
+                            title={collapsedRooms.has(r.id) ? "Expand" : "Collapse"}
+                            aria-label={collapsedRooms.has(r.id) ? "Expand room options" : "Collapse room options"}
+                            aria-expanded={!collapsedRooms.has(r.id)}
+                          >
+                            <ChevronDown
+                              className={`w-4 h-4 transition-transform ${
+                                collapsedRooms.has(r.id) ? "-rotate-90" : ""
+                              }`}
+                            />
+                          </button>
+                        )}
+                      </div>
                     </div>
                   </div>
                   {/* Date conflict: card stays visible but disabled so
