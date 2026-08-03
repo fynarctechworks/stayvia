@@ -210,10 +210,10 @@ export default function BookingRequests() {
                   </button>
                 </div>
                 <button
-                  className="w-full inline-flex items-center justify-center gap-1 text-xs font-semibold text-brand-deep hover:text-brand transition-colors min-h-[32px]"
+                  className="btn-secondary w-full inline-flex items-center justify-center gap-1.5"
                   onClick={() => navigate(`/reservations/${r.reservationNumber}`)}
                 >
-                  View full details <ChevronRight className="w-3.5 h-3.5" />
+                  View reservation <ChevronRight className="w-4 h-4" />
                 </button>
               </div>
             );
