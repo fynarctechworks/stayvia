@@ -604,14 +604,13 @@ function commonStyles(L: DocLayout) {
     }
     .powered-by {
       position: absolute;
-      left: 32px; right: 32px; bottom: 26px;
+      right: 32px; bottom: 26px;
       display: flex;
       align-items: center;
-      justify-content: center;
-      gap: 6px;
-      color: #B0B4AA;
-      font-size: 8.5px;
-      letter-spacing: 0.06em;
+      gap: 5px;
+      color: #C0C4BA;
+      font-size: 8px;
+      letter-spacing: 0.05em;
     }
     .powered-by img { height: 10px; width: auto; opacity: 0.75; }
     .powered-by .pb-sep { opacity: 0.6; }
@@ -865,7 +864,7 @@ function renderInvoiceHtml(data: {
 <html><head><meta charset="utf-8"><style>${commonStyles(L)}</style></head>
 <body>
 
-${L.showLogo ? `<div class="watermark"><img src="${esc(docLogo(L))}" alt="" /></div>` : ""}
+${L.showLogo && L.logoUrl ? `<div class="watermark"><img src="${esc(L.logoUrl)}" alt="" /></div>` : ""}
 
 <div class="page">
   <div class="top-rule"></div>
@@ -1343,7 +1342,7 @@ function renderReceiptHtml(data: {
 </style></head>
 <body>
 
-${L.showLogo ? `<div class="watermark"><img src="${esc(docLogo(L))}" alt="" /></div>` : ""}
+${L.showLogo && L.logoUrl ? `<div class="watermark"><img src="${esc(L.logoUrl)}" alt="" /></div>` : ""}
 
 <div class="page slip">
   <div class="top-rule"></div>

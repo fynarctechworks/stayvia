@@ -352,7 +352,7 @@ export function EditReceiptModal({
           {/* Vendor credit closing every printed receipt. Muted so it
               reads as a footer mark, never competing with the hotel's
               own identity at the top. */}
-          <div className="receipt-section mt-4 pt-2 border-t border-divider flex items-center justify-center gap-1.5 text-[8.5px] tracking-wide text-inkFaint">
+          <div className="receipt-section mt-4 pt-2 flex items-center justify-end gap-1.5 text-[8px] tracking-wide text-inkFaint">
             <span>Powered by Stayvia</span>
             <span className="opacity-60">·</span>
             <img src="/fyn-arc-logo.png" alt="" className="h-[10px] w-auto opacity-75" />

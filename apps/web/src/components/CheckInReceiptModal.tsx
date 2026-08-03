@@ -216,18 +216,23 @@ export function CheckInReceiptModal({ data, onClose, variant = "checkin" }: Prop
               with chrome (header bar, scroll, action buttons); the faint
               logo behind text added more noise than identity. The printed
               PDF/page still gets the watermark via the print layer below. */}
-          <div
-            aria-hidden
-            className="absolute inset-0 pointer-events-none hidden print:flex items-center justify-center overflow-hidden"
-            style={{ zIndex: 0 }}
-          >
-            <img
-              src={data.hotel.logoUrl ?? "/logo.png"}
-              alt=""
-              style={{ width: "200px", height: "200px", opacity: 0.05 }}
-              className="object-contain"
-            />
-          </div>
+          {/* Watermark uses the hotel's OWN logo only - the Stayvia
+              fallback belongs in the header tile, not behind the guest's
+              bill. */}
+          {data.hotel.logoUrl && (
+            <div
+              aria-hidden
+              className="absolute inset-0 pointer-events-none hidden print:flex items-center justify-center overflow-hidden"
+              style={{ zIndex: 0 }}
+            >
+              <img
+                src={data.hotel.logoUrl}
+                alt=""
+                style={{ width: "200px", height: "200px", opacity: 0.05 }}
+                className="object-contain"
+              />
+            </div>
+          )}
           <div className="receipt-section relative z-10 flex items-start justify-between gap-3 pb-3 border-b-2 border-brand">
             <div className="flex items-start gap-2.5">
               {/* A property without its own logo falls back to the
@@ -609,7 +614,7 @@ export function CheckInReceiptModal({ data, onClose, variant = "checkin" }: Prop
           {/* Vendor credit closing every printed receipt. Muted so it
               reads as a footer mark, never competing with the hotel's
               own identity at the top. */}
-          <div className="receipt-section mt-4 pt-2 border-t border-divider flex items-center justify-center gap-1.5 text-[8.5px] tracking-wide text-inkFaint">
+          <div className="receipt-section mt-4 pt-2 flex items-center justify-end gap-1.5 text-[8px] tracking-wide text-inkFaint">
             <span>Powered by Stayvia</span>
             <span className="opacity-60">·</span>
             <img src="/fyn-arc-logo.png" alt="" className="h-[10px] w-auto opacity-75" />
