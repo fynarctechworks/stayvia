@@ -501,11 +501,13 @@ function TabBar({
   }
 
   // Ten icon pills wrap into a four-row block on a 390px phone, which
-  // pushes the report itself below the fold. Below md the strip becomes a
+  // pushes the report itself below the fold. Below lg the strip becomes a
   // single no-wrap row that scrolls sideways (bleeding into the shell's
-  // 16px gutter so it reads as swipeable); md+ keeps the wrapping layout.
+  // 16px gutter on phones so it reads as swipeable) — the tablet band
+  // (md, ~480px next to the expanded sidebar) would otherwise wrap into
+  // three rows; lg+ keeps the wrapping layout.
   return (
-    <div className="flex gap-2 items-center overflow-x-auto no-scrollbar -mx-4 px-4 pb-0.5 sm:mx-0 sm:px-0 md:flex-wrap md:overflow-x-visible">
+    <div className="flex gap-2 items-center overflow-x-auto no-scrollbar -mx-4 px-4 pb-0.5 sm:mx-0 sm:px-0 lg:flex-wrap lg:overflow-x-visible">
       {primary.map((t) => {
         const on = t.id === active;
         return (
@@ -513,7 +515,7 @@ function TabBar({
             key={t.id}
             onClick={() => onChange(t.id)}
             title={t.caption}
-            className={`inline-flex shrink-0 whitespace-nowrap items-center gap-1.5 px-3 h-11 md:h-[38px] text-[13px] font-semibold rounded-[9px] border transition-colors ${
+            className={`inline-flex shrink-0 whitespace-nowrap items-center gap-1.5 px-3 h-11 lg:h-[38px] text-[13px] font-semibold rounded-[9px] border transition-colors ${
               on
                 ? "bg-brand text-white border-brand"
                 : "bg-surface text-textSecondary border-borderControl hover:border-brand hover:text-brand"
@@ -537,7 +539,7 @@ function TabBar({
               : "Show more reports (Complimentary, etc.)"
           }
           aria-pressed={secondaryVisible}
-          className={`inline-flex shrink-0 whitespace-nowrap items-center gap-1.5 px-3 h-11 md:h-[38px] text-[13px] font-semibold rounded-[9px] border transition-colors ${
+          className={`inline-flex shrink-0 whitespace-nowrap items-center gap-1.5 px-3 h-11 lg:h-[38px] text-[13px] font-semibold rounded-[9px] border transition-colors ${
             secondaryVisible
               ? "bg-parchment text-inkDark border-borderControl"
               : "bg-surface text-textSecondary border-borderControl hover:border-brand hover:text-brand"
@@ -558,7 +560,7 @@ function TabBar({
               key={t.id}
               onClick={() => onChange(t.id)}
               title={t.caption}
-              className={`inline-flex shrink-0 whitespace-nowrap items-center gap-1.5 px-3 h-11 md:h-[38px] text-[13px] font-semibold rounded-[9px] border transition-colors ${
+              className={`inline-flex shrink-0 whitespace-nowrap items-center gap-1.5 px-3 h-11 lg:h-[38px] text-[13px] font-semibold rounded-[9px] border transition-colors ${
                 on
                   ? "bg-brand text-white border-brand"
                   : "bg-surface text-textSecondary border-borderControl hover:border-brand hover:text-brand"
@@ -765,7 +767,7 @@ function OccupancyTab({ from, to }: { from: string; to: string }) {
 
   return (
     <div className="space-y-4">
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-3 md:grid-cols-2 lg:grid-cols-3 gap-3">
         <Kpi
           label="Average occupancy"
           value={`${data.avgOccupancy}%`}
@@ -884,7 +886,7 @@ function RevenueTab({ from, to }: { from: string; to: string }) {
 
   return (
     <div className="space-y-4">
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-3 md:grid-cols-2 lg:grid-cols-3 gap-3">
         <Kpi
           label="Total revenue"
           value={inr(data.totalRevenue)}
@@ -903,7 +905,7 @@ function RevenueTab({ from, to }: { from: string; to: string }) {
         />
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <ChartCard title="Daily revenue" subtitle="Earnings per day in the selected range">
           <ResponsiveContainer>
             <BarChart data={dailyChart} margin={{ top: 4, right: 8, bottom: 0, left: 0 }}>
@@ -1182,7 +1184,7 @@ function InvoicesTab({ from, to }: { from: string; to: string }) {
 
   return (
     <div className="space-y-4">
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         <Kpi label="Invoices" value={total} Icon={Receipt} />
         <Kpi label="Gross billed" value={inr(sums.gross)} Icon={TrendingUp} />
         <Kpi
@@ -1606,7 +1608,7 @@ function GstTab({ from, to }: { from: string; to: string }) {
 
   return (
     <div className="space-y-4">
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-2 lg:grid-cols-4 gap-3">
         <Kpi label="Invoices" value={totals.count} Icon={Receipt} />
         <Kpi label="Subtotal" value={inr(totals.subtotal)} Icon={Wallet} />
         <Kpi
@@ -1808,7 +1810,7 @@ function OutstandingTab() {
 
   return (
     <div className="space-y-5">
-      <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+      <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
         <Kpi
           label="Total outstanding"
           value={inr(totalOutstanding)}
@@ -2488,7 +2490,7 @@ function RoomsTab({ from, to }: { from: string; to: string }) {
 
   return (
     <div className="space-y-4">
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-3 md:grid-cols-2 lg:grid-cols-3 gap-3">
         <Kpi label="Active rooms" value={data.length} Icon={BedDouble} />
         <Kpi label="Total bookings" value={totalBookings} Icon={CheckCircle2} />
         <Kpi
@@ -2664,7 +2666,7 @@ function CreditTab({ from, to }: { from: string; to: string }) {
 
   return (
     <div className="space-y-4">
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-2 lg:grid-cols-4 gap-3">
         <Kpi label="Total bookings" value={data.totals.count} Icon={Gift} />
         <Kpi
           label="Complimentary value"
@@ -2857,7 +2859,7 @@ function GuestsTab({ from, to }: { from: string; to: string }) {
 
   return (
     <div className="space-y-4">
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-3 md:grid-cols-2 lg:grid-cols-3 gap-3">
         <Kpi label="Guests" value={data.length} Icon={Users} />
         <Kpi
           label="Top guest"

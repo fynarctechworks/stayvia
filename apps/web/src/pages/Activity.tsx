@@ -174,7 +174,10 @@ export default function Activity() {
           </div>
         )}
 
-        <div className="flex items-end gap-2 border-l border-divider pl-3">
+        {/* Two 12h pickers side by side are ~500px — wider than the ~456px
+            card interior in the tablet band (md, next to the 240px sidebar),
+            so md wraps them onto two lines; lg+ restores the single row. */}
+        <div className="flex md:flex-wrap lg:flex-nowrap items-end gap-2 border-l border-divider pl-3">
           <div>
             <label className="block text-[10px] font-bold uppercase tracking-wide text-inkMuted mb-1">
               Time from

@@ -172,7 +172,7 @@ export default function Dashboard() {
           fetch. Dismissible; stays gone via localStorage. */}
       {data.occupancy.total === 0 && <GetStartedCard />}
 
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
         <KpiCard
           featured
           icon={<BedDouble className="w-4 h-4" />}
@@ -236,7 +236,7 @@ export default function Dashboard() {
             counters (no rupee values) and visible to everyone — they're
             the morning work queue for housekeeping and the front desk. */}
       {(data.revenue_kpis || data.operations_kpis) && (
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
           {data.revenue_kpis?.mtd_collected !== undefined && (
             <Can do="view_revenue">
               <KpiCard
@@ -391,7 +391,7 @@ export default function Dashboard() {
         );
       })()}
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <TodayPanel
           kind="arrivals"
           title="Today's arrivals"

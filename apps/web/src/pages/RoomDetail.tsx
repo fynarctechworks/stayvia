@@ -211,7 +211,7 @@ function RoomMaintenanceSection({
           <div>
             {/* Desktop column headers — the mobile cards below carry their
                 own labels, so the header row is md-and-up only. */}
-            <div className="hidden md:grid grid-cols-[minmax(180px,1fr)_130px_110px_120px_130px_100px] gap-3 px-3 py-2.5 text-[10px] font-bold uppercase tracking-[0.06em] text-inkMuted bg-surfaceAlt border-b border-borderc">
+            <div className="hidden lg:grid grid-cols-[minmax(180px,1fr)_130px_110px_120px_130px_100px] gap-3 px-3 py-2.5 text-[10px] font-bold uppercase tracking-[0.06em] text-inkMuted bg-surfaceAlt border-b border-borderc">
               <div>Title</div>
               <div>Category</div>
               <div>Severity</div>
@@ -227,7 +227,7 @@ function RoomMaintenanceSection({
                   onClick={() => navigate(`/maintenance/${r.id}`)}
                 >
                   {/* DESKTOP */}
-                  <div className="hidden md:grid grid-cols-[minmax(180px,1fr)_130px_110px_120px_130px_100px] gap-3 items-center px-3 py-3">
+                  <div className="hidden lg:grid grid-cols-[minmax(180px,1fr)_130px_110px_120px_130px_100px] gap-3 items-center px-3 py-3">
                     <div className="min-w-0">
                       <div className="font-semibold text-sm text-ink">{r.title}</div>
                       {r.reportedByName && (
@@ -267,7 +267,7 @@ function RoomMaintenanceSection({
                   </div>
 
                   {/* MOBILE */}
-                  <div className="md:hidden px-4 py-3 min-h-[44px]">
+                  <div className="lg:hidden px-4 py-3 min-h-[44px]">
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0 flex-1">
                         <div className="font-semibold text-sm text-ink">{r.title}</div>

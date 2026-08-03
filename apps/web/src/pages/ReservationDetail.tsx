@@ -1159,7 +1159,7 @@ export default function ReservationDetail() {
         <table className="table-base">
           {/* Column headers make no sense above the phone cards below —
               every row renders its own labels there. */}
-          <thead className="hidden md:table-header-group">
+          <thead className="hidden lg:table-header-group">
             <tr>
               <th>Room #</th>
               <th>Type</th>
@@ -1295,7 +1295,7 @@ export default function ReservationDetail() {
         <div className="card p-0">
           <div className="px-3 sm:px-5 py-3.5 border-b border-divider text-base font-semibold text-ink">Additional Charges</div>
           <table className="table-base">
-            <thead className="hidden md:table-header-group">
+            <thead className="hidden lg:table-header-group">
               <tr>
                 <th>Description</th>
                 <th className="tabular-nums">GST%</th>
@@ -1599,7 +1599,7 @@ export default function ReservationDetail() {
         <div className="card p-0">
           <div className="px-3 sm:px-5 py-3.5 border-b border-divider text-base font-semibold text-ink">Payment History</div>
           <table className="table-base">
-            <thead className="hidden md:table-header-group">
+            <thead className="hidden lg:table-header-group">
               <tr>
                 <th>Date</th>
                 <th>Method</th>
@@ -2420,7 +2420,7 @@ function SwapClosedLegRow(props: {
   return (
     <>
       {/* DESKTOP */}
-      <tr className="bg-surfaceAlt hidden md:table-row">
+      <tr className="bg-surfaceAlt hidden lg:table-row">
         <td className="font-mono">{body}</td>
         <td className="capitalize text-textSecondary">{props.fromRoom.displayType}</td>
         <td className="font-mono tabular-nums text-textSecondary">-</td>
@@ -2428,7 +2428,7 @@ function SwapClosedLegRow(props: {
         <td className="text-right">{closedPill}</td>
       </tr>
       {/* MOBILE */}
-      <tr className="bg-surfaceAlt md:hidden">
+      <tr className="bg-surfaceAlt lg:hidden">
         <td colSpan={5} className="!px-3 !py-3">
           {body}
           <div className="mt-2.5 flex items-center justify-between gap-3">
@@ -2510,7 +2510,7 @@ function ExtensionBreakdownRows(props: {
     return (
       <Fragment key={`${badge.text}-${from}-${to}`}>
         {/* DESKTOP */}
-        <tr className="bg-surfaceAlt hidden md:table-row">
+        <tr className="bg-surfaceAlt hidden lg:table-row">
           <td className="font-mono">
             <div className="mt-0.5 pl-3">{windowLine}</div>
           </td>
@@ -2520,7 +2520,7 @@ function ExtensionBreakdownRows(props: {
           <td></td>
         </tr>
         {/* MOBILE — same split, stacked under the room card it belongs to. */}
-        <tr className="bg-surfaceAlt md:hidden">
+        <tr className="bg-surfaceAlt lg:hidden">
           <td colSpan={5} className="!px-3 !py-2.5">
             {windowLine}
             <div className="mt-1.5 flex items-baseline justify-between gap-3 text-xs text-textSecondary">
@@ -2895,7 +2895,7 @@ function RoomRow(props: {
 
   // Row actions (housekeeping status, Swap, Check Out, invoiced pill), or
   // the read-only "closed" pill on a vacated swap leg. Also shared by both
-  // presentations; the tap targets grow to 44px below md.
+  // presentations; the tap targets grow to 44px below lg.
   const actions = (
     <>
         {isClosedSwapLeg ? (
@@ -2932,7 +2932,7 @@ function RoomRow(props: {
                     invalidateKeys={[["reservation"], ["dashboard"]]}
                     trigger={
                       <span
-                        className="inline-flex items-center h-11 md:h-7 px-3 md:px-2 text-xs font-medium rounded-sm border border-borderControl bg-surface hover:bg-surfaceAlt cursor-pointer capitalize"
+                        className="inline-flex items-center h-11 lg:h-7 px-3 lg:px-2 text-xs font-medium rounded-sm border border-borderControl bg-surface hover:bg-surfaceAlt cursor-pointer capitalize"
                         title="Change room status"
                       >
                         Status…
@@ -2942,7 +2942,7 @@ function RoomRow(props: {
                 )}
               {props.room.roomStatus === "checked_in" && !props.room.roomInvoiceId && can("manage_rooms_on_stay") && (
                 <button
-                  className="btn-secondary !h-11 md:!h-7 !px-3 md:!px-2 text-xs"
+                  className="btn-secondary !h-11 lg:!h-7 !px-3 lg:!px-2 text-xs"
                   onClick={() => setShowSwap(true)}
                   title={
                     props.isShortStay
@@ -2955,7 +2955,7 @@ function RoomRow(props: {
               )}
               {props.room.roomStatus === "checked_in" && can("check_out") && (
                 <button
-                  className="btn-secondary !h-11 md:!h-7 !px-3 md:!px-2 text-xs"
+                  className="btn-secondary !h-11 lg:!h-7 !px-3 lg:!px-2 text-xs"
                   onClick={() => setShowRoomCheckout(true)}
                   title="Check this guest out & collect payment"
                 >
@@ -2991,7 +2991,7 @@ function RoomRow(props: {
   return (
     <>
     {/* DESKTOP */}
-    <tr className="hidden md:table-row">
+    <tr className="hidden lg:table-row">
       <td className="font-mono">{identity}</td>
       <td className="capitalize">{displayType}</td>
       <td className="font-mono tabular-nums">
@@ -3004,7 +3004,7 @@ function RoomRow(props: {
     {/* MOBILE — same room, stacked as a card. Identity on top, the
         type / rate / subtotal meta right-aligned in font-mono, then the
         row actions as full tap targets. */}
-    <tr className="md:hidden">
+    <tr className="lg:hidden">
       <td colSpan={5} className="!px-3 !py-3">
         {identity}
         <div className="mt-2.5 flex items-end justify-between gap-3">
@@ -3051,7 +3051,7 @@ function RoomRow(props: {
         invoice). Hidden on closed swap legs and when none were added.
         Folded into the phone card above, so desktop-only here. */}
     {hasExtraBeds && (
-        <tr className="text-textSecondary hidden md:table-row">
+        <tr className="text-textSecondary hidden lg:table-row">
           <td className="pl-8 text-xs">
             <span className="inline-flex items-center gap-1.5">
               <span className="text-textSecondary/60">↳</span>
@@ -3781,7 +3781,7 @@ function ChargeRow(props: {
   // differs between the desktop row and the phone card.
   const descriptionCell = editing ? (
     <input
-      className="input !h-9 md:!h-8 !py-0"
+      className="input !h-9 lg:!h-8 !py-0"
       value={description}
       onChange={(e) => setDescription(e.target.value)}
     />
@@ -3790,7 +3790,7 @@ function ChargeRow(props: {
   );
   const amountCell = editing ? (
     <input
-      className="input !h-9 md:!h-8 !py-0 w-full md:w-24"
+      className="input !h-9 lg:!h-8 !py-0 w-full lg:w-24"
       type="number"
       min={0}
       step="0.01"
@@ -3828,7 +3828,7 @@ function ChargeRow(props: {
         <div className="inline-flex gap-1">
           {props.canEdit && (
             <button
-              className="btn-secondary !h-11 md:!h-7 !px-3 md:!px-2"
+              className="btn-secondary !h-11 lg:!h-7 !px-3 lg:!px-2"
               onClick={() => setEditing(true)}
               title="Edit"
               aria-label={`Edit charge ${props.charge.description}`}
@@ -3838,7 +3838,7 @@ function ChargeRow(props: {
           )}
           {props.canDelete && (
             <button
-              className="btn-secondary !h-11 md:!h-7 !px-3 md:!px-2 text-danger"
+              className="btn-secondary !h-11 lg:!h-7 !px-3 lg:!px-2 text-danger"
               onClick={async () => {
                 const ok = await dialog.confirm({
                   title: "Delete charge",
@@ -3859,7 +3859,7 @@ function ChargeRow(props: {
       {editing && (
         <div className="inline-flex gap-1">
           <button
-            className="btn-secondary !h-11 md:!h-7 !px-3 md:!px-2 text-xs"
+            className="btn-secondary !h-11 lg:!h-7 !px-3 lg:!px-2 text-xs"
             onClick={() => {
               setDescription(props.charge.description);
               setAmount(displayAmount);
@@ -3869,7 +3869,7 @@ function ChargeRow(props: {
             Cancel
           </button>
           <button
-            className="btn-primary !h-11 md:!h-7 !px-3 md:!px-2 text-xs"
+            className="btn-primary !h-11 lg:!h-7 !px-3 lg:!px-2 text-xs"
             disabled={save.isPending || amount <= 0 || !description.trim()}
             onClick={() => save.mutate()}
           >
@@ -3883,7 +3883,7 @@ function ChargeRow(props: {
   return (
     <>
       {/* DESKTOP */}
-      <tr className="hidden md:table-row">
+      <tr className="hidden lg:table-row">
         <td>{descriptionCell}</td>
         <td className="tabular-nums">{props.charge.gstRate}%</td>
         <td className="text-xs text-textSecondary">
@@ -3895,7 +3895,7 @@ function ChargeRow(props: {
 
       {/* MOBILE — description on top, GST + added-at in the muted meta
           line, amount right-aligned in font-mono, actions below. */}
-      <tr className="md:hidden">
+      <tr className="lg:hidden">
         <td colSpan={5} className="!px-3 !py-3">
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0 flex-1">
@@ -3950,7 +3950,7 @@ function PaymentRow(props: {
     return (
       <>
         {/* DESKTOP */}
-        <tr className="opacity-50 hidden md:table-row">
+        <tr className="opacity-50 hidden lg:table-row">
           <td className="line-through">{format(new Date(props.payment.paymentDate), "dd MMM yyyy HH:mm")}</td>
           <td className="capitalize line-through">{props.payment.paymentMethod.replace("_", " ")}</td>
           <td className="text-xs text-danger">VOIDED</td>
@@ -3958,7 +3958,7 @@ function PaymentRow(props: {
           <td></td>
         </tr>
         {/* MOBILE */}
-        <tr className="opacity-50 md:hidden">
+        <tr className="opacity-50 lg:hidden">
           <td colSpan={5} className="!px-3 !py-3">
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0 flex-1">
@@ -4016,7 +4016,7 @@ function PaymentRow(props: {
     <div className="inline-flex flex-wrap gap-1">
             {isPending && (
               <button
-                className="!h-11 md:!h-7 !px-3 md:!px-2 text-xs font-semibold rounded-sm bg-success text-white border border-success hover:opacity-90 inline-flex items-center gap-1"
+                className="!h-11 lg:!h-7 !px-3 lg:!px-2 text-xs font-semibold rounded-sm bg-success text-white border border-success hover:opacity-90 inline-flex items-center gap-1"
                 onClick={async () => {
                   const chosen = await dialog.prompt({
                     title: "Mark payment received",
@@ -4046,7 +4046,7 @@ function PaymentRow(props: {
                 accounting entries, not receipts. */}
             {props.payment.receiptNumber && (
               <button
-                className="btn-secondary !h-11 md:!h-7 !px-3 md:!px-2"
+                className="btn-secondary !h-11 lg:!h-7 !px-3 lg:!px-2"
                 onClick={props.onPrintReceipt}
                 title={`Preview receipt ${props.payment.receiptNumber ?? ""}`}
                 aria-label={`Preview receipt ${props.payment.receiptNumber ?? ""}`}
@@ -4065,7 +4065,7 @@ function PaymentRow(props: {
   return (
     <>
       {/* DESKTOP */}
-      <tr className="hidden md:table-row">
+      <tr className="hidden lg:table-row">
         <td>
           {/* Green check tile — received payments read as settled at a glance
               (Warm Concierge); pending rows get an amber clock instead. */}
@@ -4082,7 +4082,7 @@ function PaymentRow(props: {
 
       {/* MOBILE — status tile + method on top, date and notes as muted
           meta, amount right-aligned in font-mono, actions below. */}
-      <tr className="md:hidden">
+      <tr className="lg:hidden">
         <td colSpan={5} className="!px-3 !py-3">
           <div className="flex items-start justify-between gap-3">
             <div className="flex items-start gap-2.5 min-w-0 flex-1">

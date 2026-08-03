@@ -119,7 +119,7 @@ export default function StaffPage() {
       <div className="card !p-0 overflow-hidden">
         {/* Desktop column headers — the mobile cards label themselves, so
             this row only exists from md up. */}
-        <div className="hidden md:grid grid-cols-[minmax(140px,1fr)_minmax(160px,1.2fr)_100px_120px_110px_200px] gap-3 px-3 py-2.5 text-[10px] font-bold uppercase tracking-[0.06em] text-inkMuted bg-surfaceAlt border-b border-borderc">
+        <div className="hidden lg:grid grid-cols-[minmax(140px,1fr)_minmax(160px,1.2fr)_100px_120px_110px_200px] gap-3 px-3 py-2.5 text-[10px] font-bold uppercase tracking-[0.06em] text-inkMuted bg-surfaceAlt border-b border-borderc">
           <div>Name</div>
           <div>Email</div>
           <div>Role</div>
@@ -176,7 +176,7 @@ export default function StaffPage() {
                 className={`hover:bg-surfaceAlt transition-colors ${s.isActive ? "" : "opacity-60"}`}
               >
                 {/* DESKTOP */}
-                <div className="hidden md:grid grid-cols-[minmax(140px,1fr)_minmax(160px,1.2fr)_100px_120px_110px_200px] gap-3 items-center px-3 py-3 text-sm">
+                <div className="hidden lg:grid grid-cols-[minmax(140px,1fr)_minmax(160px,1.2fr)_100px_120px_110px_200px] gap-3 items-center px-3 py-3 text-sm">
                   <div className="flex items-center gap-2.5 min-w-0">
                     <span className="w-[34px] h-[34px] shrink-0 rounded-full bg-parchment text-inkBody grid place-items-center font-bold text-xs">
                       {initials(s.fullName)}
@@ -221,7 +221,7 @@ export default function StaffPage() {
                 </div>
 
                 {/* MOBILE */}
-                <div className="md:hidden px-4 py-3">
+                <div className="lg:hidden px-4 py-3">
                   <div className="flex items-start gap-2.5">
                     <span className="w-[38px] h-[38px] shrink-0 rounded-full bg-parchment text-inkBody grid place-items-center font-bold text-xs">
                       {initials(s.fullName)}

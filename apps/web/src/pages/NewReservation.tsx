@@ -1492,7 +1492,9 @@ export default function NewReservation() {
           </span>
           Stay details
         </h2>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        {/* Tablet band (md, 768-1023): sidebar leaves ~510px of content — four
+            date/time fields side by side clip, so stay 2-up until lg. */}
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
           <div>
             <label className="label block mb-1">
               Check-in <span className="text-dangerFg">*</span>
@@ -2196,7 +2198,9 @@ export default function NewReservation() {
                         {byFloor.get(floor)!.length === 1 ? "" : "s"}
                       </span>
                     </div>
-                    <div className="grid grid-cols-2 md:grid-cols-3 gap-3 auto-rows-min items-start">
+                    {/* Room tiles stay 2-up through the tablet band (~510px
+                        content beside the sidebar); 3-up only from lg. */}
+                    <div className="grid grid-cols-2 lg:grid-cols-3 gap-3 auto-rows-min items-start">
                       {byFloor.get(floor)!.map((r) => {
               const selected = selectedRooms.find((s) => s.roomId === r.id);
               const conflicted = !!r.conflict;

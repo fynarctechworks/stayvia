@@ -174,7 +174,7 @@ export default function Expenses() {
 
       {/* KPI strip — sums across the FULL filtered set (server-side),
           not just the current page. */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         <div className="card !rounded-[14px]">
           <div className="label">Total</div>
           <Money
@@ -342,7 +342,7 @@ export default function Expenses() {
         </div>
       ) : (
         <div className="card !p-0 overflow-hidden">
-          <div className="hidden md:grid grid-cols-[110px_140px_minmax(180px,1fr)_140px_120px_120px] gap-3 px-3 py-2.5 text-[10px] font-bold uppercase tracking-[0.06em] text-inkMuted bg-surfaceAlt border-b border-divider">
+          <div className="hidden lg:grid grid-cols-[110px_140px_minmax(180px,1fr)_140px_120px_120px] gap-3 px-3 py-2.5 text-[10px] font-bold uppercase tracking-[0.06em] text-inkMuted bg-surfaceAlt border-b border-divider">
             <div>Date</div>
             <div>Category</div>
             <div>Description</div>
@@ -444,7 +444,7 @@ function ExpenseRowItem({ r }: { r: ExpenseRow }) {
       className="group hover:bg-surfaceAlt focus:bg-surfaceAlt focus:outline-none cursor-pointer transition-colors"
     >
       {/* DESKTOP */}
-      <div className="hidden md:grid grid-cols-[110px_140px_minmax(180px,1fr)_140px_120px_120px] gap-3 items-center px-3 py-2.5">
+      <div className="hidden lg:grid grid-cols-[110px_140px_minmax(180px,1fr)_140px_120px_120px] gap-3 items-center px-3 py-2.5">
         <div className="text-xs">
           <div className="text-ink font-medium">
             {format(new Date(r.expenseDate), "dd MMM yyyy")}
@@ -510,7 +510,7 @@ function ExpenseRowItem({ r }: { r: ExpenseRow }) {
       </div>
 
       {/* MOBILE */}
-      <div className="md:hidden px-3 py-3">
+      <div className="lg:hidden px-3 py-3">
         <div className="flex items-start justify-between gap-2">
           <div className="min-w-0 flex-1">
             <div className="text-[11px] text-inkMuted flex items-center gap-1.5">

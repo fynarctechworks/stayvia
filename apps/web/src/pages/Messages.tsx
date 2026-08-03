@@ -163,13 +163,15 @@ export default function Messages() {
   }
 
   return (
-    // Phone: ONE pane at a time — list, or the open chat (driven by the
-    // ?with= param). md+: the classic two-column split.
-    <div className="w-full grid grid-cols-1 md:grid-cols-[21rem_1fr] h-[calc(100vh-9.5rem)] md:h-[calc(100vh-6.5rem)] rounded-2xl overflow-hidden border border-borderc shadow-card">
+    // Phone + tablet band: ONE pane at a time — list, or the open chat
+    // (driven by the ?with= param). The 21rem+1fr split needs ~700px of
+    // content (240px sidebar eats into the md band), so the classic
+    // two-column layout starts at lg.
+    <div className="w-full grid grid-cols-1 lg:grid-cols-[21rem_1fr] h-[calc(100vh-9.5rem)] md:h-[calc(100vh-6.5rem)] rounded-2xl overflow-hidden border border-borderc shadow-card">
       {/* ============ LEFT: conversation list ============ */}
       <aside
         className={`bg-white border-r border-borderc flex-col min-w-0 ${
-          activeId ? "hidden md:flex" : "flex"
+          activeId ? "hidden lg:flex" : "flex"
         }`}
       >
         <div className={`px-4 py-3 ${WA.bar} flex items-center gap-2 shrink-0`}>
@@ -272,7 +274,7 @@ export default function Messages() {
       {/* ============ RIGHT: chat ============ */}
       <section
         className={`flex-col min-w-0 overflow-hidden ${
-          activeId ? "flex" : "hidden md:flex"
+          activeId ? "flex" : "hidden lg:flex"
         }`}
       >
         {!activeId && (
@@ -291,10 +293,10 @@ export default function Messages() {
         {activeId && (
           <>
             <div className={`px-4 py-2.5 ${WA.bar} flex items-center gap-3 shrink-0 border-b border-divider`}>
-              {/* Back to the conversation list (phone only). */}
+              {/* Back to the conversation list (single-pane mode: phone + tablet band). */}
               <button
                 onClick={() => setParams({})}
-                className="md:hidden -ml-1 p-1 rounded text-[#54656f] hover:bg-black/5"
+                className="lg:hidden -ml-1 p-1 rounded text-[#54656f] hover:bg-black/5"
                 aria-label="Back to chats"
               >
                 <ArrowLeft className="w-5 h-5" />

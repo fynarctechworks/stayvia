@@ -34,6 +34,17 @@ export default defineConfig({
     // both projects; assertions already use .filter({ visible: true }) so
     // desktop/mobile duplicates resolve.
     { name: "mobile", use: { ...devices["Pixel 7"] } },
+    // Tablet viewport (834x1194 portrait, touch) — the 768-1023px band where
+    // the 240px sidebar coexists with content. Chromium with an overridden
+    // viewport so no extra browser install.
+    {
+      name: "tablet",
+      use: {
+        ...devices["Desktop Chrome"],
+        viewport: { width: 834, height: 1194 },
+        hasTouch: true,
+      },
+    },
   ],
   webServer: {
     command: `npm run dev --workspace @stayvia/web -- --port ${E2E_WEB_PORT} --strictPort`,

@@ -244,7 +244,7 @@ export default function Collections() {
       </div>
       </StickyBar>
 
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         <div className="card !rounded-[14px]">
           <div className="label">Total to collect</div>
           <Money
@@ -317,7 +317,7 @@ export default function Collections() {
                 count={filteredByGuest.length}
               />
               <div className="card !p-0 overflow-hidden">
-                <div className="hidden md:grid grid-cols-[minmax(180px,1fr)_150px_210px_140px] gap-3 px-3 py-2.5 text-[10px] font-bold uppercase tracking-[0.06em] text-inkMuted bg-surfaceAlt border-b border-divider">
+                <div className="hidden lg:grid grid-cols-[minmax(180px,1fr)_150px_210px_140px] gap-3 px-3 py-2.5 text-[10px] font-bold uppercase tracking-[0.06em] text-inkMuted bg-surfaceAlt border-b border-divider">
                   <div>Guest</div>
                   <div>Phone</div>
                   <div>Oldest debt</div>
@@ -343,7 +343,7 @@ export default function Collections() {
                         onClick={() => navigate(`/guests/${g.guestPhone}`)}
                       >
                         {/* DESKTOP */}
-                        <div className="hidden md:grid grid-cols-[minmax(180px,1fr)_150px_210px_140px] gap-3 items-center px-3 py-2.5">
+                        <div className="hidden lg:grid grid-cols-[minmax(180px,1fr)_150px_210px_140px] gap-3 items-center px-3 py-2.5">
                           <div className="min-w-0 text-ink font-semibold truncate">
                             {g.guestName}
                           </div>
@@ -360,7 +360,7 @@ export default function Collections() {
                         </div>
 
                         {/* MOBILE */}
-                        <div className="md:hidden flex items-start justify-between gap-2 px-3 py-3">
+                        <div className="lg:hidden flex items-start justify-between gap-2 px-3 py-3">
                           <div className="min-w-0 flex-1">
                             <div className="text-sm text-ink font-semibold truncate">
                               {g.guestName}
@@ -400,7 +400,7 @@ export default function Collections() {
                 count={filteredPreInvoice.length}
               />
               <div className="card !p-0 overflow-hidden">
-                <div className="hidden md:grid grid-cols-[130px_minmax(160px,1fr)_170px_110px_110px_120px_120px] gap-3 px-3 py-2.5 text-[10px] font-bold uppercase tracking-[0.06em] text-inkMuted bg-surfaceAlt border-b border-divider">
+                <div className="hidden lg:grid grid-cols-[130px_minmax(160px,1fr)_170px_110px_110px_120px_120px] gap-3 px-3 py-2.5 text-[10px] font-bold uppercase tracking-[0.06em] text-inkMuted bg-surfaceAlt border-b border-divider">
                   <div>Reservation</div>
                   <div>Guest</div>
                   <div>Stay</div>
@@ -421,7 +421,7 @@ export default function Collections() {
                       }
                     >
                       {/* DESKTOP */}
-                      <div className="hidden md:grid grid-cols-[130px_minmax(160px,1fr)_170px_110px_110px_120px_120px] gap-3 items-center px-3 py-2.5">
+                      <div className="hidden lg:grid grid-cols-[130px_minmax(160px,1fr)_170px_110px_110px_120px_120px] gap-3 items-center px-3 py-2.5">
                         <div className="font-mono text-xs font-semibold text-brand-deep hover:underline truncate">
                           {r.reservationNumber}
                         </div>
@@ -455,7 +455,7 @@ export default function Collections() {
                       </div>
 
                       {/* MOBILE */}
-                      <div className="md:hidden px-3 py-3">
+                      <div className="lg:hidden px-3 py-3">
                         <div className="flex items-start justify-between gap-2">
                           <div className="min-w-0 flex-1">
                             <div className="font-mono text-xs font-semibold text-brand-deep truncate">
@@ -507,7 +507,7 @@ export default function Collections() {
                 count={filteredInvoices.length}
               />
               <div className="card !p-0 overflow-hidden">
-                <div className="hidden md:grid grid-cols-[140px_130px_minmax(160px,1fr)_140px_110px_120px_120px] gap-3 px-3 py-2.5 text-[10px] font-bold uppercase tracking-[0.06em] text-inkMuted bg-surfaceAlt border-b border-divider">
+                <div className="hidden lg:grid grid-cols-[140px_130px_minmax(160px,1fr)_140px_110px_120px_120px] gap-3 px-3 py-2.5 text-[10px] font-bold uppercase tracking-[0.06em] text-inkMuted bg-surfaceAlt border-b border-divider">
                   <div>Invoice</div>
                   <div>Reservation</div>
                   <div>Guest</div>
@@ -528,7 +528,7 @@ export default function Collections() {
                       }
                     >
                       {/* DESKTOP */}
-                      <div className="hidden md:grid grid-cols-[140px_130px_minmax(160px,1fr)_140px_110px_120px_120px] gap-3 items-center px-3 py-2.5">
+                      <div className="hidden lg:grid grid-cols-[140px_130px_minmax(160px,1fr)_140px_110px_120px_120px] gap-3 items-center px-3 py-2.5">
                         <div className="font-mono text-xs font-semibold text-brand-deep truncate">
                           {r.invoiceNumber}
                         </div>
@@ -561,7 +561,7 @@ export default function Collections() {
                       </div>
 
                       {/* MOBILE */}
-                      <div className="md:hidden px-3 py-3">
+                      <div className="lg:hidden px-3 py-3">
                         <div className="flex items-start justify-between gap-2">
                           <div className="min-w-0 flex-1">
                             <div className="font-mono text-xs font-semibold text-brand-deep truncate">
@@ -613,7 +613,7 @@ export default function Collections() {
                 count={filteredPending.length}
               />
               <div className="card !p-0 overflow-hidden">
-                <div className="hidden md:grid grid-cols-[120px_minmax(150px,1fr)_minmax(140px,1fr)_160px_110px_150px] gap-3 px-3 py-2.5 text-[10px] font-bold uppercase tracking-[0.06em] text-inkMuted bg-surfaceAlt border-b border-divider">
+                <div className="hidden lg:grid grid-cols-[120px_minmax(150px,1fr)_minmax(140px,1fr)_160px_110px_150px] gap-3 px-3 py-2.5 text-[10px] font-bold uppercase tracking-[0.06em] text-inkMuted bg-surfaceAlt border-b border-divider">
                   <div>Reservation</div>
                   <div>Guest</div>
                   <div>Reason</div>
@@ -625,7 +625,7 @@ export default function Collections() {
                   {filteredPending.map((p) => (
                     <li key={p.paymentId}>
                       {/* DESKTOP */}
-                      <div className="hidden md:grid grid-cols-[120px_minmax(150px,1fr)_minmax(140px,1fr)_160px_110px_150px] gap-3 items-center px-3 py-2.5">
+                      <div className="hidden lg:grid grid-cols-[120px_minmax(150px,1fr)_minmax(140px,1fr)_160px_110px_150px] gap-3 items-center px-3 py-2.5">
                         <div className="min-w-0">
                           <button
                             className="font-mono text-xs font-semibold text-brand-deep hover:underline truncate block"
@@ -667,7 +667,7 @@ export default function Collections() {
                       </div>
 
                       {/* MOBILE */}
-                      <div className="md:hidden px-3 py-3">
+                      <div className="lg:hidden px-3 py-3">
                         <div className="flex items-start justify-between gap-2">
                           <div className="min-w-0 flex-1">
                             <button

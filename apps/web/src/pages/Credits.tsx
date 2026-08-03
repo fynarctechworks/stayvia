@@ -145,7 +145,7 @@ export default function Credits() {
           </div>
         ) : (
           <>
-            <div className="hidden md:grid grid-cols-[minmax(180px,1fr)_150px_140px_180px_170px] gap-3 px-3 py-2.5 text-[10px] font-bold uppercase tracking-[0.06em] text-inkMuted bg-surfaceAlt border-b border-divider">
+            <div className="hidden lg:grid grid-cols-[minmax(180px,1fr)_150px_140px_180px_170px] gap-3 px-3 py-2.5 text-[10px] font-bold uppercase tracking-[0.06em] text-inkMuted bg-surfaceAlt border-b border-divider">
               <div>Guest</div>
               <div>Phone</div>
               <div className="text-right">Balance</div>
@@ -165,7 +165,7 @@ export default function Credits() {
                     onClick={() => navigate(`/guests/${g.phone}`)}
                   >
                     {/* DESKTOP */}
-                    <div className="hidden md:grid grid-cols-[minmax(180px,1fr)_150px_140px_180px_170px] gap-3 items-center px-3 py-2.5">
+                    <div className="hidden lg:grid grid-cols-[minmax(180px,1fr)_150px_140px_180px_170px] gap-3 items-center px-3 py-2.5">
                       <div className="min-w-0">
                         <div className="font-semibold text-ink truncate">{g.fullName}</div>
                         {g.email && (
@@ -202,7 +202,7 @@ export default function Credits() {
                     </div>
 
                     {/* MOBILE */}
-                    <div className="md:hidden px-3 py-3">
+                    <div className="lg:hidden px-3 py-3">
                       <div className="flex items-start justify-between gap-2">
                         <div className="min-w-0 flex-1">
                           <div className="text-sm font-semibold text-ink truncate">

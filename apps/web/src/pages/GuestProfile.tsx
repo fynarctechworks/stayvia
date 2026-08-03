@@ -586,7 +586,9 @@ function StatsRow({ stats }: { stats: GuestStats }) {
       : "No bookings yet";
 
   return (
-    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+    // Tablet band (md, 768-1023): the 240px sidebar leaves ~510px of content,
+    // where four-up stat cards crush — drop to 2×2 there, back to 4-up at lg.
+    <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-2 lg:grid-cols-4 gap-3">
       <Stat label="Total stays" value={String(stats.totalStays)} sub={totalSub} />
       <Stat label="Last stay" value={lastValue} sub={lastSub} />
       <Stat label="Total paid" value={inr(stats.totalSpent)} sub="across all invoices" mono />
@@ -1388,7 +1390,7 @@ function StayCard({ r, onOpen }: { r: GuestReservation; onOpen: () => void }) {
         <ExternalLink className="w-4 h-4 text-inkFaint shrink-0 mt-0.5" />
       </div>
 
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-sm">
+      <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-2 lg:grid-cols-4 gap-3 text-sm">
         <div>
           <div className="label">Check-in</div>
           <div className="font-medium text-ink mt-0.5">

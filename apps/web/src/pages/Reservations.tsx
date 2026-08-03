@@ -312,7 +312,7 @@ export default function Reservations() {
           {/* Column header (desktop only). Keeps the row layout legible
               at scale without the per-row "Check-in / Check-out / Nights"
               labels that bloated the old grid. */}
-          <div className="hidden md:grid grid-cols-[40px_minmax(180px,1fr)_140px_140px_60px_minmax(120px,1fr)_120px_120px_28px] gap-3 px-4 py-3 text-[10.5px] font-bold uppercase tracking-[.07em] text-inkMuted bg-surfaceAlt border-b border-divider">
+          <div className="hidden lg:grid grid-cols-[40px_minmax(180px,1fr)_140px_140px_60px_minmax(120px,1fr)_120px_120px_28px] gap-3 px-4 py-3 text-[10.5px] font-bold uppercase tracking-[.07em] text-inkMuted bg-surfaceAlt border-b border-divider">
             <div />
             <div>Guest</div>
             <div>Check-in</div>
@@ -416,7 +416,7 @@ function ReservationRow({
       className="group cursor-pointer transition-colors hover:bg-surfaceAlt focus:outline-none focus:bg-surfaceAlt"
     >
       {/* DESKTOP — 8-column grid that mirrors the header. Compact, scannable. */}
-      <div className="hidden md:grid grid-cols-[40px_minmax(180px,1fr)_140px_140px_60px_minmax(120px,1fr)_120px_120px_28px] gap-3 items-center px-3 py-2.5">
+      <div className="hidden lg:grid grid-cols-[40px_minmax(180px,1fr)_140px_140px_60px_minmax(120px,1fr)_120px_120px_28px] gap-3 items-center px-3 py-2.5">
         {/* Avatar */}
         {r.guestPhotoUrl ? (
           <img
@@ -512,7 +512,7 @@ function ReservationRow({
       </div>
 
       {/* MOBILE — stacked card. Same data, two-line layout for phones. */}
-      <div className="md:hidden px-3 py-3 flex items-start gap-2">
+      <div className="lg:hidden px-3 py-3 flex items-start gap-2">
         {r.guestPhotoUrl ? (
           <img
             src={r.guestPhotoUrl}

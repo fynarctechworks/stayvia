@@ -1188,7 +1188,10 @@ function HotelTab() {
         <input className="input" value={form.hotelAddress ?? ""} onChange={(e) => set("hotelAddress", e.target.value)} />
       </Field>
 
-      <div className="grid grid-cols-1 sm:grid-cols-[1fr_1fr_auto_auto] gap-3 items-end">
+      {/* md band (sidebar visible, ~480-735px of content): the 4-track row
+          with two nowrap buttons overflows, so it wraps to 2-up there and
+          restores the single row at lg. */}
+      <div className="grid grid-cols-1 sm:grid-cols-[1fr_1fr_auto_auto] md:grid-cols-2 lg:grid-cols-[1fr_1fr_auto_auto] gap-3 items-end">
         <Field label="Latitude">
           <input
             className="input font-mono"

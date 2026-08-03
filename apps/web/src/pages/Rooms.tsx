@@ -309,7 +309,7 @@ export default function Rooms() {
         <div className="card !p-0 overflow-hidden">
           {/* Desktop column headers — pointless above the mobile cards, so
               they only exist from md up. */}
-          <div className="hidden md:grid grid-cols-[90px_minmax(160px,1fr)_90px_130px_150px_190px] gap-3 px-3 py-2.5 text-[10px] font-bold uppercase tracking-[0.06em] text-inkMuted bg-surfaceAlt border-b border-borderc">
+          <div className="hidden lg:grid grid-cols-[90px_minmax(160px,1fr)_90px_130px_150px_190px] gap-3 px-3 py-2.5 text-[10px] font-bold uppercase tracking-[0.06em] text-inkMuted bg-surfaceAlt border-b border-borderc">
             <div>Room</div>
             <div>Type</div>
             <div>Floor</div>
@@ -328,7 +328,7 @@ export default function Rooms() {
                 <li key={r.id} className="hover:bg-surfaceAlt transition-colors">
                   {/* DESKTOP */}
                   <div
-                    className="hidden md:grid grid-cols-[90px_minmax(160px,1fr)_90px_130px_150px_190px] gap-3 items-center px-3 py-3 cursor-pointer"
+                    className="hidden lg:grid grid-cols-[90px_minmax(160px,1fr)_90px_130px_150px_190px] gap-3 items-center px-3 py-3 cursor-pointer"
                     onClick={() => navigate(`/rooms/${r.roomNumber}`)}
                   >
                     <div className="font-mono text-base font-semibold text-ink">
@@ -378,7 +378,7 @@ export default function Rooms() {
                   </div>
 
                   {/* MOBILE */}
-                  <div className="md:hidden px-3 py-3">
+                  <div className="lg:hidden px-3 py-3">
                     <button
                       onClick={() => navigate(`/rooms/${r.roomNumber}`)}
                       className="w-full min-h-[44px] flex items-start justify-between gap-3 text-left"
