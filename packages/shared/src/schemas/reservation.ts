@@ -114,6 +114,9 @@ export const reservationCreateSchema = z
 
 export const reservationListQuerySchema = z.object({
   status: z.enum(RESERVATION_STATUSES).optional(),
+  // Filter by how the booking was made (e.g. source=qr for the Booking
+  // Requests history).
+  source: z.enum(BOOKING_SOURCES).optional(),
   date: z.string().optional(),
   q: z.string().trim().min(1).max(100).optional(),
   date_from: z.string().date().optional(),

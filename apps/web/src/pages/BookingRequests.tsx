@@ -28,6 +28,8 @@ interface HoldRow {
   grandTotal: string;
   holdExpiresAt: string | null;
   createdAt: string;
+  status: string;
+  cancellationReason?: string | null;
 }
 
 // Re-render every 30s so the countdown chips stay honest without a fetch.
@@ -59,6 +61,15 @@ export default function BookingRequests() {
     queryFn: () => getList<HoldRow>("/reservations", { status: "hold", per_page: 50 }),
     refetchInterval: 10_000,
   });
+
+  // Past QR bookings - everything that came through the QR that is no
+  // longer a live hold. Same 30s-ish freshness as the pending list.
+  const historyQ = useQuery({
+    queryKey: ["reservations", { source: "qr" }, "history"],
+    queryFn: () => getList<HoldRow>("/reservations", { source: "qr", per_page: 20 }),
+    refetchInterval: 30_000,
+  });
+  const history = (historyQ.data?.data ?? []).filter((r) => r.status !== "hold");
 
   // The server sweep cancels expired holds on its own cadence; hide anything
   // already past its expiry so the desk never acts on a dead request.
@@ -234,6 +245,46 @@ export default function BookingRequests() {
             );
           })}
         </div>
+      )}
+
+      {/* History - every QR booking that already left the queue. */}
+      {history.length > 0 && (
+        <section className="space-y-2.5">
+          <h2 className="text-[11px] font-bold uppercase tracking-[0.1em] text-inkMuted px-1 pt-2">
+            History
+            <span className="font-normal normal-case tracking-normal text-textSecondary">
+              {" "}
+              · last {history.length} QR booking{history.length === 1 ? "" : "s"}
+            </span>
+          </h2>
+          <div className="card !p-0 overflow-hidden">
+            <ul className="divide-y divide-divider">
+              {history.map((r) => (
+                <li key={r.id}>
+                  <button
+                    className="w-full flex items-center justify-between gap-3 px-4 py-3 text-left hover:bg-surfaceAlt transition-colors min-h-[44px]"
+                    onClick={() => navigate(`/reservations/${r.reservationNumber}`)}
+                  >
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2">
+                        <span className="font-mono text-sm font-semibold">{r.reservationNumber}</span>
+                        <HistoryPill status={r.status} reason={r.cancellationReason} />
+                      </div>
+                      <div className="text-xs text-textSecondary truncate mt-0.5">
+                        {r.guestName} · Room{r.roomNumbers.includes(",") ? "s" : ""} {r.roomNumbers} ·{" "}
+                        <span className="font-mono">{r.checkInDate}</span>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <span className="font-mono text-sm font-semibold">{inr(r.grandTotal)}</span>
+                      <ChevronRight className="w-4 h-4 text-inkFaint" />
+                    </div>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </div>
+        </section>
       )}
 
       {review && (
@@ -562,5 +613,31 @@ function RequestReviewOverlay({
         </div>
       )}
     </div>
+  );
+}
+
+// Outcome pill for the history list. A cancelled QR booking is either a
+// desk decline or a sweep expiry - the stored cancellation reason tells
+// which.
+function HistoryPill({ status, reason }: { status: string; reason?: string | null }) {
+  const map: Record<string, { label: string; cls: string }> = {
+    confirmed: { label: "Confirmed", cls: "bg-infoBg text-info border-infoBorder" },
+    checked_in: { label: "Checked in", cls: "bg-successBg text-success border-successBorder" },
+    checked_out: { label: "Completed", cls: "bg-neutralBg text-inkMuted border-neutralBorder" },
+    no_show: { label: "No-show", cls: "bg-dangerBg text-dangerFg border-dangerBorder" },
+  };
+  let m = map[status];
+  if (!m && status === "cancelled") {
+    m = reason?.startsWith("QR booking expired")
+      ? { label: "Expired", cls: "bg-neutralBg text-inkMuted border-neutralBorder" }
+      : { label: "Declined", cls: "bg-dangerBg text-dangerFg border-dangerBorder" };
+  }
+  if (!m) m = { label: status, cls: "bg-neutralBg text-inkMuted border-neutralBorder" };
+  return (
+    <span
+      className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-bold ${m.cls}`}
+    >
+      {m.label}
+    </span>
   );
 }

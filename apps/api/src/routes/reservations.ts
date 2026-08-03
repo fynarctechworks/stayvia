@@ -147,6 +147,7 @@ router.get(
   async (req, res) => {
     const {
       status,
+      source,
       date,
       q,
       date_from,
@@ -158,6 +159,7 @@ router.get(
       per_page,
     } = req.query as unknown as {
       status?: string;
+      source?: string;
       date?: string;
       q?: string;
       date_from?: string;
@@ -172,6 +174,7 @@ router.get(
     // Phase 2 tenancy: every list row belongs to the caller's property.
     conditions.push(eq(reservations.propertyId, req.propertyId));
     if (status) conditions.push(eq(reservations.status, status as never));
+    if (source) conditions.push(eq(reservations.bookingSource, source as never));
     if (date) {
       conditions.push(lte(reservations.checkInDate, date));
       conditions.push(gte(reservations.checkOutDate, date));
