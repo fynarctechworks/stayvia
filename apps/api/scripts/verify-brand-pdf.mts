@@ -7,6 +7,7 @@
 //   3. both marks (Stayvia fallback + FYN ARC credit) are embedded.
 //
 // Run: npx tsx apps/api/scripts/verify-brand-pdf.mts
+import { writeFileSync } from "node:fs";
 import { eq } from "drizzle-orm";
 import { db } from "../src/db/client.js";
 import { invoiceLineItems, invoices } from "../src/db/schema/invoices.js";
@@ -55,6 +56,14 @@ async function render(label: string, settingsRow: typeof s) {
 }
 
 const withLogo = await render("with hotel logo   ", s);
+// Multi-page check: repeat the line items until the invoice spills over
+// several sheets, then confirm the credit repeats too.
+const many = Array.from({ length: 60 }, (_, i) => ({ ...items[0]!, id: `${items[0]!.id}-${i}` }));
+const bigPdf = await renderInvoicePdf({ invoice: inv, lineItems: many, payments: [], settings: s });
+const bigRaw = bigPdf.toString("latin1");
+const pageCount = (bigRaw.match(/\/Type\s*\/Page[^s]/g) ?? []).length;
+writeFileSync(`${process.env.TEMP ?? "/tmp"}/brand-multipage.pdf`, bigPdf);
+console.log(`multi-page render: ${pageCount} pages, ${bigPdf.length} bytes`);
 // The real fallback path: a property that never uploaded a mark.
 const noLogo = await render("no logo (fallback)", { ...s, hotelLogoUrl: null });
 process.exit(withLogo && noLogo ? 0 : 1);

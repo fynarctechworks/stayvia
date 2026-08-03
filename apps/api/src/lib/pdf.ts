@@ -602,9 +602,12 @@ function commonStyles(L: DocLayout) {
       letter-spacing: 0.2em;
       text-transform: uppercase;
     }
+    /* position:fixed repeats on EVERY printed page in Chromium's paged
+       media, unlike absolute which paints once wherever it lands. A
+       multi-page invoice therefore carries the credit on each sheet. */
     .powered-by {
-      position: absolute;
-      right: 32px; bottom: 26px;
+      position: fixed;
+      right: 32px; bottom: 14px;
       display: flex;
       align-items: center;
       gap: 5px;
