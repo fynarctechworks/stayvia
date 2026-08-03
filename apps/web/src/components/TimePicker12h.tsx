@@ -74,7 +74,9 @@ export function TimePicker12h({
     else if (!nh && !nm && !nap) onChange(""); // fully cleared
   }
 
-  const sel = "input !w-auto min-w-[4.5rem]";
+  // flex-1 + min-w-0 lets the three selects share whatever width the row
+  // has instead of forcing 3x72px and overflowing narrow phone columns.
+  const sel = "input flex-1 !w-auto min-w-0 basis-[4.5rem]";
 
   return (
     <div className={`flex items-center gap-1.5 ${className}`}>

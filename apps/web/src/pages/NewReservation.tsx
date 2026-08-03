@@ -1492,9 +1492,11 @@ export default function NewReservation() {
           </span>
           Stay details
         </h2>
-        {/* Tablet band (md, 768-1023): sidebar leaves ~510px of content — four
-            date/time fields side by side clip, so stay 2-up until lg. */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        {/* Phones (<640): one field per row — the 12h time picker's three
+            selects can't fit a half-column at 360px. Tablet band (md,
+            768-1023): sidebar leaves ~510px of content — four date/time
+            fields side by side clip, so stay 2-up until lg. */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
           <div>
             <label className="label block mb-1">
               Check-in <span className="text-dangerFg">*</span>
