@@ -58,7 +58,7 @@ function Nav() {
           </a>
           <a
             href={SIGNUP}
-            className="inline-flex items-center gap-1.5 h-9 px-4 rounded-sm bg-brand text-ink text-sm font-semibold hover:bg-brand-deep transition-colors"
+            className="inline-flex items-center gap-1.5 h-9 px-4 rounded-sm bg-brand text-white text-sm font-semibold hover:bg-brand-deep transition-colors"
           >
             Start free trial
           </a>
@@ -96,7 +96,7 @@ function Hero() {
           <div className="mt-8 flex flex-wrap items-center gap-4">
             <a
               href={SIGNUP}
-              className="inline-flex items-center gap-2 h-12 px-6 rounded-sm bg-brand text-ink font-semibold hover:bg-brand-deep transition-colors"
+              className="inline-flex items-center gap-2 h-12 px-6 rounded-sm bg-brand text-white font-semibold hover:bg-brand-deep transition-colors"
             >
               Start your free 14-day trial <ArrowRight className="w-4 h-4" />
             </a>
@@ -272,7 +272,7 @@ function HowItWorks() {
         <div className="mt-10 grid md:grid-cols-3 gap-6">
           {STEPS.map((s) => (
             <div key={s.n} className="rounded-md border border-borderc bg-surface p-6">
-              <div className="w-9 h-9 rounded-full bg-brand text-ink font-bold grid place-items-center">
+              <div className="w-9 h-9 rounded-full bg-brand text-white font-bold grid place-items-center">
                 {s.n}
               </div>
               <h3 className="mt-4 font-semibold text-ink">{s.title}</h3>
@@ -338,7 +338,7 @@ function Pricing() {
         </ul>
         <a
           href={SIGNUP}
-          className="mt-8 w-full inline-flex items-center justify-center gap-2 h-12 rounded-sm bg-brand text-ink font-semibold hover:bg-brand-deep transition-colors"
+          className="mt-8 w-full inline-flex items-center justify-center gap-2 h-12 rounded-sm bg-brand text-white font-semibold hover:bg-brand-deep transition-colors"
         >
           Start free 14-day trial <ArrowRight className="w-4 h-4" />
         </a>
@@ -423,7 +423,7 @@ function FinalCta() {
         </div>
         <a
           href={SIGNUP}
-          className="inline-flex items-center gap-2 h-12 px-8 rounded-sm bg-brand text-ink font-semibold hover:bg-brand-deep transition-colors shrink-0"
+          className="inline-flex items-center gap-2 h-12 px-8 rounded-sm bg-brand text-white font-semibold hover:bg-brand-deep transition-colors shrink-0"
         >
           Start free trial <ArrowRight className="w-4 h-4" />
         </a>

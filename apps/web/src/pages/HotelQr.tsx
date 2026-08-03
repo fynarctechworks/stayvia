@@ -348,7 +348,7 @@ export default function HotelQr() {
                         onClick={() => setNights(n)}
                         className={`h-10 w-10 rounded-md font-semibold transition ${
                           nights === n
-                            ? "bg-brand text-textPrimary"
+                            ? "bg-brand text-white"
                             : "bg-white text-textPrimary border border-borderc"
                         }`}
                       >
@@ -734,7 +734,7 @@ function RoomCard({
           </span>
         )}
         {active && (
-          <span className="absolute top-3 right-3 w-6 h-6 rounded-full bg-brand text-textPrimary grid place-items-center shadow">
+          <span className="absolute top-3 right-3 w-6 h-6 rounded-full bg-brand text-white grid place-items-center shadow">
             <Check className="w-4 h-4" />
           </span>
         )}
@@ -777,7 +777,7 @@ function RoomCard({
             onClick={onToggle}
             disabled={disabled}
             className={`h-9 px-5 rounded-full text-[13px] font-semibold transition disabled:opacity-40 inline-flex items-center gap-1 shadow-sm active:scale-95 ${
-              active ? "bg-brand-dark text-cream" : "bg-brand text-textPrimary hover:bg-brand-light"
+              active ? "bg-brand-dark text-cream" : "bg-brand text-white hover:bg-brand-light"
             }`}
           >
             {active ? (

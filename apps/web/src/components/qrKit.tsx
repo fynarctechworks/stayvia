@@ -117,7 +117,7 @@ export function PrimaryButton({
 }: ButtonHTMLAttributes<HTMLButtonElement>) {
   return (
     <button
-      className={`w-full h-11 rounded-md bg-brand text-textPrimary font-semibold flex items-center justify-center gap-2 hover:bg-brand-light active:scale-[0.99] disabled:opacity-50 disabled:active:scale-100 transition ${className}`}
+      className={`w-full h-11 rounded-md bg-brand text-white font-semibold flex items-center justify-center gap-2 hover:bg-brand-light active:scale-[0.99] disabled:opacity-50 disabled:active:scale-100 transition ${className}`}
       {...rest}
     >
       {children}
