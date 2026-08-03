@@ -224,6 +224,76 @@ export function QrSelect({
   );
 }
 
+// Free-text input with a styled suggestion popover — same visual language
+// as QrSelect (bounded, internal scroll), unlike a native <datalist> which
+// renders a giant unstyled browser dropdown. Typing filters; anything can
+// still be typed and kept as-is. autoComplete off so the browser's own
+// address autofill doesn't stack on top.
+export function QrSuggestInput({
+  value,
+  onChange,
+  options,
+  placeholder,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  options: string[];
+  placeholder?: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const onDoc = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener("mousedown", onDoc);
+    return () => document.removeEventListener("mousedown", onDoc);
+  }, [open]);
+
+  const term = value.trim().toLowerCase();
+  const matches = (
+    term ? options.filter((o) => o.toLowerCase().includes(term)) : options
+  ).slice(0, 8);
+  // Exact match already typed — nothing left to suggest.
+  const show = open && matches.length > 0 && !(matches.length === 1 && matches[0]!.toLowerCase() === term);
+
+  return (
+    <div className="relative" ref={ref}>
+      <input
+        className={qrInputClass}
+        value={value}
+        placeholder={placeholder}
+        autoComplete="off"
+        onChange={(e) => {
+          onChange(e.target.value);
+          setOpen(true);
+        }}
+        onFocus={() => setOpen(true)}
+      />
+      {show && (
+        <div className="absolute z-30 left-0 right-0 mt-1 max-h-48 overflow-y-auto rounded-md border border-borderc bg-white shadow-lg py-1 animate-in fade-in slide-in-from-top-1">
+          {matches.map((o) => (
+            <button
+              key={o}
+              type="button"
+              onMouseDown={(e) => {
+                e.preventDefault();
+                onChange(o);
+                setOpen(false);
+              }}
+              className="w-full px-3 py-2.5 text-left text-sm hover:bg-bg transition"
+            >
+              {o}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function QrFooterBrand() {
   return (
     <div className="flex flex-col items-center gap-2 pt-3 pb-1">

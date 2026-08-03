@@ -37,6 +37,7 @@ import {
   PrimaryButton,
   QrField,
   QrFooterBrand,
+  QrSuggestInput,
   QrTopNav,
   QrSelect,
   qrFormatTime,
@@ -571,20 +572,12 @@ export default function HotelQr() {
               </QrField>
             </div>
             <QrField label="City">
-              <input
-                className={qrInputClass}
+              <QrSuggestInput
                 value={city}
-                onChange={(e) => setCity(e.target.value)}
-                list="qr-city-suggestions"
+                onChange={setCity}
+                options={citiesForState(state)}
                 placeholder={state ? `Cities in ${state}…` : "Pick a state first"}
               />
-              {/* Native datalist keeps the public page dependency-free while
-                  matching the walk-in form's state-aware city suggestions. */}
-              <datalist id="qr-city-suggestions">
-                {citiesForState(state).map((c) => (
-                  <option key={c} value={c} />
-                ))}
-              </datalist>
             </QrField>
             <QrField label="Address">
               <textarea
