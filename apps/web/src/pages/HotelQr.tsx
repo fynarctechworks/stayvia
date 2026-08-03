@@ -559,7 +559,7 @@ export default function HotelQr() {
                 {nights === 1 ? "" : "s"} · + GST
               </div>
             </div>
-            <PrimaryButton className="!w-auto px-6" onClick={() => setShowStayOptions(true)}>
+            <PrimaryButton className="!w-auto px-6" onClick={() => setStep("details")}>
               Continue
             </PrimaryButton>
           </div>
@@ -630,14 +630,12 @@ export default function HotelQr() {
                 </span>
                 <span className="font-mono font-bold text-textPrimary">{inr0(total)}</span>
               </div>
-              <PrimaryButton
-                onClick={() => {
-                  setShowStayOptions(false);
-                  setStep("details");
-                }}
-              >
-                Continue
+              <PrimaryButton onClick={() => setShowStayOptions(false)}>
+                Done
               </PrimaryButton>
+              <p className="text-[11px] text-textSecondary text-center -mt-1">
+                You can keep adding rooms — tap Continue below when ready.
+              </p>
             </div>
           </div>
         </div>
