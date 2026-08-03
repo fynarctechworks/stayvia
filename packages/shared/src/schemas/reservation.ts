@@ -117,6 +117,12 @@ export const reservationListQuerySchema = z.object({
   // Filter by how the booking was made (e.g. source=qr for the Booking
   // Requests history).
   source: z.enum(BOOKING_SOURCES).optional(),
+  // Drop one status from the result (e.g. exclude_status=hold so the QR
+  // history's pagination count doesn't include live requests).
+  exclude_status: z.enum(RESERVATION_STATUSES).optional(),
+  // With status=hold, keep only holds that haven't expired yet - the sweep
+  // runs on an interval, so expired rows linger and would inflate counts.
+  live_only: z.coerce.boolean().optional(),
   date: z.string().optional(),
   q: z.string().trim().min(1).max(100).optional(),
   date_from: z.string().date().optional(),

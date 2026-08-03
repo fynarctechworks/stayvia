@@ -43,6 +43,7 @@ import {
   qrFormatTime,
   qrInputClass,
 } from "@/components/qrKit";
+import { ID_PROOF_NUMBER_RULES } from "@stayvia/shared";
 import { citiesForState } from "@/lib/indianCities";
 import { INDIAN_STATES, INDIAN_UNION_TERRITORIES } from "@/lib/indianStates";
 import { EmailInput } from "@/components/EmailInput";
@@ -154,6 +155,11 @@ export default function HotelQr() {
     return { rate, mode: gstMode, subtotal, gstAmount, cgst, sgst: +(gstAmount - cgst).toFixed(2), grandTotal };
   }, [catalog, chosenRooms.length, perNight, nights]);
 
+  // "+ GST" is only true when the property adds tax on top; inclusive
+  // properties quote a price that already contains it.
+  const gstSuffix =
+    catalog?.hotel.gstMode === "inclusive" ? "GST included" : "+ GST";
+
   // Toggle one specific room. Global cap 3 rooms per booking. Picking a
   // room pops the stay-options sheet right away (nights/guests/total);
   // deselecting never does.
@@ -170,7 +176,8 @@ export default function HotelQr() {
     fullName.trim().length >= 2 &&
     /^[6-9]\d{9}$/.test(phone) &&
     gender !== "" &&
-    idProofNumber.length >= 4 &&
+    (ID_PROOF_NUMBER_RULES[idProofType]?.regex.test(idProofNumber) ??
+      idProofNumber.length >= 4) &&
     nationality.trim() !== "" &&
     state.trim() !== "" &&
     city.trim() !== "" &&
@@ -242,6 +249,20 @@ export default function HotelQr() {
       setStep("done");
     } catch (e) {
       setError(e instanceof PublicApiError ? e.message : "Booking failed. Try again.");
+      // Somebody else took a room while this guest was filling the form —
+      // the catalog on screen is stale, so refetch it and drop the picks
+      // that no longer exist before sending them back to browse.
+      if (e instanceof PublicApiError && e.code === "ROOM_TAKEN") {
+        try {
+          const fresh = await publicQr.get<QrCatalog>(`/public/qr/hotel/${token}`);
+          setCatalog(fresh);
+          const stillFree = new Set(fresh.rooms.map((r) => r.id));
+          setSelected((prev) => prev.filter((id) => stillFree.has(id)));
+        } catch {
+          /* leave the stale catalog; the error message still explains it */
+        }
+        setStep("browse");
+      }
     } finally {
       setBusy(false);
     }
@@ -388,6 +409,7 @@ export default function HotelQr() {
                             disabled={!selected.includes(r.id) && selected.length >= 3}
                             onToggle={() => toggleRoom(r.id)}
                             onDetails={() => setDetailRoom(r)}
+                            gstNote={gstSuffix}
                           />
                         ))}
                       </div>
@@ -563,7 +585,12 @@ export default function HotelQr() {
               <QrField label="State">
                 <QrSelect
                   value={state}
-                  onChange={setState}
+                  onChange={(v) => {
+                    setState(v);
+                    // The city list is state-scoped; keeping the old city
+                    // would submit a mismatched address pair.
+                    setCity("");
+                  }}
                   options={[...INDIAN_STATES, ...INDIAN_UNION_TERRITORIES].map((s) => ({
                     value: s,
                     label: s,
@@ -660,7 +687,7 @@ export default function HotelQr() {
                   <Loader2 className="w-4 h-4 animate-spin" /> Booking…
                 </>
               ) : (
-                `Confirm booking · ${inr0(total)}`
+                `Confirm booking · ${inr0(gst ? gst.grandTotal : total)}`
               )}
             </PrimaryButton>
           </Card>
@@ -708,11 +735,11 @@ export default function HotelQr() {
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-1 font-mono font-bold text-xl text-brand-dark leading-none">
                 <BadgeIndianRupee className="w-4 h-4 text-brand-deep" />
-                {inr0(total)}
+                {inr0(gst ? gst.grandTotal : total)}
               </div>
               <div className="text-[11px] text-textSecondary mt-1">
                 {selected.length} room{selected.length === 1 ? "" : "s"} · {nights} night
-                {nights === 1 ? "" : "s"} · + GST
+                {nights === 1 ? "" : "s"} · {gstSuffix}
               </div>
             </div>
             <PrimaryButton className="!w-auto px-6" onClick={() => setStep("details")}>
@@ -795,9 +822,11 @@ export default function HotelQr() {
               <div className="flex items-center justify-between text-sm">
                 <span className="text-textSecondary">
                   {selected.length} room{selected.length === 1 ? "" : "s"} · {nights} night
-                  {nights === 1 ? "" : "s"} · + GST
+                  {nights === 1 ? "" : "s"} · {gstSuffix}
                 </span>
-                <span className="font-mono font-bold text-textPrimary">{inr0(total)}</span>
+                <span className="font-mono font-bold text-textPrimary">
+                  {inr0(gst ? gst.grandTotal : total)}
+                </span>
               </div>
               <PrimaryButton onClick={() => setShowStayOptions(false)}>
                 Done
@@ -912,12 +941,14 @@ function RoomCard({
   disabled,
   onToggle,
   onDetails,
+  gstNote,
 }: {
   room: QrCatalogRoom;
   active: boolean;
   disabled: boolean;
   onToggle: () => void;
   onDetails: () => void;
+  gstNote: string;
 }) {
   const cover = r.images[0]?.url;
   return (
@@ -965,7 +996,7 @@ function RoomCard({
             <div className="font-mono font-bold text-[18px] text-brand-dark leading-none">
               {inr0(r.baseRate)}
             </div>
-            <div className="text-[10px] text-textSecondary mt-1">per night · + GST</div>
+            <div className="text-[10px] text-textSecondary mt-1">per night · {gstNote}</div>
           </div>
         </div>
 

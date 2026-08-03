@@ -166,7 +166,9 @@ export function Sidebar({
   const requestsQ = useQuery({
     queryKey: ["reservations", { status: "hold" }, "count"],
     queryFn: () =>
-      getList("/reservations", { status: "hold", per_page: 1 }).then(
+      // live_only drops holds already past their expiry that the sweep
+      // hasn't collected yet, so the badge matches the queue's card count.
+      getList("/reservations", { status: "hold", live_only: "true", per_page: 1 }).then(
         (d) => d.meta.total,
       ),
     refetchInterval: 15_000,

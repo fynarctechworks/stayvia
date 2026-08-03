@@ -70,13 +70,15 @@ export default function BookingRequests() {
   });
 
   const confirm = useMutation({
-    mutationFn: (id: string) => api.post(`/reservations/${id}/confirm`, {}),
-    onSuccess: (_d, id) => {
+    // Carry the row through the mutation instead of looking it up in
+    // `items` afterwards: the 10s poll (or the expiry filter) can drop it
+    // while the POST is in flight, which used to swallow the navigation.
+    mutationFn: (row: HoldRow) => api.post(`/reservations/${row.id}/confirm`, {}),
+    onSuccess: (_d, row) => {
       toast("Booking confirmed - rooms reserved. Open it to check the guest in.", "success");
       void qc.invalidateQueries({ queryKey: ["reservations"] });
       setReview(null);
-      const row = items.find((r) => r.id === id);
-      if (row) navigate(`/reservations/${row.reservationNumber}`);
+      navigate(`/reservations/${row.reservationNumber}`);
     },
     onError: (e) => {
       toast(e instanceof ApiError ? e.message : "Could not confirm the request", "error");
@@ -106,7 +108,7 @@ export default function BookingRequests() {
       okLabel: "Yes, confirm booking",
       cancelLabel: "Not yet",
     });
-    if (ok) confirm.mutate(r.id);
+    if (ok) confirm.mutate(r);
   }
 
   async function onDecline(r: HoldRow) {
@@ -153,7 +155,7 @@ export default function BookingRequests() {
           {items.map((r) => {
             const mins = minutesLeft(r.holdExpiresAt, now);
             const urgent = mins !== null && mins <= 5;
-            const confirming = confirm.isPending && confirm.variables === r.id;
+            const confirming = confirm.isPending && confirm.variables?.id === r.id;
             const declining = decline.isPending && decline.variables === r.id;
             return (
               <div key={r.id} className="card !p-[18px] space-y-3">
@@ -250,7 +252,7 @@ export default function BookingRequests() {
         <RequestReviewOverlay
           row={review}
           minsLeft={minutesLeft(review.holdExpiresAt, now)}
-          confirming={confirm.isPending && confirm.variables === review.id}
+          confirming={confirm.isPending && confirm.variables?.id === review.id}
           declining={decline.isPending && decline.variables === review.id}
           onConfirm={() => onConfirm(review)}
           onDecline={() => onDecline(review)}

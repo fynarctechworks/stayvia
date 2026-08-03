@@ -148,6 +148,8 @@ router.get(
     const {
       status,
       source,
+      exclude_status,
+      live_only,
       date,
       q,
       date_from,
@@ -160,6 +162,8 @@ router.get(
     } = req.query as unknown as {
       status?: string;
       source?: string;
+      exclude_status?: string;
+      live_only?: boolean;
       date?: string;
       q?: string;
       date_from?: string;
@@ -175,6 +179,8 @@ router.get(
     conditions.push(eq(reservations.propertyId, req.propertyId));
     if (status) conditions.push(eq(reservations.status, status as never));
     if (source) conditions.push(eq(reservations.bookingSource, source as never));
+    if (exclude_status) conditions.push(ne(reservations.status, exclude_status as never));
+    if (live_only) conditions.push(gt(reservations.holdExpiresAt, sql`now()`));
     if (date) {
       conditions.push(lte(reservations.checkInDate, date));
       conditions.push(gte(reservations.checkOutDate, date));

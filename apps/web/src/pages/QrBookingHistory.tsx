@@ -34,9 +34,16 @@ export function QrHistoryPill({ status, reason }: { status: string; reason?: str
   };
   let m = map[status];
   if (!m && status === "cancelled") {
-    m = reason?.startsWith("QR booking expired")
-      ? { label: "Expired", cls: "bg-neutralBg text-inkMuted border-neutralBorder" }
-      : { label: "Declined", cls: "bg-dangerBg text-dangerFg border-dangerBorder" };
+    // Three ways a QR booking ends up cancelled: the sweep expired it, the
+    // desk declined it from the queue, or staff cancelled it later for an
+    // unrelated reason. Only the middle one is a "decline".
+    if (reason?.startsWith("QR booking expired")) {
+      m = { label: "Expired", cls: "bg-neutralBg text-inkMuted border-neutralBorder" };
+    } else if (reason?.includes("Declined at the front desk")) {
+      m = { label: "Declined", cls: "bg-dangerBg text-dangerFg border-dangerBorder" };
+    } else {
+      m = { label: "Cancelled", cls: "bg-neutralBg text-inkMuted border-neutralBorder" };
+    }
   }
   if (!m) m = { label: status, cls: "bg-neutralBg text-inkMuted border-neutralBorder" };
   return (
@@ -50,14 +57,21 @@ export default function QrBookingHistory() {
   const navigate = useNavigate();
   const [page, setPage] = useState(1);
 
+  // Live holds belong on /requests, so they're excluded SERVER-side —
+  // filtering them client-side left meta.total (and therefore the page
+  // count and header) counting rows this page never shows.
   const q = useQuery({
     queryKey: ["reservations", { source: "qr" }, "history", page],
     queryFn: () =>
-      getList<HistoryRow>("/reservations", { source: "qr", page, per_page: PER_PAGE }),
+      getList<HistoryRow>("/reservations", {
+        source: "qr",
+        exclude_status: "hold",
+        page,
+        per_page: PER_PAGE,
+      }),
     refetchInterval: 30_000,
   });
-  // Live holds belong on /requests, not in history.
-  const rows = (q.data?.data ?? []).filter((r) => r.status !== "hold");
+  const rows = q.data?.data ?? [];
   const total = q.data?.meta.total ?? 0;
   const pages = Math.max(1, Math.ceil(total / PER_PAGE));
 
