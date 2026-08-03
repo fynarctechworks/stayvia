@@ -349,32 +349,60 @@ export default function HotelQr() {
         {/* ---- details ---- */}
         {step === "details" && (
           <>
-          {/* Booking recap — what's being reserved, always visible above
-              the identity form. Back on the header row returns to browse. */}
-          <Card className="!p-3.5 space-y-2.5">
-            <div className="flex items-center justify-between gap-2">
-              <span className="text-[11px] font-bold uppercase tracking-[0.12em] text-brand-deep">
-                Your booking
-              </span>
-              <span className="text-[11px] text-textSecondary">
-                {nights} night{nights === 1 ? "" : "s"} · {numAdults} guest
-                {numAdults === 1 ? "" : "s"}
-              </span>
+          {/* Booking breakdown — the full picture above the identity form:
+              stay facts, one line per room with its rate math, and the
+              pre-GST total with honest GST/payment wording. The exact GST
+              is computed by the desk at confirmation, so it is never
+              guessed here. */}
+          <Card className="!p-4 space-y-3">
+            <div className="text-[11px] font-bold uppercase tracking-[0.12em] text-brand-deep">
+              Your booking
             </div>
-            <div className="flex flex-wrap gap-1.5">
+
+            <div className="grid grid-cols-2 gap-2 text-sm">
+              <div className="rounded-md bg-bg border border-borderc/60 px-3 py-2">
+                <div className="text-[10px] uppercase tracking-wider text-textSecondary">Check-in</div>
+                <div className="font-semibold mt-0.5">
+                  Tonight · {qrFormatTime(catalog.hotel.checkInTime)}
+                </div>
+              </div>
+              <div className="rounded-md bg-bg border border-borderc/60 px-3 py-2">
+                <div className="text-[10px] uppercase tracking-wider text-textSecondary">Stay</div>
+                <div className="font-semibold mt-0.5">
+                  {nights} night{nights === 1 ? "" : "s"} · {numAdults} guest
+                  {numAdults === 1 ? "" : "s"}
+                </div>
+              </div>
+            </div>
+
+            <div className="divide-y divide-borderc/60">
               {chosenRooms.map((r) => (
-                <span
-                  key={r.id}
-                  className="inline-flex items-center gap-1 rounded-full bg-brand-soft text-brand-deep px-2.5 py-1 text-[11px] font-semibold"
-                >
-                  <BedDouble className="w-3 h-3" /> Room {r.roomNumber} · {r.roomTypeLabel}
-                </span>
+                <div key={r.id} className="flex items-center justify-between gap-2 py-2">
+                  <div className="min-w-0">
+                    <div className="text-sm font-semibold flex items-center gap-1.5">
+                      <BedDouble className="w-3.5 h-3.5 text-brand-deep shrink-0" />
+                      Room {r.roomNumber}
+                    </div>
+                    <div className="text-[11px] text-textSecondary mt-0.5">
+                      {r.roomTypeLabel} · {inr0(r.baseRate)}/night × {nights} night
+                      {nights === 1 ? "" : "s"}
+                    </div>
+                  </div>
+                  <div className="font-mono font-semibold text-sm shrink-0">
+                    {inr0(r.baseRate * nights)}
+                  </div>
+                </div>
               ))}
             </div>
-            <div className="flex items-center justify-between border-t border-borderc/60 pt-2.5">
-              <span className="text-[11px] text-textSecondary">Total · + GST · pay at the desk</span>
-              <span className="font-mono font-bold text-textPrimary">{inr0(total)}</span>
+
+            <div className="flex items-center justify-between border-t border-borderc pt-2.5">
+              <span className="text-sm font-semibold">Total before GST</span>
+              <span className="font-mono font-bold text-lg text-textPrimary">{inr0(total)}</span>
             </div>
+            <p className="text-[11px] text-textSecondary leading-snug">
+              GST is added when the front desk confirms your booking. Nothing is
+              charged online — you pay at the hotel.
+            </p>
           </Card>
 
           <Card className="space-y-3.5">
