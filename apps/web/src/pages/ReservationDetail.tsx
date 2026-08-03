@@ -385,9 +385,17 @@ export default function ReservationDetail() {
       return;
     }
     // QR self-bookings verified the guest's phone with an OTP at booking
-    // time; the server accepts that verification, so no second code here.
+    // time; the server accepts that verification, so no second code here —
+    // but the desk still confirms the arrival explicitly.
     if (r?.bookingSource === "qr") {
-      checkIn.mutate();
+      const ok = await dialog.confirm({
+        title: `Check in ${r.guest?.fullName ?? "this guest"}?`,
+        message:
+          "The phone was already OTP-verified at booking, so no new code is needed. Checking in marks the room occupied and prints the check-in slip.",
+        okLabel: "Check in now",
+        cancelLabel: "Not yet",
+      });
+      if (ok) checkIn.mutate();
       return;
     }
     setShowOtp(true);
