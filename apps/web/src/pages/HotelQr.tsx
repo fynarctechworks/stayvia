@@ -348,6 +348,35 @@ export default function HotelQr() {
 
         {/* ---- details ---- */}
         {step === "details" && (
+          <>
+          {/* Booking recap — what's being reserved, always visible above
+              the identity form. Back on the header row returns to browse. */}
+          <Card className="!p-3.5 space-y-2.5">
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-[11px] font-bold uppercase tracking-[0.12em] text-brand-deep">
+                Your booking
+              </span>
+              <span className="text-[11px] text-textSecondary">
+                {nights} night{nights === 1 ? "" : "s"} · {numAdults} guest
+                {numAdults === 1 ? "" : "s"}
+              </span>
+            </div>
+            <div className="flex flex-wrap gap-1.5">
+              {chosenRooms.map((r) => (
+                <span
+                  key={r.id}
+                  className="inline-flex items-center gap-1 rounded-full bg-brand-soft text-brand-deep px-2.5 py-1 text-[11px] font-semibold"
+                >
+                  <BedDouble className="w-3 h-3" /> Room {r.roomNumber} · {r.roomTypeLabel}
+                </span>
+              ))}
+            </div>
+            <div className="flex items-center justify-between border-t border-borderc/60 pt-2.5">
+              <span className="text-[11px] text-textSecondary">Total · + GST · pay at the desk</span>
+              <span className="font-mono font-bold text-textPrimary">{inr0(total)}</span>
+            </div>
+          </Card>
+
           <Card className="space-y-3.5">
             <BackRow onClick={() => setStep("browse")} title="Your details" />
             <QrField label="Full name">
@@ -477,6 +506,7 @@ export default function HotelQr() {
               )}
             </PrimaryButton>
           </Card>
+          </>
         )}
 
         {/* ---- otp ---- */}
