@@ -7,7 +7,7 @@
 // This is the guest's first digital impression of the hotel, so it's styled
 // as a premium mini-app rather than a form: full-bleed gradient hero, soft
 // cards, tap-to-copy WiFi, tactile request tiles.
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useParams } from "react-router-dom";
 import {
   Bell,
@@ -23,6 +23,7 @@ import {
   SprayCan,
   Wifi,
   Wrench,
+  X,
 } from "@/lib/micons";
 import {
   Card,
@@ -43,13 +44,15 @@ import {
 
 type RequestKind = "cleaning" | "amenity" | "issue";
 
-const REQUESTS: {
+interface RequestDef {
   kind: RequestKind;
   label: string;
   hint: string;
   Icon: typeof Bell;
   tint: string;
-}[] = [
+}
+
+const REQUESTS: RequestDef[] = [
   {
     kind: "cleaning",
     label: "Clean my room",
@@ -73,6 +76,15 @@ const REQUESTS: {
   },
 ];
 
+// Overlay gutter: a comfortable 1rem, grown to clear the notch / home
+// indicator / curved edges when the phone reports insets.
+const OVERLAY_INSET = {
+  paddingTop: "max(1rem, env(safe-area-inset-top))",
+  paddingBottom: "max(1rem, env(safe-area-inset-bottom))",
+  paddingLeft: "max(1rem, env(safe-area-inset-left))",
+  paddingRight: "max(1rem, env(safe-area-inset-right))",
+};
+
 export default function RoomQr() {
   const { token = "" } = useParams();
   const storageKey = `qr-unlock:${token}`;
@@ -91,6 +103,8 @@ export default function RoomQr() {
   const [sending, setSending] = useState(false);
   const [toast, setToast] = useState("");
   const [copied, setCopied] = useState(false);
+  // The tile that opened the overlay — focus goes back to it on close.
+  const requestTriggerRef = useRef<HTMLButtonElement | null>(null);
 
   async function loadHome(key: string): Promise<boolean> {
     try {
@@ -139,6 +153,22 @@ export default function RoomQr() {
     }
   }
 
+  function openRequest(kind: RequestKind, trigger: HTMLButtonElement) {
+    requestTriggerRef.current = trigger;
+    setNote("");
+    setActiveRequest(kind);
+  }
+
+  // Stable identity: the overlay's mount effect (scroll lock + initial focus)
+  // depends on it and must not re-run while the guest types their note.
+  const closeRequest = useCallback(() => {
+    setActiveRequest(null);
+    const trigger = requestTriggerRef.current;
+    requestTriggerRef.current = null;
+    // After the overlay unmounts, hand focus back to the tile that opened it.
+    requestAnimationFrame(() => trigger?.focus());
+  }, []);
+
   async function sendRequest(kind: RequestKind) {
     const key = sessionStorage.getItem(storageKey);
     if (!key) return;
@@ -150,7 +180,7 @@ export default function RoomQr() {
         ...(note.trim() ? { note: note.trim() } : {}),
       });
       flashToast("Sent. The front desk has been notified.");
-      setActiveRequest(null);
+      closeRequest();
       setNote("");
     } catch (e) {
       flashToast(e instanceof PublicApiError ? e.message : "Could not send. Try again.");
@@ -202,12 +232,14 @@ export default function RoomQr() {
   }
 
   const firstName = home?.guestName?.trim().split(" ")[0] ?? "";
+  const activeDef = REQUESTS.find((r) => r.kind === activeRequest);
 
   return (
     <div className="min-h-screen bg-bg text-textPrimary antialiased">
-      {/* Floating toast */}
+      {/* Floating toast. Sits above the request overlay — a failed send keeps
+          the overlay open, and the guest has to be able to read why. */}
       {toast && (
-        <div className="fixed top-4 inset-x-0 z-50 flex justify-center px-4 animate-in fade-in slide-in-from-top-2">
+        <div className="fixed top-4 inset-x-0 z-[60] flex justify-center px-4 animate-in fade-in slide-in-from-top-2">
           <div className="flex items-center gap-2 bg-brand-dark text-white text-sm font-medium px-4 py-2.5 rounded-md shadow-lg max-w-sm">
             <Check className="w-4 h-4 text-brand-light shrink-0" />
             {toast}
@@ -350,57 +382,27 @@ export default function RoomQr() {
                 Need something?
               </div>
               <div className="space-y-2.5">
-                {REQUESTS.map(({ kind, label, hint, Icon, tint }) => {
-                  const open = activeRequest === kind;
-                  return (
-                    <div key={kind}>
-                      <button
-                        className={`w-full flex items-center gap-3 rounded-lg border p-3 text-left transition active:scale-[0.99] ${
-                          open ? "border-brand bg-brand/5" : "border-borderc hover:border-brand/50"
-                        }`}
-                        onClick={() => {
-                          setActiveRequest(open ? null : kind);
-                          setNote("");
-                        }}
-                      >
-                        <IconBubble className={tint}>
-                          <Icon className="w-5 h-5" />
-                        </IconBubble>
-                        <div className="flex-1">
-                          <div className="font-medium text-sm">{label}</div>
-                          <div className="text-xs text-textSecondary">{hint}</div>
-                        </div>
-                      </button>
-                      {open && (
-                        <div className="mt-2 pl-1 animate-in fade-in slide-in-from-top-1">
-                          <textarea
-                            className="w-full rounded-md border border-borderc bg-white p-3 text-sm outline-none focus:border-brand focus:ring-2 focus:ring-brand/25 transition resize-none"
-                            rows={2}
-                            maxLength={300}
-                            placeholder="Anything specific? (optional)"
-                            value={note}
-                            onChange={(e) => setNote(e.target.value)}
-                          />
-                          <PrimaryButton
-                            className="mt-2"
-                            disabled={sending}
-                            onClick={() => sendRequest(kind)}
-                          >
-                            {sending ? (
-                              <>
-                                <Loader2 className="w-4 h-4 animate-spin" /> Sending…
-                              </>
-                            ) : (
-                              <>
-                                <SendFill className="w-4 h-4" /> Send to front desk
-                              </>
-                            )}
-                          </PrimaryButton>
-                        </div>
-                      )}
+                {REQUESTS.map(({ kind, label, hint, Icon, tint }) => (
+                  <button
+                    key={kind}
+                    type="button"
+                    aria-haspopup="dialog"
+                    className={`w-full min-h-[60px] flex items-center gap-3 rounded-lg border p-3 text-left transition active:scale-[0.99] ${
+                      activeRequest === kind
+                        ? "border-brand bg-brand/5"
+                        : "border-borderc hover:border-brand/50"
+                    }`}
+                    onClick={(e) => openRequest(kind, e.currentTarget)}
+                  >
+                    <IconBubble className={tint}>
+                      <Icon className="w-5 h-5" />
+                    </IconBubble>
+                    <div className="flex-1 min-w-0">
+                      <div className="font-medium text-sm">{label}</div>
+                      <div className="text-xs text-textSecondary">{hint}</div>
                     </div>
-                  );
-                })}
+                  </button>
+                ))}
               </div>
             </Card>
 
@@ -418,6 +420,165 @@ export default function RoomQr() {
 
         <QrFooterBrand />
       </main>
+
+      {home && activeDef && (
+        <RequestOverlay
+          request={activeDef}
+          note={note}
+          onNoteChange={setNote}
+          sending={sending}
+          onSend={() => sendRequest(activeDef.kind)}
+          onClose={closeRequest}
+        />
+      )}
+    </div>
+  );
+}
+
+// Centered request overlay. Phone-first: the guest is holding the device in
+// one hand, so tap targets are >= 44px, the sheet is safe-area padded and it
+// fits a 320px screen. Nothing is auto-focused inside the form — popping the
+// software keyboard on open would bury the sheet — so focus lands on the
+// dialog itself, which also gives screen readers its name.
+function RequestOverlay({
+  request,
+  note,
+  onNoteChange,
+  sending,
+  onSend,
+  onClose,
+}: {
+  request: RequestDef;
+  note: string;
+  onNoteChange: (v: string) => void;
+  sending: boolean;
+  onSend: () => void;
+  onClose: () => void;
+}) {
+  const panelRef = useRef<HTMLDivElement>(null);
+  const { Icon, label, hint, tint } = request;
+
+  useEffect(() => {
+    const panel = panelRef.current;
+    panel?.focus();
+
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") {
+        e.preventDefault();
+        onClose();
+        return;
+      }
+      if (e.key !== "Tab" || !panel) return;
+      // Focus trap — Tab cycles within the sheet, never back to the page.
+      const items = Array.from(
+        panel.querySelectorAll<HTMLElement>("button, textarea, a[href], [tabindex]:not([tabindex='-1'])"),
+      ).filter((el) => !el.hasAttribute("disabled") && el.offsetParent !== null);
+      const first = items[0];
+      const last = items[items.length - 1];
+      if (!first || !last) {
+        e.preventDefault();
+        panel.focus();
+        return;
+      }
+      const active = document.activeElement as HTMLElement | null;
+      if (!active || !panel.contains(active)) {
+        e.preventDefault();
+        (e.shiftKey ? last : first).focus();
+      } else if (e.shiftKey && (active === first || active === panel)) {
+        e.preventDefault();
+        last.focus();
+      } else if (!e.shiftKey && active === last) {
+        e.preventDefault();
+        first.focus();
+      }
+    }
+
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("keydown", onKey);
+      document.body.style.overflow = prevOverflow;
+    };
+  }, [onClose]);
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto overscroll-contain bg-inkDark/60 backdrop-blur-[3px] animate-in fade-in duration-150"
+      style={OVERLAY_INSET}
+      onMouseDown={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+    >
+      <div
+        ref={panelRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="qr-request-title"
+        aria-describedby="qr-request-hint"
+        tabIndex={-1}
+        className="my-auto w-full max-w-sm bg-white rounded-2xl shadow-modal outline-none animate-in fade-in zoom-in-95 duration-150"
+      >
+        <div className="flex items-start gap-3 p-4 border-b border-borderc">
+          <IconBubble className={tint}>
+            <Icon className="w-5 h-5" />
+          </IconBubble>
+          <div className="flex-1 min-w-0 pt-0.5">
+            <h2 id="qr-request-title" className="font-semibold text-[15px] leading-snug">
+              {label}
+            </h2>
+            <p id="qr-request-hint" className="text-xs text-textSecondary mt-0.5">
+              {hint}
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Close"
+            className="-mr-2 -mt-2 w-11 h-11 shrink-0 grid place-items-center rounded-lg text-textSecondary hover:text-textPrimary active:bg-bg transition"
+          >
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+
+        <div className="p-4">
+          <label htmlFor="qr-request-note" className="block text-xs font-medium text-textSecondary">
+            Anything specific? (optional)
+          </label>
+          <textarea
+            id="qr-request-note"
+            /* 16px, not the page's 15px: anything smaller makes iOS Safari
+               zoom the viewport on focus and shove the centered sheet off. */
+            className="w-full mt-1.5 rounded-md border border-borderc bg-white p-3 text-base outline-none focus:border-brand focus:ring-2 focus:ring-brand/25 transition resize-none"
+            rows={3}
+            maxLength={300}
+            placeholder="e.g. two extra towels, please"
+            value={note}
+            onChange={(e) => onNoteChange(e.target.value)}
+          />
+          <div className="text-[11px] text-textSecondary text-right mt-1">{note.length}/300</div>
+
+          <PrimaryButton className="!h-12 mt-2" disabled={sending} onClick={onSend}>
+            {sending ? (
+              <>
+                <Loader2 className="w-4 h-4 animate-spin" /> Sending…
+              </>
+            ) : (
+              <>
+                <SendFill className="w-4 h-4" /> Send to front desk
+              </>
+            )}
+          </PrimaryButton>
+          <button
+            type="button"
+            onClick={onClose}
+            className="w-full h-11 mt-1 rounded-md text-sm font-medium text-textSecondary active:bg-bg transition"
+          >
+            Not now
+          </button>
+        </div>
+      </div>
     </div>
   );
 }

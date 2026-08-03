@@ -19,6 +19,12 @@ import { cn } from "@/lib/utils";
 // existing full-nav drawer. Each tab is permission-gated so a
 // frontdesk/housekeeping user only sees what they can reach; everything
 // else lives in the "More" drawer, which renders the full Sidebar nav.
+//
+// Deliberately NOT here: Guest Requests (/guest-requests) and Booking Requests
+// (/requests). Five slots at 320px already give each tab ~64px; a sixth drops
+// that to ~53px and starts truncating labels. Both queues live one tap away in
+// the "More" drawer, which renders the full Sidebar — badge and all — so a
+// waiting guest request is still visible on a phone without crowding the bar.
 interface Tab {
   to: string;
   label: string;

@@ -19,3 +19,5 @@ export * from "./propertyCounters.js";
 export * from "./subscriptions.js";
 export * from "./expenses.js";
 export * from "./maintenance.js";
+export * from "./housekeeping.js";
+export * from "./guestRequests.js";

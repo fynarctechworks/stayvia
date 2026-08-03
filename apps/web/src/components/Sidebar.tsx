@@ -8,6 +8,8 @@ import {
   BarChart3Fill,
   Bell,
   BellFill,
+  BellRing,
+  BellRingFill,
   CalendarCheck,
   CalendarCheckFill,
   CalendarDays,
@@ -39,6 +41,7 @@ import {
   Wallet,
   WalletFill,
 } from "@/lib/micons";
+import { GUEST_REQUEST_OPEN_STATUSES } from "@stayvia/shared";
 import { NavLink } from "react-router-dom";
 import { useAuth } from "@/auth/AuthContext";
 import { useDialog } from "@/components/Dialog";
@@ -57,7 +60,7 @@ interface NavItem {
   // which the API guards with requireRole('admin').
   adminOnly?: boolean;
   // Live indicator rendered at the right edge when expanded.
-  indicator?: "collections" | "messages" | "notifications" | "requests";
+  indicator?: "collections" | "guestRequests" | "messages" | "notifications" | "requests";
 }
 
 // Warm Concierge grouped nav. Same items + permissions as before, now
@@ -71,6 +74,10 @@ const NAV_SECTIONS: { title: string; items: NavItem[] }[] = [
       // QR self-bookings waiting for desk confirmation. Same icon for both
       // states (no fill variant needed for a code glyph).
       { to: "/requests", label: "Booking Requests", icon: QrCode, iconFill: QrCode, permission: "view_reservations", indicator: "requests" },
+      // In-room QR service requests (cleaning / amenity / issue). A different
+      // queue from Booking Requests above — same QR family, different table.
+      // Gated on view_housekeeping to match routes/guestRequests.ts.
+      { to: "/guest-requests", label: "Guest Requests", icon: BellRing, iconFill: BellRingFill, permission: "view_housekeeping", indicator: "guestRequests" },
       { to: "/rooms", label: "Rooms", icon: DoorOpen, iconFill: DoorOpenFill, permission: "view_rooms" },
       { to: "/housekeeping", label: "Housekeeping", icon: SprayCan, iconFill: SprayCanFill, permission: "view_housekeeping" },
       { to: "/calendar", label: "Calendar", icon: CalendarDays, iconFill: CalendarDaysFill, permission: "view_reservations" },
@@ -176,6 +183,25 @@ export function Sidebar({
   });
   const pendingRequests = requestsQ.data ?? 0;
 
+  // In-room guest requests still needing someone (open + acknowledged). Same
+  // 15s cadence as Booking Requests above and for the same reason: a guest is
+  // physically waiting in their room, so a 30s badge is a 30s-late towel.
+  // There is no dedicated count endpoint — the list's meta.total with
+  // per_page=1 is the same trick the Booking Requests badge uses.
+  const guestRequestsQ = useQuery({
+    queryKey: ["guest-requests", "count"],
+    queryFn: () =>
+      getList("/guest-requests", {
+        statuses: GUEST_REQUEST_OPEN_STATUSES.join(","),
+        per_page: 1,
+      }).then((d) => d.meta.total),
+    refetchInterval: 15_000,
+    // Matches the nav item and the API's own gate (view_housekeeping) — don't
+    // poll an endpoint for a user who can't open the page.
+    enabled: !!profile && can("view_housekeeping"),
+  });
+  const pendingGuestRequests = guestRequestsQ.data ?? 0;
+
   // Messages badge — sum of per-thread unread counts. Same polling
   // cadence as collections so the sidebar stays cheap.
   const messagesQ = useQuery({
@@ -210,6 +236,16 @@ export function Sidebar({
           aria-label={`${pendingRequests} booking request${pendingRequests === 1 ? "" : "s"} waiting`}
         >
           {pendingRequests}
+        </span>
+      );
+    }
+    if (kind === "guestRequests" && pendingGuestRequests > 0) {
+      return (
+        <span
+          className="shrink-0 min-w-[19px] h-[19px] px-1.5 rounded-full bg-gold text-white text-[11px] font-bold tabular-nums inline-flex items-center justify-center"
+          aria-label={`${pendingGuestRequests} guest request${pendingGuestRequests === 1 ? "" : "s"} waiting`}
+        >
+          {pendingGuestRequests}
         </span>
       );
     }

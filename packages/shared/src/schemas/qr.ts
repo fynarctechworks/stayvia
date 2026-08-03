@@ -1,5 +1,10 @@
 import { z } from "zod";
 import { ID_PROOF_TYPES } from "../enums.js";
+import {
+  GUEST_REQUEST_KINDS,
+  guestRequestCreateSchema,
+  type GuestRequestKind,
+} from "./guestRequest.js";
 import { GENDERS, ID_PROOF_NUMBER_RULES } from "./guest.js";
 
 // Public QR surface (unauthenticated). Every payload here is typed by a
@@ -27,14 +32,14 @@ export const qrUnlockSchema = z.object({
 
 // In-room QR: guest request. Kinds map to who gets notified; note is free
 // text shown to staff.
-export const QR_REQUEST_KINDS = ["cleaning", "amenity", "issue"] as const;
-export type QrRequestKind = (typeof QR_REQUEST_KINDS)[number];
-
-export const qrRequestSchema = z.object({
-  key: z.string().min(10).max(500),
-  kind: z.enum(QR_REQUEST_KINDS),
-  note: z.string().max(300).optional(),
-});
+//
+// Defined in schemas/guestRequest.ts and aliased here under the historical
+// names — the shape is unchanged. The handler persists a `guest_requests`
+// row, so this wire enum and the table's guest_request_kind enum have to be
+// the same list rather than two copies that happen to agree today.
+export const QR_REQUEST_KINDS = GUEST_REQUEST_KINDS;
+export type QrRequestKind = GuestRequestKind;
+export const qrRequestSchema = guestRequestCreateSchema;
 
 // Master QR: send the booking OTP to the guest's phone.
 export const qrBookSendOtpSchema = z.object({

@@ -14,6 +14,9 @@ const CalendarPage = lazy(() => import("@/pages/Calendar"));
 const Reservations = lazy(() => import("@/pages/Reservations"));
 const BookingRequests = lazy(() => import("@/pages/BookingRequests"));
 const QrBookingHistory = lazy(() => import("@/pages/QrBookingHistory"));
+// In-room QR service requests (cleaning / amenity / issue). NOT the same as
+// BookingRequests above, which is QR self-booking holds.
+const GuestRequests = lazy(() => import("@/pages/GuestRequests"));
 const NewReservation = lazy(() => import("@/pages/NewReservation"));
 const ReservationDetail = lazy(() => import("@/pages/ReservationDetail"));
 const Guests = lazy(() => import("@/pages/Guests"));
@@ -150,6 +153,21 @@ export default function App() {
               <AppShell>
                 <PermissionGuard any={["view_reservations"]}>
                   <QrBookingHistory />
+                </PermissionGuard>
+              </AppShell>
+            </ProtectedRoute>
+          }
+        />
+        {/* In-room guest requests queue. Gated on view_housekeeping to match
+            the API (routes/guestRequests.ts) — the page's own buttons check
+            update_housekeeping / manage_maintenance before rendering. */}
+        <Route
+          path="/guest-requests"
+          element={
+            <ProtectedRoute>
+              <AppShell>
+                <PermissionGuard any={["view_housekeeping"]}>
+                  <GuestRequests />
                 </PermissionGuard>
               </AppShell>
             </ProtectedRoute>

@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   AlertTriangle,
   BedDouble,
+  Bell,
   Check,
   CheckCircle2,
   ChevronDown,
@@ -30,6 +31,7 @@ interface Room {
   // pill rendered on each card so staff can see at a glance where the
   // outstanding work is.
   openIssueCount: number;
+  openGuestRequestCount: number;
 }
 
 // Single-step cleaning workflow: dirty rooms go straight to
@@ -333,6 +335,21 @@ export default function Housekeeping() {
                             {r.openIssueCount} open issue
                             {r.openIssueCount === 1 ? "" : "s"}
                           </div>
+                        )}
+
+                        {/* The guest asked for something from the in-room QR.
+                            Housekeeping lives on this board, so the ask has to
+                            surface here — the /guest-requests queue is a
+                            front-desk page this role rarely opens. */}
+                        {r.openGuestRequestCount > 0 && (
+                          <Link
+                            to="/guest-requests"
+                            className="inline-flex items-center gap-1.5 self-start text-[11px] font-semibold text-brand-deep bg-brand-soft px-2 py-0.5 rounded-full border border-brand-tint hover:bg-brand-tint transition-colors"
+                          >
+                            <Bell className="w-3.5 h-3.5" />
+                            {r.openGuestRequestCount} guest request
+                            {r.openGuestRequestCount === 1 ? "" : "s"}
+                          </Link>
                         )}
 
                         {canMarkReady && (

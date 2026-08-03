@@ -25,6 +25,7 @@ import calendarRoutes from "./routes/calendar.js";
 import creditsRoutes from "./routes/credits.js";
 import dashboardRoutes from "./routes/dashboard.js";
 import expenseRoutes from "./routes/expenses.js";
+import guestRequestRoutes from "./routes/guestRequests.js";
 import guestRoutes from "./routes/guests.js";
 import housekeepingRoutes from "./routes/housekeeping.js";
 import invoiceRoutes from "./routes/invoices.js";
@@ -200,6 +201,9 @@ v1.use("/invoices", invoiceRoutes);
 v1.use("/payments", paymentRoutes);
 v1.use("/credits", creditsRoutes);
 v1.use("/housekeeping", housekeepingRoutes);
+// In-room QR service requests. NOT /requests — that is the web app's Booking
+// Requests page, which reads /reservations?status=hold.
+v1.use("/guest-requests", guestRequestRoutes);
 v1.use("/properties", propertiesRoutes);
 v1.use("/dashboard", dashboardRoutes);
 v1.use("/expenses", expenseRoutes);

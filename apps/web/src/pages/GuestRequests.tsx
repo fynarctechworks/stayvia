@@ -1,0 +1,1009 @@
+// Guest Requests — the staff queue behind the in-room QR service tiles.
+//
+// A guest scans the sticker in their room, unlocks with their phone's last 4
+// digits and taps "Clean my room" / "Towels, water & amenities" / "Report a
+// problem". Each tap writes a guest_requests row; this page is where the desk
+// sees them and acts.
+//
+// NOT "Booking Requests" (/requests), which is QR self-booking holds on
+// `reservations`. Different table, different page, different queue.
+//
+// A guest request is a guest *communication*, not a work order: the card shows
+// the guest's own wording verbatim and nothing on this page can overwrite it
+// (the PATCH accepts `status` and nothing else). Staff either close it out
+// where it stands, or promote it into a real work item in one tap:
+//
+//   cleaning → housekeeping task     issue → maintenance issue
+//   amenity  → no target module; acknowledge / mark done only
+//
+// Convert is idempotent server-side, so a double-tap or a second person
+// clicking the same button returns the SAME work item rather than filing two.
+// Once a request is converted the button is replaced by a link to what it
+// became.
+//
+// Polling matches BookingRequests (10s): a guest standing in their room with a
+// wet towel should not be waiting on someone to hit refresh.
+import {
+  GUEST_REQUEST_KIND_CONVERT_TARGET,
+  GUEST_REQUEST_KIND_LABELS,
+  GUEST_REQUEST_OPEN_STATUSES,
+  GUEST_REQUEST_STATUS_LABELS,
+  MAINTENANCE_CATEGORIES,
+  MAINTENANCE_CATEGORY_LABELS,
+  MAINTENANCE_SEVERITIES,
+  MAINTENANCE_SEVERITY_LABELS,
+  type GuestRequestConvertInput,
+  type GuestRequestConvertTarget,
+  type GuestRequestKind,
+  type GuestRequestStaffStatus,
+  type GuestRequestStatus,
+  type MaintenanceCategory,
+  type MaintenanceSeverity,
+} from "@stayvia/shared";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useEffect, useMemo, useState } from "react";
+import { Link } from "react-router-dom";
+import {
+  Ban,
+  BedDouble,
+  Check,
+  CheckCircle2,
+  ChevronRight,
+  ExternalLink,
+  Gift,
+  Loader2,
+  MessageSquare,
+  SprayCan,
+  User,
+  Wrench,
+  X,
+} from "@/lib/micons";
+import { useAuth } from "@/auth/AuthContext";
+import { useDialog } from "@/components/Dialog";
+import { EmptyState, FilterChip, ListSkeleton, PageHeader } from "@/components/kit";
+import { useToast } from "@/components/Toast";
+import { ApiError, api, getList } from "@/lib/api";
+
+// Mirrors the list/detail row the API shapes in routes/guestRequests.ts.
+// reservationNumber and guestName are nullable on purpose: those FKs are
+// ON DELETE SET NULL, so a request outlives a DPDP purge of the stay.
+interface GuestRequestRow {
+  id: string;
+  kind: GuestRequestKind;
+  status: GuestRequestStatus;
+  note: string | null;
+  createdAt: string;
+  acknowledgedAt: string | null;
+  acknowledgedBy: string | null;
+  acknowledgedByName: string | null;
+  completedAt: string | null;
+  completedBy: string | null;
+  completedByName: string | null;
+  roomId: string;
+  roomNumber: string;
+  roomType: string;
+  floor: number;
+  reservationId: string | null;
+  reservationNumber: string | null;
+  guestId: string | null;
+  guestName: string | null;
+  housekeepingTaskId: string | null;
+  maintenanceIssueId: string | null;
+}
+
+interface ConvertResponse {
+  alreadyConverted: boolean;
+  target: GuestRequestConvertTarget;
+  workItemId: string;
+  request: GuestRequestRow;
+}
+
+// ---------------------------------------------------------------- helpers
+
+// Re-render every 30s so "4m ago" stays honest between the 10s fetches.
+function useNowTick(ms = 30_000): number {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const t = setInterval(() => setNow(Date.now()), ms);
+    return () => clearInterval(t);
+  }, [ms]);
+  return now;
+}
+
+function timeAgo(iso: string, now: number): string {
+  const s = Math.max(1, Math.floor((now - new Date(iso).getTime()) / 1000));
+  if (s < 60) return `${s}s ago`;
+  if (s < 3600) return `${Math.floor(s / 60)}m ago`;
+  if (s < 86400) return `${Math.floor(s / 3600)}h ago`;
+  if (s < 604800) return `${Math.floor(s / 86400)}d ago`;
+  return new Date(iso).toLocaleDateString("en-IN", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+  });
+}
+
+function stampedAt(iso: string): string {
+  return new Date(iso).toLocaleString("en-IN", {
+    day: "2-digit",
+    month: "short",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+const KIND_META: Record<
+  GuestRequestKind,
+  { icon: typeof SprayCan; chip: string; blurb: string }
+> = {
+  cleaning: {
+    icon: SprayCan,
+    chip: "bg-infoBg text-info border-infoBorder",
+    blurb: "The guest asked for their room to be cleaned.",
+  },
+  amenity: {
+    icon: Gift,
+    chip: "bg-brand-soft text-brand-deep border-brand-tint",
+    blurb: "The guest asked for towels, water or another amenity.",
+  },
+  issue: {
+    icon: Wrench,
+    chip: "bg-dangerBg text-dangerFg border-dangerBorder",
+    blurb: "The guest reported something broken in the room.",
+  },
+};
+
+const STATUS_CHIP: Record<GuestRequestStatus, string> = {
+  open: "bg-warnBg text-warnFg border-warnBorder",
+  acknowledged: "bg-infoBg text-info border-infoBorder",
+  done: "bg-successBg text-success border-successBorder",
+  cancelled: "bg-neutralBg text-inkMuted border-neutralBorder",
+};
+
+// Open before acknowledged before everything else. The API already orders
+// newest-first, and Array.prototype.sort is stable, so this groups by status
+// without disturbing the time order inside each group.
+const STATUS_RANK: Record<GuestRequestStatus, number> = {
+  open: 0,
+  acknowledged: 1,
+  done: 2,
+  cancelled: 3,
+};
+
+const TERMINAL: readonly GuestRequestStatus[] = ["done", "cancelled"];
+const isTerminal = (s: GuestRequestStatus) => TERMINAL.includes(s);
+
+type QueueFilter = "active" | "done" | "cancelled" | "all";
+
+const FILTERS: { key: QueueFilter; label: string }[] = [
+  { key: "active", label: "Needs action" },
+  { key: "done", label: "Done" },
+  { key: "cancelled", label: "Cancelled" },
+  { key: "all", label: "All" },
+];
+
+function filterParams(f: QueueFilter): Record<string, string> {
+  // `statuses` is a comma-separated list the shared schema decodes and
+  // enum-validates — never hand-write the member list here.
+  if (f === "active") return { statuses: GUEST_REQUEST_OPEN_STATUSES.join(",") };
+  if (f === "done") return { status: "done" };
+  if (f === "cancelled") return { status: "cancelled" };
+  return {};
+}
+
+// The link column that matters for a given kind. amenity has neither.
+function workItemFor(r: GuestRequestRow): { target: GuestRequestConvertTarget; id: string } | null {
+  const target = GUEST_REQUEST_KIND_CONVERT_TARGET[r.kind];
+  if (!target) return null;
+  const id = target === "maintenance" ? r.maintenanceIssueId : r.housekeepingTaskId;
+  return id ? { target, id } : null;
+}
+
+// ------------------------------------------------------------------- page
+
+export default function GuestRequests() {
+  const { can } = useAuth();
+  const dialog = useDialog();
+  const { toast } = useToast();
+  const qc = useQueryClient();
+  const now = useNowTick();
+
+  const [filter, setFilter] = useState<QueueFilter>("active");
+  // Card open in the detail overlay, held by id so the 10s poll keeps it fresh.
+  const [detailId, setDetailId] = useState<string | null>(null);
+  // Request being converted (the convert form overlay).
+  const [convertId, setConvertId] = useState<string | null>(null);
+
+  // Writes are gated exactly the way the API gates them, so the UI never
+  // offers a button that comes back 403.
+  const canWrite = can("update_housekeeping");
+  const canMaintain = can("manage_maintenance");
+
+  const q = useQuery({
+    queryKey: ["guest-requests", "list", filter],
+    queryFn: () =>
+      getList<GuestRequestRow>("/guest-requests", { ...filterParams(filter), per_page: 50 }),
+    // Same cadence as Booking Requests — a guest is waiting on the other end.
+    refetchInterval: 10_000,
+  });
+
+  const items = useMemo(
+    () => [...(q.data?.data ?? [])].sort((a, b) => STATUS_RANK[a.status] - STATUS_RANK[b.status]),
+    [q.data],
+  );
+  const total = q.data?.meta.total ?? 0;
+  const openCount = items.filter((r) => r.status === "open").length;
+
+  const detail = detailId ? items.find((r) => r.id === detailId) ?? null : null;
+  const converting = convertId ? items.find((r) => r.id === convertId) ?? null : null;
+
+  // A row that scrolls out of the active filter after being actioned must not
+  // leave a stuck overlay behind.
+  useEffect(() => {
+    if (detailId && !q.isLoading && !detail) setDetailId(null);
+  }, [detailId, detail, q.isLoading]);
+  useEffect(() => {
+    if (convertId && !q.isLoading && !converting) setConvertId(null);
+  }, [convertId, converting, q.isLoading]);
+
+  // Covers the page list AND the sidebar badge — both live under the
+  // "guest-requests" key prefix.
+  const refresh = () => qc.invalidateQueries({ queryKey: ["guest-requests"] });
+
+  const setStatus = useMutation({
+    mutationFn: (v: { id: string; status: GuestRequestStaffStatus }) =>
+      api.patch<GuestRequestRow>(`/guest-requests/${v.id}`, { status: v.status }),
+    onSuccess: (_d, v) => {
+      toast(
+        v.status === "acknowledged"
+          ? "Acknowledged - the guest's request is now yours."
+          : v.status === "done"
+            ? "Marked done."
+            : "Request cancelled.",
+        "success",
+      );
+      void refresh();
+    },
+    onError: (e) => {
+      toast(e instanceof ApiError ? e.message : "Could not update the request", "error");
+      void refresh();
+    },
+  });
+
+  const convert = useMutation({
+    mutationFn: (v: { id: string; body: GuestRequestConvertInput }) =>
+      api.post<ConvertResponse>(`/guest-requests/${v.id}/convert`, v.body),
+    onSuccess: (d) => {
+      toast(
+        d.alreadyConverted
+          ? "Already converted - opening the existing work item instead of creating a second one."
+          : d.target === "maintenance"
+            ? "Maintenance issue raised. It's on the Maintenance page now."
+            : "Housekeeping task created and the team has been notified.",
+        "success",
+      );
+      setConvertId(null);
+      void refresh();
+      // The maintenance module keeps its own caches.
+      void qc.invalidateQueries({ queryKey: ["maint-list"] });
+      void qc.invalidateQueries({ queryKey: ["maint-summary"] });
+      void qc.invalidateQueries({ queryKey: ["maint-room"] });
+    },
+    onError: (e) => {
+      toast(e instanceof ApiError ? e.message : "Could not convert the request", "error");
+      void refresh();
+    },
+  });
+
+  const busyId =
+    (setStatus.isPending && setStatus.variables?.id) ||
+    (convert.isPending && convert.variables?.id) ||
+    null;
+
+  async function onCancel(r: GuestRequestRow) {
+    const ok = await dialog.confirm({
+      title: `Cancel this ${GUEST_REQUEST_KIND_LABELS[r.kind].toLowerCase()} request?`,
+      message: `Room ${r.roomNumber}'s request is closed without being actioned. The guest is NOT told - if they're still waiting, say so in person. They can always tap the tile again.`,
+      okLabel: "Cancel request",
+      cancelLabel: "Keep it open",
+      tone: "danger",
+    });
+    if (ok) setStatus.mutate({ id: r.id, status: "cancelled" });
+  }
+
+  const subtitle =
+    filter === "active"
+      ? total === 0
+        ? "In-room QR requests land here the moment a guest taps a tile."
+        : `${total} request${total === 1 ? "" : "s"} need${total === 1 ? "s" : ""} action${
+            openCount > 0 ? ` - ${openCount} not picked up yet` : ""
+          }.`
+      : `${total} request${total === 1 ? "" : "s"}.`;
+
+  return (
+    <div className="space-y-[22px]">
+      <PageHeader title="Guest Requests" subtitle={subtitle} />
+
+      {/* Horizontal scroll rather than wrap so the chip row never pushes the
+          page wide at 320px. */}
+      <div className="-mx-3 px-3 sm:mx-0 sm:px-0 overflow-x-auto no-scrollbar">
+        <div className="flex items-center gap-2 w-max">
+          {FILTERS.map((f) => (
+            <FilterChip
+              key={f.key}
+              label={f.label}
+              active={filter === f.key}
+              count={filter === f.key ? total : undefined}
+              onClick={() => setFilter(f.key)}
+            />
+          ))}
+        </div>
+      </div>
+
+      {q.isLoading ? (
+        <ListSkeleton rows={3} />
+      ) : items.length === 0 ? (
+        <div className="card">
+          <EmptyState
+            icon={<MessageSquare className="w-5 h-5" />}
+            title={
+              filter === "active"
+                ? "Nothing waiting right now"
+                : `No ${filter === "all" ? "" : filter + " "}requests`
+            }
+            hint={
+              filter === "active"
+                ? "When a guest scans the QR in their room and asks for cleaning, an amenity or reports a problem, it appears here straight away."
+                : "Switch back to Needs action to see the live queue."
+            }
+          />
+        </div>
+      ) : (
+        <div className="grid gap-3.5 md:grid-cols-2 xl:grid-cols-3">
+          {items.map((r) => (
+            <RequestCard
+              key={r.id}
+              row={r}
+              now={now}
+              busy={busyId === r.id}
+              canWrite={canWrite}
+              canMaintain={canMaintain}
+              onOpen={() => setDetailId(r.id)}
+              onAcknowledge={() => setStatus.mutate({ id: r.id, status: "acknowledged" })}
+              onDone={() => setStatus.mutate({ id: r.id, status: "done" })}
+              onConvert={() => setConvertId(r.id)}
+            />
+          ))}
+          {total > items.length && (
+            <div className="md:col-span-2 xl:col-span-3 text-center text-xs text-textSecondary">
+              Showing the {items.length} most recent of {total}.
+            </div>
+          )}
+        </div>
+      )}
+
+      {detail && (
+        <RequestDetailOverlay
+          row={detail}
+          now={now}
+          busy={busyId === detail.id}
+          canWrite={canWrite}
+          canMaintain={canMaintain}
+          onClose={() => setDetailId(null)}
+          onAcknowledge={() => setStatus.mutate({ id: detail.id, status: "acknowledged" })}
+          onDone={() => setStatus.mutate({ id: detail.id, status: "done" })}
+          onCancel={() => void onCancel(detail)}
+          onConvert={() => {
+            setDetailId(null);
+            setConvertId(detail.id);
+          }}
+        />
+      )}
+
+      {converting && (
+        <ConvertOverlay
+          row={converting}
+          pending={convert.isPending}
+          onClose={() => setConvertId(null)}
+          onSubmit={(body) => convert.mutate({ id: converting.id, body })}
+        />
+      )}
+    </div>
+  );
+}
+
+// ------------------------------------------------------------------- card
+
+function RequestCard({
+  row,
+  now,
+  busy,
+  canWrite,
+  canMaintain,
+  onOpen,
+  onAcknowledge,
+  onDone,
+  onConvert,
+}: {
+  row: GuestRequestRow;
+  now: number;
+  busy: boolean;
+  canWrite: boolean;
+  canMaintain: boolean;
+  onOpen: () => void;
+  onAcknowledge: () => void;
+  onDone: () => void;
+  onConvert: () => void;
+}) {
+  const meta = KIND_META[row.kind];
+  const Icon = meta.icon;
+  const target = GUEST_REQUEST_KIND_CONVERT_TARGET[row.kind];
+  const linked = workItemFor(row);
+  const closed = isTerminal(row.status);
+  // Convert into maintenance needs that module's own key — the API checks
+  // manage_maintenance on top of update_housekeeping for that branch.
+  const mayConvert =
+    canWrite && !!target && !linked && !closed && (target !== "maintenance" || canMaintain);
+
+  return (
+    <div className="card !p-[18px] space-y-3 min-w-0">
+      <div className="flex items-start justify-between gap-2">
+        <button className="min-w-0 text-left group" onClick={onOpen} title="Open this request">
+          <span
+            className={`inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-[11px] font-bold uppercase tracking-[0.08em] ${meta.chip}`}
+          >
+            <Icon className="w-3.5 h-3.5" /> {GUEST_REQUEST_KIND_LABELS[row.kind]}
+          </span>
+          <div className="flex items-center gap-1.5 mt-1.5 min-w-0">
+            <BedDouble className="w-4 h-4 shrink-0 text-inkMuted" />
+            <span className="font-mono text-sm font-semibold truncate group-hover:text-brand-deep transition-colors">
+              Room {row.roomNumber}
+            </span>
+            <ChevronRight className="w-3.5 h-3.5 shrink-0 text-inkFaint group-hover:text-brand-deep" />
+          </div>
+        </button>
+        <span
+          className={`shrink-0 inline-flex items-center rounded-full border px-2.5 py-1 text-[11px] font-bold ${STATUS_CHIP[row.status]}`}
+        >
+          {GUEST_REQUEST_STATUS_LABELS[row.status]}
+        </span>
+      </div>
+
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-textSecondary min-w-0">
+        <span className="inline-flex items-center gap-1 min-w-0">
+          <User className="w-3.5 h-3.5 shrink-0" />
+          <span className="truncate">{row.guestName ?? "Guest record removed"}</span>
+        </span>
+        <span className="tabular-nums">{timeAgo(row.createdAt, now)}</span>
+      </div>
+
+      {/* The guest's own words, verbatim. Nothing on this page edits it. */}
+      {row.note?.trim() ? (
+        <blockquote className="rounded-md bg-surfaceSubtle border-l-2 border-brand-tint px-3 py-2 text-[13px] text-inkBody leading-snug break-words">
+          &ldquo;{row.note.trim()}&rdquo;
+        </blockquote>
+      ) : (
+        <p className="text-[13px] text-textSecondary leading-snug">{meta.blurb}</p>
+      )}
+
+      {linked && <WorkItemLink target={linked.target} id={linked.id} />}
+
+      {canWrite && !closed && (
+        <div className="flex flex-wrap gap-2 pt-0.5">
+          {row.status === "open" && (
+            <button
+              className="btn-secondary flex-1 min-w-[112px] inline-flex items-center justify-center gap-1.5 disabled:opacity-60"
+              disabled={busy}
+              onClick={onAcknowledge}
+            >
+              {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
+              Acknowledge
+            </button>
+          )}
+          {mayConvert && (
+            <button
+              className="btn-secondary flex-1 min-w-[112px] inline-flex items-center justify-center gap-1.5 disabled:opacity-60"
+              disabled={busy}
+              onClick={onConvert}
+            >
+              {target === "maintenance" ? (
+                <Wrench className="w-4 h-4" />
+              ) : (
+                <SprayCan className="w-4 h-4" />
+              )}
+              {target === "maintenance" ? "Raise issue" : "Create task"}
+            </button>
+          )}
+          <button
+            className="btn-primary flex-1 min-w-[112px] inline-flex items-center justify-center gap-1.5 disabled:opacity-60"
+            disabled={busy}
+            onClick={onDone}
+          >
+            {busy ? (
+              <Loader2 className="w-4 h-4 animate-spin" />
+            ) : (
+              <CheckCircle2 className="w-4 h-4" />
+            )}
+            Mark done
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// What the request became. Maintenance issues have a page of their own, so
+// that one is a link. Housekeeping tasks do not have a page yet — showing a
+// dead link would be worse than showing none, so it renders as a plain chip
+// (the task is real; the team was notified when it was created).
+function WorkItemLink({ target, id }: { target: GuestRequestConvertTarget; id: string }) {
+  if (target === "maintenance") {
+    return (
+      <Link
+        to={`/maintenance/${id}`}
+        className="flex items-center gap-1.5 rounded-md border border-borderControl bg-surfaceAlt px-3 py-2 text-xs font-semibold text-brand-deep hover:bg-brand-soft hover:border-brand-tint transition-colors"
+      >
+        <Wrench className="w-3.5 h-3.5 shrink-0" />
+        <span className="flex-1 min-w-0 truncate">Maintenance issue raised</span>
+        <ExternalLink className="w-3.5 h-3.5 shrink-0" />
+      </Link>
+    );
+  }
+  return (
+    <div
+      className="flex items-center gap-1.5 rounded-md border border-borderControl bg-surfaceAlt px-3 py-2 text-xs font-semibold text-textSecondary"
+      title={`Housekeeping task ${id}`}
+    >
+      <SprayCan className="w-3.5 h-3.5 shrink-0" />
+      <span className="flex-1 min-w-0 truncate">Housekeeping task created</span>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------- overlay
+
+function RequestDetailOverlay({
+  row,
+  now,
+  busy,
+  canWrite,
+  canMaintain,
+  onClose,
+  onAcknowledge,
+  onDone,
+  onCancel,
+  onConvert,
+}: {
+  row: GuestRequestRow;
+  now: number;
+  busy: boolean;
+  canWrite: boolean;
+  canMaintain: boolean;
+  onClose: () => void;
+  onAcknowledge: () => void;
+  onDone: () => void;
+  onCancel: () => void;
+  onConvert: () => void;
+}) {
+  const meta = KIND_META[row.kind];
+  const Icon = meta.icon;
+  const target = GUEST_REQUEST_KIND_CONVERT_TARGET[row.kind];
+  const linked = workItemFor(row);
+  const closed = isTerminal(row.status);
+  const mayConvert =
+    canWrite && !!target && !linked && !closed && (target !== "maintenance" || canMaintain);
+
+  const field = (label: string, value: string | null | undefined, mono = false) => (
+    <div className="min-w-0">
+      <div className="text-[10px] font-bold uppercase tracking-[0.06em] text-inkMuted">{label}</div>
+      <div className={`text-sm text-ink mt-0.5 break-words ${mono ? "font-mono" : ""}`}>
+        {value?.trim() ? value : <span className="text-inkFaint">-</span>}
+      </div>
+    </div>
+  );
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-start md:items-center justify-center bg-inkDark/50 backdrop-blur-[2px] p-3 md:p-6 overflow-y-auto"
+      onClick={onClose}
+    >
+      <div
+        className="bg-surface rounded-2xl shadow-modal w-full max-w-lg my-auto overflow-hidden"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between gap-2 px-5 py-3.5 border-b border-divider bg-surfaceAlt">
+          <div className="min-w-0">
+            <span
+              className={`inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-[11px] font-bold uppercase tracking-[0.08em] ${meta.chip}`}
+            >
+              <Icon className="w-3.5 h-3.5" /> {GUEST_REQUEST_KIND_LABELS[row.kind]}
+            </span>
+            <div className="font-mono text-sm font-semibold mt-1 truncate">
+              Room {row.roomNumber}
+            </div>
+          </div>
+          <div className="flex items-center gap-2 shrink-0">
+            <span
+              className={`inline-flex items-center rounded-full border px-2.5 py-1 text-[11px] font-bold ${STATUS_CHIP[row.status]}`}
+            >
+              {GUEST_REQUEST_STATUS_LABELS[row.status]}
+            </span>
+            <button
+              onClick={onClose}
+              aria-label="Close"
+              className="w-9 h-9 rounded-full grid place-items-center hover:bg-parchment transition-colors"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
+        </div>
+
+        <div className="max-h-[calc(100vh-230px)] overflow-y-auto px-5 py-4 space-y-5">
+          <section>
+            <h3 className="text-[11px] font-bold uppercase tracking-[0.1em] text-inkMuted mb-2">
+              What the guest said
+            </h3>
+            {row.note?.trim() ? (
+              <blockquote className="rounded-md bg-surfaceSubtle border-l-2 border-brand-tint px-3 py-2.5 text-sm text-inkBody leading-relaxed break-words">
+                &ldquo;{row.note.trim()}&rdquo;
+              </blockquote>
+            ) : (
+              <p className="text-sm text-textSecondary leading-relaxed">
+                {meta.blurb} They didn&rsquo;t add a note.
+              </p>
+            )}
+          </section>
+
+          <section>
+            <h3 className="text-[11px] font-bold uppercase tracking-[0.1em] text-inkMuted mb-2.5">
+              Where it came from
+            </h3>
+            <div className="grid grid-cols-2 gap-x-4 gap-y-3">
+              {field("Room", `${row.roomNumber} - Floor ${row.floor}`, true)}
+              {field("Room type", row.roomType.replace(/_/g, " "))}
+              {field("Guest", row.guestName)}
+              {row.reservationId && row.reservationNumber ? (
+                <div className="min-w-0">
+                  <div className="text-[10px] font-bold uppercase tracking-[0.06em] text-inkMuted">
+                    Reservation
+                  </div>
+                  <Link
+                    to={`/reservations/${row.reservationId}`}
+                    className="text-sm font-mono text-brand-deep hover:underline mt-0.5 inline-flex items-center gap-1 break-all"
+                  >
+                    {row.reservationNumber}
+                    <ChevronRight className="w-3.5 h-3.5 shrink-0" />
+                  </Link>
+                </div>
+              ) : (
+                field("Reservation", null)
+              )}
+            </div>
+          </section>
+
+          <section>
+            <h3 className="text-[11px] font-bold uppercase tracking-[0.1em] text-inkMuted mb-2.5">
+              Timeline
+            </h3>
+            <ol className="space-y-2 text-[13px]">
+              <li className="flex items-start gap-2">
+                <span className="w-1.5 h-1.5 rounded-full bg-brand mt-[7px] shrink-0" />
+                <span className="min-w-0">
+                  <span className="text-ink">Guest sent it</span>{" "}
+                  <span className="text-textSecondary">
+                    - {stampedAt(row.createdAt)} ({timeAgo(row.createdAt, now)})
+                  </span>
+                </span>
+              </li>
+              {row.acknowledgedAt && (
+                <li className="flex items-start gap-2">
+                  <span className="w-1.5 h-1.5 rounded-full bg-info mt-[7px] shrink-0" />
+                  <span className="min-w-0">
+                    <span className="text-ink">
+                      Acknowledged{row.acknowledgedByName ? ` by ${row.acknowledgedByName}` : ""}
+                    </span>{" "}
+                    <span className="text-textSecondary">- {stampedAt(row.acknowledgedAt)}</span>
+                  </span>
+                </li>
+              )}
+              {row.completedAt && (
+                <li className="flex items-start gap-2">
+                  <span
+                    className={`w-1.5 h-1.5 rounded-full mt-[7px] shrink-0 ${
+                      row.status === "cancelled" ? "bg-inkFaint" : "bg-success"
+                    }`}
+                  />
+                  <span className="min-w-0">
+                    <span className="text-ink">
+                      {row.status === "cancelled" ? "Cancelled" : "Marked done"}
+                      {row.completedByName ? ` by ${row.completedByName}` : ""}
+                    </span>{" "}
+                    <span className="text-textSecondary">- {stampedAt(row.completedAt)}</span>
+                  </span>
+                </li>
+              )}
+            </ol>
+          </section>
+
+          {linked && (
+            <section>
+              <h3 className="text-[11px] font-bold uppercase tracking-[0.1em] text-inkMuted mb-2">
+                Converted into
+              </h3>
+              <WorkItemLink target={linked.target} id={linked.id} />
+            </section>
+          )}
+        </div>
+
+        {canWrite && !closed && (
+          <div className="flex flex-wrap gap-2 px-5 py-3.5 border-t border-divider bg-surfaceAlt">
+            {row.status === "open" && (
+              <button
+                className="btn-secondary flex-1 min-w-[120px] inline-flex items-center justify-center gap-1.5 disabled:opacity-60"
+                disabled={busy}
+                onClick={onAcknowledge}
+              >
+                <Check className="w-4 h-4" /> Acknowledge
+              </button>
+            )}
+            {mayConvert && (
+              <button
+                className="btn-secondary flex-1 min-w-[120px] inline-flex items-center justify-center gap-1.5 disabled:opacity-60"
+                disabled={busy}
+                onClick={onConvert}
+              >
+                {target === "maintenance" ? (
+                  <Wrench className="w-4 h-4" />
+                ) : (
+                  <SprayCan className="w-4 h-4" />
+                )}
+                {target === "maintenance" ? "Raise issue" : "Create task"}
+              </button>
+            )}
+            <button
+              className="btn-primary flex-1 min-w-[120px] inline-flex items-center justify-center gap-1.5 disabled:opacity-60"
+              disabled={busy}
+              onClick={onDone}
+            >
+              {busy ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                <CheckCircle2 className="w-4 h-4" />
+              )}
+              Mark done
+            </button>
+            <button
+              className="btn-danger flex-1 min-w-[120px] inline-flex items-center justify-center gap-1.5 disabled:opacity-60"
+              disabled={busy}
+              onClick={onCancel}
+            >
+              <Ban className="w-4 h-4" /> Cancel
+            </button>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------- convert
+
+// One overlay, two shapes — the payload is a discriminated union on `target`,
+// and the target is decided by the request's kind (the server re-derives it
+// from the stored row, so this is presentation only).
+function ConvertOverlay({
+  row,
+  pending,
+  onClose,
+  onSubmit,
+}: {
+  row: GuestRequestRow;
+  pending: boolean;
+  onClose: () => void;
+  onSubmit: (body: GuestRequestConvertInput) => void;
+}) {
+  const target = GUEST_REQUEST_KIND_CONVERT_TARGET[row.kind];
+  const note = row.note?.trim() ?? "";
+
+  // Prefilled from the guest's wording, editable before sending — the request
+  // row keeps the original either way.
+  const [category, setCategory] = useState<MaintenanceCategory>("other");
+  const [severity, setSeverity] = useState<MaintenanceSeverity>("normal");
+  const [title, setTitle] = useState(
+    (note || `Guest reported a problem in room ${row.roomNumber}`).slice(0, 200),
+  );
+  const [description, setDescription] = useState(
+    note
+      ? `Reported by the guest from the in-room QR: "${note}"`
+      : `The guest in room ${row.roomNumber} reported a problem from the in-room QR without adding details. Check with them at the room.`,
+  );
+  const [costEstimate, setCostEstimate] = useState("");
+  const [notes, setNotes] = useState("");
+
+  if (!target) return null;
+
+  const costInvalid =
+    costEstimate.trim() !== "" &&
+    (!Number.isFinite(Number(costEstimate)) || Number(costEstimate) < 0);
+  const blocked =
+    pending ||
+    (target === "maintenance" &&
+      (title.trim().length < 3 || description.trim().length < 3 || costInvalid));
+
+  function submit() {
+    if (blocked) return;
+    if (target === "maintenance") {
+      onSubmit({
+        target: "maintenance",
+        category,
+        severity,
+        title: title.trim(),
+        description: description.trim(),
+        // Optional on purpose: a guest saying "AC not cooling" gives the desk
+        // no basis for a number, and 0 would read as "free to fix".
+        ...(costEstimate.trim() === "" ? {} : { costEstimate: Number(costEstimate) }),
+      });
+    } else {
+      onSubmit({ target: "housekeeping", ...(notes.trim() ? { notes: notes.trim() } : {}) });
+    }
+  }
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-start md:items-center justify-center bg-inkDark/50 backdrop-blur-[2px] p-3 md:p-6 overflow-y-auto"
+      onClick={onClose}
+    >
+      <div
+        className="bg-surface rounded-2xl shadow-modal w-full max-w-xl my-auto overflow-hidden"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between gap-2 px-5 py-3.5 border-b border-divider bg-surfaceAlt">
+          <div className="min-w-0">
+            <h2 className="text-[15px] font-semibold text-ink truncate">
+              {target === "maintenance" ? "Raise a maintenance issue" : "Create a housekeeping task"}
+            </h2>
+            <div className="text-xs text-textSecondary mt-0.5 truncate">
+              Room {row.roomNumber} - from the guest&rsquo;s request
+            </div>
+          </div>
+          <button
+            onClick={onClose}
+            aria-label="Close"
+            className="w-9 h-9 shrink-0 rounded-full grid place-items-center hover:bg-parchment transition-colors"
+          >
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+
+        <div className="max-h-[calc(100vh-230px)] overflow-y-auto px-5 py-4 space-y-3.5">
+          {note && (
+            <blockquote className="rounded-md bg-surfaceSubtle border-l-2 border-brand-tint px-3 py-2 text-[13px] text-inkBody leading-snug break-words">
+              &ldquo;{note}&rdquo;
+            </blockquote>
+          )}
+
+          {target === "maintenance" ? (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label className="label block mb-1" htmlFor="gr-category">
+                  Category
+                </label>
+                <select
+                  id="gr-category"
+                  className="input"
+                  value={category}
+                  onChange={(e) => setCategory(e.target.value as MaintenanceCategory)}
+                >
+                  {MAINTENANCE_CATEGORIES.map((c) => (
+                    <option key={c} value={c}>
+                      {MAINTENANCE_CATEGORY_LABELS[c]}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="label block mb-1" htmlFor="gr-severity">
+                  Severity
+                </label>
+                <select
+                  id="gr-severity"
+                  className="input"
+                  value={severity}
+                  onChange={(e) => setSeverity(e.target.value as MaintenanceSeverity)}
+                >
+                  {MAINTENANCE_SEVERITIES.map((s) => (
+                    <option key={s} value={s}>
+                      {MAINTENANCE_SEVERITY_LABELS[s]}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="sm:col-span-2">
+                <label className="label block mb-1" htmlFor="gr-title">
+                  Title
+                </label>
+                <input
+                  id="gr-title"
+                  className="input"
+                  value={title}
+                  maxLength={200}
+                  onChange={(e) => setTitle(e.target.value)}
+                  placeholder="Short summary - e.g. AC not cooling"
+                />
+              </div>
+              <div className="sm:col-span-2">
+                <label className="label block mb-1" htmlFor="gr-description">
+                  Description
+                </label>
+                <textarea
+                  id="gr-description"
+                  className="input min-h-[88px]"
+                  value={description}
+                  maxLength={2000}
+                  onChange={(e) => setDescription(e.target.value)}
+                  placeholder="What the technician needs to know"
+                />
+              </div>
+              <div className="sm:col-span-2">
+                <label className="label block mb-1" htmlFor="gr-cost">
+                  Estimated cost (₹) - optional
+                </label>
+                <input
+                  id="gr-cost"
+                  className="input"
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={costEstimate}
+                  onChange={(e) => setCostEstimate(e.target.value)}
+                  placeholder="Leave blank until someone has looked at it"
+                />
+                {costInvalid && (
+                  <div className="text-danger text-xs mt-1">Enter ₹0 or more, or leave it blank.</div>
+                )}
+              </div>
+            </div>
+          ) : (
+            <div>
+              <label className="label block mb-1" htmlFor="gr-notes">
+                Notes for housekeeping - optional
+              </label>
+              <textarea
+                id="gr-notes"
+                className="input min-h-[88px]"
+                value={notes}
+                maxLength={500}
+                onChange={(e) => setNotes(e.target.value)}
+                placeholder="Anything the room attendant should know before knocking"
+              />
+              <p className="text-xs text-textSecondary mt-2">
+                Creates a daily-refresh task for room {row.roomNumber} and notifies the
+                housekeeping team. The guest&rsquo;s own words are carried over.
+              </p>
+            </div>
+          )}
+        </div>
+
+        <div className="flex flex-wrap gap-2 px-5 py-3.5 border-t border-divider bg-surfaceAlt">
+          <button className="btn-secondary flex-1 min-w-[120px]" onClick={onClose} disabled={pending}>
+            Cancel
+          </button>
+          <button
+            className="btn-primary flex-1 min-w-[120px] inline-flex items-center justify-center gap-1.5 disabled:opacity-60"
+            disabled={blocked}
+            onClick={submit}
+          >
+            {pending ? (
+              <Loader2 className="w-4 h-4 animate-spin" />
+            ) : target === "maintenance" ? (
+              <Wrench className="w-4 h-4" />
+            ) : (
+              <SprayCan className="w-4 h-4" />
+            )}
+            {target === "maintenance" ? "Raise issue" : "Create task"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}

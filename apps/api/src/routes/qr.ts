@@ -23,12 +23,12 @@
 
 import { createHmac, timingSafeEqual } from "node:crypto";
 import {
+  guestRequestCreateSchema,
   qrBookSchema,
   qrBookSendOtpSchema,
-  qrRequestSchema,
   qrUnlockSchema,
+  type GuestRequestCreateInput,
   type QrBookInput,
-  type QrRequestInput,
   type QrUnlockInput,
 } from "@stayvia/shared";
 import { addDays, format, parseISO } from "date-fns";
@@ -38,6 +38,7 @@ import { Router, type Request, type Response } from "express";
 import { env } from "../config/env.js";
 import { db } from "../db/client.js";
 import { amenities, roomAmenities, roomImages } from "../db/schema/amenities.js";
+import { guestRequests } from "../db/schema/guestRequests.js";
 import { guests } from "../db/schema/guests.js";
 import { otps } from "../db/schema/otps.js";
 import { properties } from "../db/schema/properties.js";
@@ -364,16 +365,26 @@ router.get("/room/:token/home", qrReadLimiter, async (req: Request, res: Respons
   });
 });
 
-// Guest service request → staff notification. Occupancy re-checked; rate
-// limited.
+// Guest service request → a guest_requests row + a staff notification.
+// Occupancy re-checked; rate limited.
+//
+// The row is what makes this durable: the notification alone meant a request
+// nobody happened to see was simply gone — no queue, no status, no history.
+// Staff work it from /guest-requests (routes/guestRequests.ts); the ping stays
+// so nothing about the existing staff experience regresses.
+//
+// Tenancy: property_id, room_id, reservation_id and guest_id ALL come from the
+// server-side token context (loadRoomByToken → activeStayForRoom). The request
+// body carries only the unlock key, the kind and the guest's note — nothing
+// from it selects a hotel, a room or a stay.
 router.post(
   "/room/:token/request",
   qrWriteLimiter,
-  validate(qrRequestSchema),
+  validate(guestRequestCreateSchema),
   async (req: Request, res: Response) => {
     const ctx = await loadRoomByToken(req.params.token);
     if (!ctx) return fail(res, 404, "NOT_FOUND", "Unknown code");
-    const body = req.body as QrRequestInput;
+    const body = req.body as GuestRequestCreateInput;
     const verified = verifyUnlockKey(body.key, ctx.room.id);
     if (!verified) return fail(res, 401, "LOCKED", "Unlock first");
     const stay = await activeStayForRoom(ctx.property.id, ctx.room.id);
@@ -389,17 +400,38 @@ router.post(
           : "Problem reported";
     const note = (body.note ?? "").trim();
 
+    // Persist BEFORE notifying: if the insert fails the guest is told, rather
+    // than being thanked for a request that only ever existed as a ping.
+    // `status` defaults to 'open' in the column.
+    const [created] = await db
+      .insert(guestRequests)
+      .values({
+        propertyId: ctx.property.id,
+        roomId: ctx.room.id,
+        reservationId: stay.reservationId,
+        guestId: stay.guestId,
+        kind: body.kind,
+        note: note || null,
+      })
+      .returning({ id: guestRequests.id });
+
     await dispatchNotification({
       propertyId: ctx.property.id,
       type: "system",
       title: `Room ${ctx.room.roomNumber}: ${kindLabel}`,
       body: note || `${stay.guestName} asked via the in-room QR.`,
-      href: `/reservations/${stay.reservationId}`,
+      // The queue, not the reservation — that is where staff action it.
+      href: "/guest-requests",
       recipientRoles:
         body.kind === "issue" ? ["admin", "frontdesk"] : ["admin", "frontdesk", "housekeeping"],
     });
     logger.info(
-      { roomId: ctx.room.id, reservationId: stay.reservationId, kind: body.kind },
+      {
+        guestRequestId: created!.id,
+        roomId: ctx.room.id,
+        reservationId: stay.reservationId,
+        kind: body.kind,
+      },
       "QR guest request",
     );
     return ok(res, { received: true });

@@ -3,6 +3,7 @@ import { Router } from "express";
 import { roomListQuerySchema } from "@stayvia/shared";
 import { z } from "zod";
 import { db } from "../db/client.js";
+import { guestRequests } from "../db/schema/guestRequests.js";
 import { maintenanceIssues } from "../db/schema/maintenance.js";
 import { rooms } from "../db/schema/rooms.js";
 import { logActivity } from "../lib/activity.js";
@@ -66,11 +67,34 @@ router.get("/", requireAuth, validate(roomListQuerySchema, "query"), async (req,
     issueCounts.map((c) => [c.roomId, Number(c.count)]),
   );
 
+  // Open in-room guest requests per room. Housekeeping staff work off THIS
+  // board, not the guest_requests queue, so a guest who asked for a clean or
+  // for towels has to be visible here — otherwise the request only exists on
+  // a page this role has no reason to open.
+  const requestCounts = roomIds.length
+    ? await db
+        .select({
+          roomId: guestRequests.roomId,
+          count: sql<number>`COUNT(*)::int`,
+        })
+        .from(guestRequests)
+        .where(
+          and(
+            eq(guestRequests.propertyId, req.propertyId),
+            inArray(guestRequests.roomId, roomIds),
+            inArray(guestRequests.status, ["open", "acknowledged"]),
+          ),
+        )
+        .groupBy(guestRequests.roomId)
+    : [];
+  const requestMap = new Map(requestCounts.map((c) => [c.roomId, Number(c.count)]));
+
   return ok(
     res,
     rows.map((r) => ({
       ...r,
       openIssueCount: countMap.get(r.id) ?? 0,
+      openGuestRequestCount: requestMap.get(r.id) ?? 0,
     })),
   );
 });

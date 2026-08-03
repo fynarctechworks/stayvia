@@ -86,4 +86,24 @@ export type LineItemType = (typeof LINE_ITEM_TYPES)[number];
 export const BOOKING_SOURCES = ["walkin", "phone_whatsapp", "complimentary", "qr"] as const;
 export type BookingSource = (typeof BOOKING_SOURCES)[number];
 
+// In-room QR service requests (migration 0015). Backed by real Postgres enum
+// types (guest_request_kind / guest_request_status), so adding a value needs
+// a migration — the lists have to stay in lockstep with the DB.
+//   cleaning — "Clean my room"   → converts to housekeeping
+//   amenity  — "Towels, water"   → no target module; acknowledge / done only
+//   issue    — "Report a problem" → converts to a maintenance issue
+//
+// Re-exported from @stayvia/shared rather than redeclared, for the same
+// reason RESERVATION_STATUSES above is: the shared copy backs the Zod
+// validators on the public create, the list query and the PATCH, so a second
+// hand-written copy here is a divergence nothing can typecheck.
+export {
+  GUEST_REQUEST_KINDS,
+  GUEST_REQUEST_STATUSES,
+  GUEST_REQUEST_OPEN_STATUSES,
+  GUEST_REQUEST_TERMINAL_STATUSES,
+  type GuestRequestKind,
+  type GuestRequestStatus,
+} from "@stayvia/shared";
+
 export const REVENUE_EXCLUDED_SOURCES: readonly BookingSource[] = ["complimentary"];

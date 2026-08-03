@@ -5,6 +5,7 @@ export * from "./schemas/reservation.js";
 export * from "./schemas/settings.js";
 export * from "./schemas/expense.js";
 export * from "./schemas/maintenance.js";
+export * from "./schemas/guestRequest.js";
 export * from "./schemas/signup.js";
 export * from "./schemas/invoice.js";
 export * from "./schemas/qr.js";
