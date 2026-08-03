@@ -317,7 +317,31 @@ router.get("/revenue", requireAuth, requirePermission("view_reports"), async (re
     )
     .groupBy(reservations.stayType);
 
-  return ok(res, { from, to, totalRevenue, daily, byRoomType: byType, byStayType });
+  // Booking-source split (walk-in / phone / QR). Same payment-based frame
+  // as the rest of this endpoint, so the QR channel's earnings are visible
+  // as a channel. Complimentary keeps its own report.
+  const bySource = await db
+    .select({
+      source: reservations.bookingSource,
+      bookings: sql<number>`count(distinct ${reservations.id})::int`,
+      total: sql<string>`COALESCE(SUM(${payments.amount}),0)::text`,
+    })
+    .from(payments)
+    .innerJoin(reservations, eq(reservations.id, payments.reservationId))
+    .where(
+      and(
+        eq(payments.propertyId, propertyId),
+        eq(reservations.propertyId, propertyId),
+        gte(payments.paymentDate, from),
+        lte(payments.paymentDate, to),
+        eq(payments.voided, false),
+        eq(payments.status, "received"),
+        sql`${reservations.bookingSource} <> 'complimentary'`,
+      ),
+    )
+    .groupBy(reservations.bookingSource);
+
+  return ok(res, { from, to, totalRevenue, daily, byRoomType: byType, byStayType, bySource });
 });
 
 router.get("/collections", requireAuth, requirePermission("view_reports"), async (req, res) => {

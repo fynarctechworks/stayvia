@@ -838,6 +838,7 @@ function RevenueTab({ from, to }: { from: string; to: string }) {
         daily: { day: string; total: string; count: number }[];
         byRoomType: { roomType: string; total: string }[];
         byStayType?: { stayType: string; bookings: number; total: string }[];
+        bySource?: { source: string; bookings: number; total: string }[];
       }>("/reports/revenue", { date_from: from, date_to: to }),
   });
   // Reuse the collections endpoint for the by-payment-method split so the
@@ -867,6 +868,23 @@ function RevenueTab({ from, to }: { from: string; to: string }) {
   }));
   const overnight = stayTypeRows.find((s) => s.stayType === "overnight");
   const shortStay = stayTypeRows.find((s) => s.stayType === "short_stay");
+
+  // Channel split - is the front-desk QR actually earning its frame?
+  const sourceLabels: Record<string, string> = {
+    walkin: "Walk-in",
+    phone_whatsapp: "Phone / WhatsApp",
+    qr: "QR self-booking",
+  };
+  const sourceOrder = ["walkin", "phone_whatsapp", "qr"];
+  const sourceRows = (data.bySource ?? [])
+    .map((r) => ({
+      source: r.source,
+      label: sourceLabels[r.source] ?? r.source,
+      bookings: r.bookings,
+      revenue: Number(r.total),
+    }))
+    .sort((a, b) => sourceOrder.indexOf(a.source) - sourceOrder.indexOf(b.source));
+  const sourceGrand = sourceRows.reduce((t, r) => t + r.revenue, 0);
 
   // Payment-method split for the selected range, ordered Cash → UPI →
   // Card → Bank transfer → Cheque (any future method falls to the end).
@@ -983,6 +1001,36 @@ function RevenueTab({ from, to }: { from: string; to: string }) {
                     {inr(shortStay?.revenue ?? 0)}
                   </td>
                 </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {sourceRows.length > 0 && (
+        <div className="card">
+          <div className="text-sm font-semibold text-ink mb-2">By booking source</div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm min-w-[360px]">
+              <thead>
+                <tr className="text-left text-[10.5px] uppercase tracking-[0.05em] text-inkMuted border-b border-divider">
+                  <th className="py-2 font-bold">Source</th>
+                  <th className="py-2 font-bold text-right">Bookings</th>
+                  <th className="py-2 font-bold text-right">Revenue</th>
+                  <th className="py-2 font-bold text-right">Share</th>
+                </tr>
+              </thead>
+              <tbody>
+                {sourceRows.map((r) => (
+                  <tr key={r.source} className="border-b border-divider last:border-0">
+                    <td className="py-2">{r.label}</td>
+                    <td className="py-2 text-right font-mono tabular-nums">{r.bookings}</td>
+                    <td className="py-2 text-right font-mono tabular-nums">{inr(r.revenue)}</td>
+                    <td className="py-2 text-right font-mono tabular-nums">
+                      {sourceGrand > 0 ? `${Math.round((r.revenue / sourceGrand) * 100)}%` : "0%"}
+                    </td>
+                  </tr>
+                ))}
               </tbody>
             </table>
           </div>
