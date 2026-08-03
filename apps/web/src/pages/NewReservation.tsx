@@ -2236,11 +2236,12 @@ export default function NewReservation() {
                     toggleRoom(r);
                   }}
                 >
-                  {/* Row 1 — number, chips and type·floor on ONE line; the
-                      meta truncates before anything wraps. Row 2 below
-                      carries the price + selection controls. */}
+                  {/* Row 1 — number, chips and type·floor share one line and
+                      wrap only when the tile truly runs out of width; nothing
+                      is ever truncated or hidden. Row 2 below carries the
+                      price + selection controls. */}
                   <div>
-                    <div className="flex items-center gap-1.5 min-w-0">
+                    <div className="flex items-center gap-x-1.5 gap-y-1 flex-wrap">
                         <div
                           className={`font-mono text-lg font-semibold leading-none mr-0.5 shrink-0 ${
                             sel ? "text-white" : "text-ink"
@@ -2288,10 +2289,11 @@ export default function NewReservation() {
                             <Users className="w-3 h-3" /> Sleeps {r.maxOccupancy}
                           </span>
                         )}
-                        {/* Type + floor complete the single header line; the
-                            meta truncates (never wraps) when width runs out. */}
+                        {/* Type + floor complete the header line; kept whole
+                            (no truncation) — drops below the chips as a unit
+                            when the tile is too narrow. */}
                         <span
-                          className={`text-[12.5px] font-semibold capitalize truncate min-w-0 ${
+                          className={`text-[12.5px] font-semibold capitalize whitespace-nowrap ${
                             sel ? "text-white/80" : "text-textSecondary"
                           }`}
                         >
