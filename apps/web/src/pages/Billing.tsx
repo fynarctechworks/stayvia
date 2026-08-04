@@ -11,6 +11,7 @@ import {
 import { useState } from "react";
 import { useAuth } from "@/auth/AuthContext";
 import { useDialog } from "@/components/Dialog";
+import { QueryError } from "@/components/kit";
 import { Loader } from "@/components/Loader";
 import { useToast } from "@/components/Toast";
 import { ApiError, api } from "@/lib/api";
@@ -82,10 +83,11 @@ export default function Billing() {
   const qc = useQueryClient();
   const [notConfigured, setNotConfigured] = useState(false);
 
-  const { data, isLoading, error } = useQuery({
+  const billingQ = useQuery({
     queryKey: ["billing"],
     queryFn: () => api.get<BillingData>("/billing"),
   });
+  const { data, isLoading } = billingQ;
 
   const subscribe = useMutation({
     mutationFn: async () => {
@@ -137,23 +139,25 @@ export default function Billing() {
     if (ok) cancel.mutate();
   }
 
-  if (isLoading) return <Loader label="Loading billing…" size="lg" />;
-
-  if (error || !data) {
+  // Error before loading, and via the shared surface so this page gets the same
+  // 403/offline wording and a retry as every other failed query in the app.
+  if (billingQ.isError || (!isLoading && !data)) {
     return (
       <div className="w-full space-y-4">
         <h1 className="text-[clamp(22px,3vw,28px)] leading-tight font-semibold tracking-[-0.5px] text-ink">
           Billing
         </h1>
-        <div className="card flex items-start gap-2 text-dangerFg">
-          <AlertCircle className="w-4 h-4 mt-0.5 shrink-0" />
-          <span className="text-sm">
-            {error instanceof Error ? error.message : "Could not load billing details."}
-          </span>
-        </div>
+        <QueryError
+          error={billingQ.error}
+          onRetry={() => void billingQ.refetch()}
+          isRetrying={billingQ.isFetching}
+          message="Your subscription details didn't load. Nothing about your plan has changed — try again."
+        />
       </div>
     );
   }
+
+  if (isLoading || !data) return <Loader label="Loading billing…" size="lg" />;
 
   const chip = STATUS_CHIP[data.status];
   const showSubscribe = data.status !== "active";

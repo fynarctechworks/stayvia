@@ -14,7 +14,7 @@ import {
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth, usePermission } from "@/auth/AuthContext";
-import { ListSkeleton } from "@/components/kit";
+import { ListSkeleton, QueryError } from "@/components/kit";
 import { NewIssueModal } from "@/components/NewIssueModal";
 import { useRoomTypes, labelForRoomType } from "@/hooks/useRoomTypes";
 import { api } from "@/lib/api";
@@ -93,11 +93,13 @@ export default function Housekeeping() {
   // dropdown always has the full property's list (it would otherwise
   // collapse to only the active floor). Properties are small (10-20
   // rooms typical), so the extra rows in memory are free.
-  const { data: rooms = [], isLoading } = useQuery({
+  const roomsQ = useQuery({
     queryKey: ["hk"],
     queryFn: () => api.get<Room[]>("/housekeeping"),
     refetchInterval: 15_000,
   });
+  const { isLoading, isError } = roomsQ;
+  const rooms = roomsQ.data ?? [];
 
   // includeArchived so rooms still pointing at a deactivated type keep a
   // human label instead of falling back to the raw slug.
@@ -164,8 +166,14 @@ export default function Housekeeping() {
           <h1 className="text-[clamp(22px,3vw,28px)] font-semibold tracking-[-0.5px] text-ink">
             Housekeeping
           </h1>
+          {/* "0 total" off a failed board is the claim housekeeping acts on,
+              so the count is stated only once the request has succeeded. */}
           <p className="text-sm text-textSecondary mt-1.5">
-            All rooms at a glance. {rooms.length} total.
+            {isError
+              ? "The room list didn't load, so this board is incomplete."
+              : isLoading
+                ? "All rooms at a glance."
+                : `All rooms at a glance. ${rooms.length} total.`}
           </p>
         </div>
         <div className="flex items-end gap-3 w-full sm:w-auto">
@@ -187,7 +195,9 @@ export default function Housekeeping() {
         </div>
       </div>
 
-      <div className="flex flex-wrap items-center gap-2">
+      {/* Every chip badge counts `rooms`, so the whole filter strip is
+          withheld when that list failed rather than reading a row of zeros. */}
+      <div className={`flex flex-wrap items-center gap-2 ${isError ? "hidden" : ""}`}>
         {STATUS_FILTERS.map((s) => {
           const count = s === "all" ? floorScoped.length : counts[s] ?? 0;
           const active = statusFilter === s;
@@ -216,7 +226,17 @@ export default function Housekeeping() {
 
       {err && <div className="card !bg-dangerBg !border-dangerBorder text-dangerFg text-sm">{err}</div>}
 
-      {isLoading ? (
+      {/* Error before loading: an empty board tells housekeeping there is no
+          work, and tells an admin to re-create rooms that already exist. */}
+      {isError ? (
+        <QueryError
+          error={roomsQ.error}
+          onRetry={() => roomsQ.refetch()}
+          isRetrying={roomsQ.isFetching}
+          title="Couldn't load the housekeeping board"
+          message="The room list didn't load, so this board is unknown — not empty. Don't treat it as 'no work waiting' until it loads."
+        />
+      ) : isLoading ? (
         <ListSkeleton rows={6} />
       ) : sorted.length === 0 ? (
         <div className="card flex flex-col items-center justify-center py-16 text-center text-textSecondary">

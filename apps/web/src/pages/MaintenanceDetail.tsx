@@ -12,6 +12,8 @@ import { CheckCircle2, ChevronLeft, Send } from "@/lib/micons";
 import { useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { Loader } from "@/components/Loader";
+import { PageError, queryErrorMessage } from "@/components/kit";
+import { useToast } from "@/components/Toast";
 import { api } from "@/lib/api";
 import { inr } from "@/lib/utils";
 
@@ -67,6 +69,7 @@ export default function MaintenanceDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const qc = useQueryClient();
+  const { toast } = useToast();
   const [comment, setComment] = useState("");
   const [showResolve, setShowResolve] = useState(false);
   const [resolveNotes, setResolveNotes] = useState("");
@@ -81,6 +84,9 @@ export default function MaintenanceDetail() {
 
   const issue = issueQ.data;
 
+  // The page is gated on view_maintenance but every write here needs
+  // manage_maintenance, so a view-only role gets a 403 on Resolve and on
+  // Post — it has to say so instead of flipping the button back in silence.
   const update = useMutation({
     mutationFn: (patch: Record<string, unknown>) =>
       api.patch<IssueDetail>(`/maintenance/${id}`, patch),
@@ -89,6 +95,7 @@ export default function MaintenanceDetail() {
       qc.invalidateQueries({ queryKey: ["maint-room"] });
       qc.invalidateQueries({ queryKey: ["hk"] });
     },
+    onError: (e) => toast(queryErrorMessage(e, "Could not update the issue"), "error"),
   });
 
   const addComment = useMutation({
@@ -98,8 +105,20 @@ export default function MaintenanceDetail() {
       setComment("");
       qc.invalidateQueries({ queryKey: ["maint-issue", id] });
     },
+    onError: (e) => toast(queryErrorMessage(e, "Could not post the update"), "error"),
   });
 
+  // Error before loading: a deleted issue, an id from another hotel (the route
+  // scopes by property and 404s) or a 500 must never sit behind a spinner —
+  // the back button lives after this return, so a stuck page has no way out.
+  if (issueQ.isError)
+    return (
+      <PageError
+        error={issueQ.error}
+        onRetry={() => void issueQ.refetch()}
+        isRetrying={issueQ.isFetching}
+      />
+    );
   if (issueQ.isLoading || !issue) return <Loader label="Loading issue…" />;
 
   const isClosed =

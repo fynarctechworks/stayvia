@@ -217,8 +217,33 @@ export function Sidebar({
 
   if (!profile) return null;
 
-  function renderIndicator(kind: NavItem["indicator"]) {
+  // A badge that silently disappears reads as "nothing waiting" — which is
+  // exactly what a guest sitting in their room with an open request is not.
+  // So each indicator carries its query's failure state, and a failed count
+  // renders a warning marker instead of nothing.
+  const indicatorFailed: Record<NonNullable<NavItem["indicator"]>, boolean> = {
+    collections: collectionsQ.isError,
+    guestRequests: guestRequestsQ.isError,
+    messages: messagesQ.isError,
+    notifications: notifQ.isError,
+    requests: requestsQ.isError,
+  };
+
+  function renderIndicator(item: NavItem) {
+    const kind = item.indicator;
+    if (!kind) return null;
     if (collapsed && !mobile) return null;
+    if (indicatorFailed[kind]) {
+      return (
+        <span
+          className="shrink-0 min-w-[19px] h-[19px] px-1.5 rounded-full bg-warnBg text-warnFg border border-warnBorder text-[11px] font-bold inline-flex items-center justify-center"
+          aria-label={`${item.label} count unavailable — the request failed`}
+          title="Count unavailable — this didn't load. It is not necessarily zero."
+        >
+          !
+        </span>
+      );
+    }
     if (kind === "collections" && owingCount > 0) {
       return (
         <span
@@ -340,7 +365,7 @@ export function Sidebar({
                         <>
                           <Icon className="w-5 h-5 shrink-0" />
                           {!iconOnly && <span className="flex-1 min-w-0 truncate">{item.label}</span>}
-                          {renderIndicator(item.indicator)}
+                          {renderIndicator(item)}
                         </>
                       );
                     }}

@@ -4,6 +4,8 @@ import { ArrowLeft, Check, CheckCheck, Loader2, MessageSquare, Search, Send, Use
 import { useEffect, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { useAuth } from "@/auth/AuthContext";
+import { QueryError, queryErrorMessage } from "@/components/kit";
+import { useToast } from "@/components/Toast";
 import { api } from "@/lib/api";
 
 interface Staff {
@@ -98,6 +100,7 @@ const WA = {
 
 export default function Messages() {
   const { profile } = useAuth();
+  const { toast } = useToast();
   const [params, setParams] = useSearchParams();
   const activeId = params.get("with");
 
@@ -125,6 +128,10 @@ export default function Messages() {
       qc.invalidateQueries({ queryKey: ["msg-thread", activeId] });
       qc.invalidateQueries({ queryKey: ["msg-threads"] });
     },
+    // The draft is only cleared in the caller's own onSuccess, so a failed
+    // send keeps the text — but without this the failure itself is silent and
+    // the sender walks away believing the message went out.
+    onError: (e) => toast(queryErrorMessage(e, "The message didn't send."), "error"),
   });
 
   const [draft, setDraft] = useState("");
@@ -195,6 +202,19 @@ export default function Messages() {
         </div>
 
         <div className="overflow-y-auto flex-1">
+          {/* A failed thread fetch leaves `threads` empty, which the block
+              below would render as "No conversations yet." — and the unread
+              badge above as nothing. Neither is true when the request died. */}
+          {threadsQ.isError && (
+            <div className="p-3">
+              <QueryError
+                error={threadsQ.error}
+                onRetry={() => void threadsQ.refetch()}
+                isRetrying={threadsQ.isFetching}
+                message="Your conversations didn't load, so none are listed and the unread count is unknown. This is not an empty inbox — try again."
+              />
+            </div>
+          )}
           {threads.map((t) => {
             const active = activeId === t.other_id;
             return (
@@ -235,7 +255,7 @@ export default function Messages() {
               </button>
             );
           })}
-          {threads.length === 0 && q === "" && (
+          {!threadsQ.isError && threads.length === 0 && q === "" && (
             <div className="px-4 py-10 text-center text-[#667781]">
               <MessageSquare className="w-7 h-7 mx-auto mb-2 opacity-30" />
               <div className="text-xs leading-relaxed">
@@ -246,6 +266,16 @@ export default function Messages() {
             </div>
           )}
 
+          {staffQ.isError && (
+            <div className="p-3">
+              <QueryError
+                error={staffQ.error}
+                onRetry={() => void staffQ.refetch()}
+                isRetrying={staffQ.isFetching}
+                message="The staff list didn't load, so there is nobody to start a new conversation with here."
+              />
+            </div>
+          )}
           {freshStaff.length > 0 && (
             <div className="mt-1">
               <div className="px-4 pt-2.5 pb-1 text-[11px] uppercase tracking-[0.12em] text-[#667781] font-semibold flex items-center gap-1.5">
@@ -321,7 +351,20 @@ export default function Messages() {
                 backgroundSize: "22px 22px",
               }}
             >
-              {msgsQ.isLoading && (
+              {/* Error before the spinner: an empty wallpaper reads as a
+                  conversation with no history, which is how a staff member
+                  concludes nobody replied to them. */}
+              {msgsQ.isError && (
+                <div className="py-4">
+                  <QueryError
+                    error={msgsQ.error}
+                    onRetry={() => void msgsQ.refetch()}
+                    isRetrying={msgsQ.isFetching}
+                    message="This conversation didn't load, so no messages are shown. Don't read this as an empty chat."
+                  />
+                </div>
+              )}
+              {!msgsQ.isError && msgsQ.isLoading && (
                 <div className="text-center text-[#667781] text-sm py-6">
                   <Loader2 className="inline w-4 h-4 animate-spin" />
                 </div>

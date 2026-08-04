@@ -5,7 +5,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/auth/AuthContext";
 import { useDialog } from "@/components/Dialog";
-import { ListSkeleton } from "@/components/kit";
+import { ListSkeleton, QueryError } from "@/components/kit";
 import { StickyBar } from "@/components/StickyBar";
 import { useToast } from "@/components/Toast";
 import { ApiError, api, getList, newIdempotencyKey } from "@/lib/api";
@@ -39,11 +39,12 @@ export default function Credits() {
   const [cashoutFor, setCashoutFor] = useState<CreditGuest | null>(null);
   const [showAdd, setShowAdd] = useState(false);
 
-  const { data, isLoading } = useQuery({
+  const creditsQ = useQuery({
     queryKey: ["credits", "guests"],
     queryFn: () => api.get<CreditsResp>("/credits/guests"),
     refetchInterval: 60_000,
   });
+  const data = creditsQ.data;
 
   const filtered = useMemo(() => {
     const list = data?.guests ?? [];
@@ -90,9 +91,11 @@ export default function Credits() {
             Wallet Credits
           </h1>
           <div className="text-sm text-textSecondary mt-1">
-            {data
-              ? `${data.guestCount} guest${data.guestCount === 1 ? "" : "s"} with positive balance · ${inr(data.totalCredit)} total outstanding`
-              : "Loading…"}
+            {creditsQ.isError
+              ? "Credit totals unavailable - the list didn't load"
+              : data
+                ? `${data.guestCount} guest${data.guestCount === 1 ? "" : "s"} with positive balance · ${inr(data.totalCredit)} total outstanding`
+                : "Loading…"}
           </div>
         </div>
         {canAddCredit && (
@@ -128,8 +131,17 @@ export default function Credits() {
       </div>
       </StickyBar>
 
+      {/* A failed lookup must never read as "nobody holds credit" — staff act
+          on that by collecting cash a guest has already paid. */}
+      {creditsQ.isError ? (
+        <QueryError
+          error={creditsQ.error}
+          onRetry={() => void creditsQ.refetch()}
+          isRetrying={creditsQ.isFetching}
+        />
+      ) : (
       <div className="card p-0 overflow-hidden">
-        {isLoading ? (
+        {creditsQ.isLoading ? (
           <ListSkeleton rows={6} />
         ) : filtered.length === 0 ? (
           <div className="p-8 text-center text-textSecondary">
@@ -245,6 +257,7 @@ export default function Credits() {
           </>
         )}
       </div>
+      )}
 
       {cashoutFor && (
         <CashoutModal
@@ -403,7 +416,18 @@ function AddCreditModal({
                     autoFocus
                   />
                 </div>
-                {debouncedQuery.length >= 2 && (
+                {debouncedQuery.length >= 2 &&
+                  (guestsQ.isError ? (
+                  // "No guests match" is only honest when the search actually
+                  // ran — otherwise an admin creates a duplicate guest record.
+                  <QueryError
+                    className="mt-2"
+                    error={guestsQ.error}
+                    onRetry={() => void guestsQ.refetch()}
+                    isRetrying={guestsQ.isFetching}
+                    retryLabel="Search again"
+                  />
+                ) : (
                   <div className="mt-2 border border-borderc rounded-sm max-h-48 overflow-y-auto">
                     {guestsQ.isLoading ? (
                       <div className="px-3 py-2 text-textSecondary text-xs">Searching…</div>
@@ -430,7 +454,7 @@ function AddCreditModal({
                       ))
                     )}
                   </div>
-                )}
+                  ))}
               </>
             )}
           </div>

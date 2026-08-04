@@ -10,6 +10,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useParams } from "react-router-dom";
 import {
+  AlertTriangle,
   Bell,
   Check,
   Clock,
@@ -18,6 +19,7 @@ import {
   Loader2,
   Lock,
   Phone,
+  RefreshCw,
   SendFill,
   ShieldCheck,
   SprayCan,
@@ -92,6 +94,10 @@ export default function RoomQr() {
   const [brochure, setBrochure] = useState<QrRoomBrochure | null>(null);
   const [home, setHome] = useState<QrRoomHome | null>(null);
   const [notFound, setNotFound] = useState(false);
+  // "The page didn't load" — kept apart from notFound, because telling a
+  // guest their room's QR sticker is unregistered when the server is simply
+  // down sends them to the desk to report a bug that doesn't exist.
+  const [loadFailed, setLoadFailed] = useState(false);
   const [loading, setLoading] = useState(true);
 
   const [last4, setLast4] = useState("");
@@ -106,34 +112,59 @@ export default function RoomQr() {
   // The tile that opened the overlay — focus goes back to it on close.
   const requestTriggerRef = useRef<HTMLButtonElement | null>(null);
 
-  async function loadHome(key: string): Promise<boolean> {
-    try {
+  // Throws on failure. Callers decide what a failure means: a key the server
+  // rejected is a dead key, but a dropped connection says nothing about the
+  // key — swallowing both was what made "Unlock room" a silent no-op.
+  const loadHome = useCallback(
+    async (key: string): Promise<void> => {
       const data = await publicQr.get<QrRoomHome>(
         `/public/qr/room/${token}/home?key=${encodeURIComponent(key)}`,
       );
       setHome(data);
-      return true;
-    } catch {
-      sessionStorage.removeItem(storageKey);
-      return false;
+    },
+    [token],
+  );
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    setNotFound(false);
+    setLoadFailed(false);
+    try {
+      const data = await publicQr.get<QrRoomBrochure>(`/public/qr/room/${token}`);
+      setBrochure(data);
+      const saved = sessionStorage.getItem(storageKey);
+      if (saved && data.occupied) {
+        try {
+          await loadHome(saved);
+        } catch (e) {
+          const keyRejected =
+            e instanceof PublicApiError && e.status >= 400 && e.status < 500;
+          if (keyRejected) {
+            // 401 LOCKED / STAY_ENDED — the key is dead. Drop it and let the
+            // guest verify again; that's an honest ask, not an error.
+            sessionStorage.removeItem(storageKey);
+          } else {
+            // A server fault or a dropped connection says nothing about the
+            // key, so keep it — and say something, or the verify card is a
+            // silent mystery to a guest who was unlocked a minute ago.
+            setUnlockError(
+              "We couldn't load your room just now. Check your connection and try again.",
+            );
+          }
+        }
+      }
+    } catch (e) {
+      // Only a real 404 means the sticker isn't registered.
+      if (e instanceof PublicApiError && e.status === 404) setNotFound(true);
+      else setLoadFailed(true);
+    } finally {
+      setLoading(false);
     }
-  }
+  }, [token, storageKey, loadHome]);
 
   useEffect(() => {
-    (async () => {
-      try {
-        const data = await publicQr.get<QrRoomBrochure>(`/public/qr/room/${token}`);
-        setBrochure(data);
-        const saved = sessionStorage.getItem(storageKey);
-        if (saved && data.occupied) await loadHome(saved);
-      } catch {
-        setNotFound(true);
-      } finally {
-        setLoading(false);
-      }
-    })();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [token]);
+    void load();
+  }, [load]);
 
   async function unlock() {
     setUnlockError("");
@@ -145,9 +176,16 @@ export default function RoomQr() {
         ...(geo ? { geo } : {}),
       });
       sessionStorage.setItem(storageKey, key);
+      // Verified — but the room page still has to arrive. If this throws the
+      // guest must be told, otherwise the button just re-renders the same
+      // card and they tap it forever.
       await loadHome(key);
     } catch (e) {
-      setUnlockError(e instanceof PublicApiError ? e.message : "Could not unlock. Try again.");
+      setUnlockError(
+        e instanceof PublicApiError
+          ? e.message
+          : "We couldn't reach the hotel just now. Check your connection and tap Unlock room again.",
+      );
     } finally {
       setUnlocking(false);
     }
@@ -215,11 +253,46 @@ export default function RoomQr() {
     );
   }
 
+  // Couldn't load — as opposed to "this code isn't ours". The guest gets a
+  // retry instead of being sent to the desk with a false bug report.
+  if (loadFailed) {
+    return (
+      <div className="min-h-screen bg-bg grid place-items-center p-6 text-center">
+        <div className="max-w-xs">
+          <div className="w-14 h-14 rounded-2xl bg-warnBg text-warnFg grid place-items-center mx-auto mb-4">
+            <AlertTriangle className="w-6 h-6" />
+          </div>
+          <div className="text-xl font-semibold text-textPrimary">
+            This page didn't load
+          </div>
+          <p className="text-sm text-textSecondary mt-1.5 leading-relaxed">
+            Your code is fine — we just couldn't load the page. Check your
+            connection and try again.
+          </p>
+          <PrimaryButton className="mt-4" disabled={loading} onClick={() => void load()}>
+            {loading ? (
+              <>
+                <Loader2 className="w-4 h-4 animate-spin" /> Trying…
+              </>
+            ) : (
+              <>
+                <RefreshCw className="w-4 h-4" /> Try again
+              </>
+            )}
+          </PrimaryButton>
+          <p className="text-[11px] text-textSecondary mt-3">
+            Still not working? Please ask at the front desk.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
   if (notFound || !brochure) {
     return (
       <div className="min-h-screen bg-bg grid place-items-center p-6 text-center">
         <div className="max-w-xs">
-          <div className="w-14 h-14 rounded-2xl bg-red-50 text-red-500 grid place-items-center mx-auto mb-4">
+          <div className="w-14 h-14 rounded-2xl bg-dangerBg text-dangerFg grid place-items-center mx-auto mb-4">
             <Lock className="w-6 h-6" />
           </div>
           <div className="text-xl font-semibold text-textPrimary">Unknown code</div>
@@ -298,7 +371,9 @@ export default function RoomQr() {
               autoFocus
             />
             {unlockError && (
-              <div className="text-sm text-red-600 mt-2 text-center">{unlockError}</div>
+              <div role="alert" className="text-sm text-dangerFg mt-2 text-center">
+                {unlockError}
+              </div>
             )}
             <PrimaryButton
               className="mt-4"

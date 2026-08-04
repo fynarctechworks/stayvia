@@ -15,6 +15,7 @@ import { EmailInput } from "@/components/EmailInput";
 import { useDialog } from "@/components/Dialog";
 import QrCodeModal from "@/components/QrCodeModal";
 import { TimePicker12h } from "@/components/TimePicker12h";
+import { QueryError } from "@/components/kit";
 import { Loader } from "@/components/Loader";
 import { useToast } from "@/components/Toast";
 import { api } from "@/lib/api";
@@ -78,10 +79,11 @@ function MyProfileTab() {
   const { toast } = useToast();
   const { profile: authProfile } = useAuth();
 
-  const { data: me, isLoading } = useQuery({
+  const meQ = useQuery({
     queryKey: ["auth-me"],
     queryFn: () => api.get<{ profile: MeProfile }>("/auth/me").then((r) => r.profile),
   });
+  const { data: me, isLoading } = meQ;
 
   const [form, setForm] = useState({ fullName: "", email: "", phone: "" });
   const [err, setErr] = useState<string | null>(null);
@@ -119,6 +121,21 @@ function MyProfileTab() {
     },
     onError: (e: Error) => setErr(e.message),
   });
+
+  // Error before loading: a 500 or an offline blip leaves isLoading false with
+  // no data, which the Loader below would render as a permanent spinner on the
+  // first tab every user lands on.
+  if (meQ.isError)
+    return (
+      <div className="card">
+        <QueryError
+          error={meQ.error}
+          onRetry={() => meQ.refetch()}
+          isRetrying={meQ.isFetching}
+          message="Your account details didn't load, so there is nothing safe to edit here. Try again — your profile has not changed."
+        />
+      </div>
+    );
 
   if (isLoading || !me) return <Loader />;
 
@@ -500,7 +517,7 @@ function TwoFactorCard() {
   const dialog = useDialog();
   const qc = useQueryClient();
 
-  const { data: factors, isLoading } = useQuery({
+  const factorsQ = useQuery({
     queryKey: ["mfa-factors"],
     queryFn: async () => {
       const { data, error } = await supabase.auth.mfa.listFactors();
@@ -508,6 +525,7 @@ function TwoFactorCard() {
       return data.totp ?? [];
     },
   });
+  const { data: factors, isLoading } = factorsQ;
 
   const verified = (factors ?? []).filter((f) => f.status === "verified");
   const hasVerified = verified.length > 0;
@@ -644,10 +662,23 @@ function TwoFactorCard() {
         )}
       </div>
 
+      {/* A failed listFactors() must not be reported as "2FA is off" — that
+          copy would send a user who already has TOTP enabled to enrol a second
+          authenticator. No status, no enable button, until we know. */}
+      {factorsQ.isError && !enroll && (
+        <QueryError
+          error={factorsQ.error}
+          onRetry={() => factorsQ.refetch()}
+          isRetrying={factorsQ.isFetching}
+          title="Couldn't check your two-factor status"
+          message="We couldn't reach the sign-in service, so this card can't tell you whether two-factor authentication is on or off. Your existing setup is unchanged — try again before enrolling anything."
+        />
+      )}
+
       {isLoading && <Loader />}
 
       {/* No enrollment in progress — show status + actions */}
-      {!isLoading && !enroll && (
+      {!isLoading && !factorsQ.isError && !enroll && (
         <>
           {hasVerified ? (
             <div className="space-y-2">
@@ -847,10 +878,27 @@ interface HotelSettings {
 // confirms). Per-room stickers live on the Rooms page.
 function QrCodesSection() {
   const [open, setOpen] = useState(false);
-  const { data: property } = useQuery({
+  const propertyQ = useQuery({
     queryKey: ["property-me"],
     queryFn: () => api.get<{ qrToken: string; name: string }>("/properties/me"),
   });
+  const property = propertyQ.data;
+  // Deleting the whole section on failure reads as "this hotel has no QR
+  // code" — keep the heading and say the fetch failed instead.
+  if (propertyQ.isError)
+    return (
+      <div className="border-t border-divider pt-4 mt-2">
+        <h3 className="text-[15px] font-semibold text-ink">QR codes</h3>
+        <div className="mt-3">
+          <QueryError
+            error={propertyQ.error}
+            onRetry={() => propertyQ.refetch()}
+            isRetrying={propertyQ.isFetching}
+            message="The front-desk QR code couldn't be loaded, so it can't be shown or printed right now. The code itself is unchanged — any already-printed sticker still works."
+          />
+        </div>
+      </div>
+    );
   if (!property) return null;
   return (
     <div className="border-t border-divider pt-4 mt-2">
@@ -892,7 +940,7 @@ function StepDot({ n }: { n: number }) {
 
 function HotelTab() {
   const qc = useQueryClient();
-  const { data } = useQuery({
+  const settingsQ = useQuery({
     queryKey: ["settings"],
     queryFn: () =>
       api.get<{
@@ -900,6 +948,7 @@ function HotelTab() {
         roomTypes: unknown[];
       }>("/settings"),
   });
+  const data = settingsQ.data;
   const [form, setForm] = useState<HotelSettings | null>(null);
   const [msg, setMsg] = useState<string | null>(null);
   // Local confirm field for the complimentary-report access code. Never
@@ -1015,6 +1064,22 @@ function HotelTab() {
     onError: (e: Error) => setMsg(e.message),
   });
   const logoBusy = uploadLogo.isPending || removeLogo.isPending;
+
+  // GET /settings requires manage_settings while the route admits four other
+  // permissions, so a staff-manager lands here and 403s. On error the hydrate
+  // effect never runs and `form` stays null — the Loader below would spin for
+  // good — so the failure gets its own branch, above it.
+  if (settingsQ.isError)
+    return (
+      <div className="card">
+        <QueryError
+          error={settingsQ.error}
+          onRetry={() => settingsQ.refetch()}
+          isRetrying={settingsQ.isFetching}
+          message="The hotel profile didn't load, so none of these settings can be shown or edited. Nothing has been changed — try again, or ask an administrator if it keeps failing."
+        />
+      </div>
+    );
 
   if (!form) return <Loader />;
 

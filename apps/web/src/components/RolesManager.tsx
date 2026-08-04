@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Pencil, Plus, Trash2 } from "@/lib/micons";
 import { useState } from "react";
 import { useDialog } from "@/components/Dialog";
+import { QueryError } from "@/components/kit";
 import { Loader } from "@/components/Loader";
 import { useToast } from "@/components/Toast";
 import { api } from "@/lib/api";
@@ -16,14 +17,16 @@ export function RolesManager() {
   const [editing, setEditing] = useState<RbacRole | null>(null);
   const [creating, setCreating] = useState(false);
 
-  const { data: rolesData } = useQuery({
+  const rolesQ = useQuery({
     queryKey: ["rbac-roles"],
     queryFn: () => api.get<RbacRole[]>("/rbac/roles"),
   });
-  const { data: catalog } = useQuery({
+  const catalogQ = useQuery({
     queryKey: ["rbac-catalog"],
     queryFn: () => api.get<PermissionDef[]>("/rbac/permissions"),
   });
+  const rolesData = rolesQ.data;
+  const catalog = catalogQ.data;
 
   const del = useMutation({
     mutationFn: (id: string) => api.del(`/rbac/roles/${id}`),
@@ -33,6 +36,27 @@ export function RolesManager() {
     },
     onError: (e: Error) => toast(e.message, "error"),
   });
+
+  // Failure first: without the role list AND the permission catalogue there is
+  // nothing safe to show here — an empty table would read as "this hotel has
+  // no roles", and the editor would offer a permission picker with no
+  // permissions in it.
+  if (rolesQ.isError || catalogQ.isError) {
+    const failed = rolesQ.isError ? rolesQ : catalogQ;
+    return (
+      <div className="card">
+        <QueryError
+          error={failed.error}
+          onRetry={() => {
+            if (rolesQ.isError) rolesQ.refetch();
+            if (catalogQ.isError) catalogQ.refetch();
+          }}
+          isRetrying={rolesQ.isFetching || catalogQ.isFetching}
+          message="Roles and permissions didn't load, so nothing here reflects what this hotel actually has configured. Try again, and check with an administrator if it keeps failing."
+        />
+      </div>
+    );
+  }
 
   if (!rolesData || !catalog) return <Loader />;
 

@@ -12,6 +12,7 @@ import { ChevronLeft, Plus, QrCode, Snowflake, Tv, Wifi, Wrench } from "@/lib/mi
 import { useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { Can } from "@/auth/Can";
+import { PageError, QueryError } from "@/components/kit";
 import { Loader } from "@/components/Loader";
 import { NewIssueModal } from "@/components/NewIssueModal";
 import QrCodeModal from "@/components/QrCodeModal";
@@ -41,13 +42,28 @@ export default function RoomDetail() {
   const navigate = useNavigate();
   const [showQr, setShowQr] = useState(false);
 
-  const { data: room, isLoading } = useQuery({
+  const roomQ = useQuery({
     queryKey: ["room", id],
     queryFn: () => api.get<Room>(`/rooms/${id}`),
     enabled: !!id,
   });
+  const room = roomQ.data;
 
-  if (isLoading || !room) return <Loader size="lg" />;
+  // Error branch first — everything below (including the back button) lives
+  // after this early return, so folding a failure into the spinner strands the
+  // user on a page with no way out. PageError carries its own way back; no
+  // `backTo` because housekeeping reaches this page from their board without
+  // view_rooms, and /rooms would bounce them off a permission guard.
+  if (roomQ.isError)
+    return (
+      <PageError
+        error={roomQ.error}
+        onRetry={() => roomQ.refetch()}
+        isRetrying={roomQ.isFetching}
+        message="This room's details didn't load. Try again, and tell an administrator if it keeps failing."
+      />
+    );
+  if (roomQ.isLoading || !room) return <Loader size="lg" />;
 
   return (
     <div className="space-y-[22px] w-full">
@@ -199,7 +215,19 @@ function RoomMaintenanceSection({
           </Can>
         </div>
 
-        {issuesQ.isLoading ? (
+        {/* A failed fetch would otherwise read as "this room is clean" while
+            the "N active" badge above silently drops to nothing. */}
+        {issuesQ.isError ? (
+          <div className="p-4 sm:p-[18px]">
+            <QueryError
+              error={issuesQ.error}
+              onRetry={() => issuesQ.refetch()}
+              isRetrying={issuesQ.isFetching}
+              title="Couldn't load maintenance history"
+              message={`Room ${roomNumber}'s issues didn't load, so this list is unknown — not empty. Don't treat the room as clear until it loads.`}
+            />
+          </div>
+        ) : issuesQ.isLoading ? (
           <div className="py-8">
             <Loader />
           </div>

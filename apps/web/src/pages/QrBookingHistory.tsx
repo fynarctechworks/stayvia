@@ -6,7 +6,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { ChevronLeft, ChevronRight, QrCode } from "@/lib/micons";
-import { EmptyState, ListSkeleton, PageHeader } from "@/components/kit";
+import { EmptyState, ListSkeleton, PageHeader, QueryError } from "@/components/kit";
 import { getList } from "@/lib/api";
 import { inr } from "@/lib/utils";
 
@@ -88,14 +88,39 @@ export default function QrBookingHistory() {
         <PageHeader
           title="QR Booking History"
           subtitle={
-            total === 0
-              ? "Every QR self-booking that has left the queue lands here."
-              : `${total} QR booking${total === 1 ? "" : "s"} so far.`
+            q.isError
+              ? "This page didn't load - the history below is missing, not empty."
+              : total === 0
+                ? "Every QR self-booking that has left the queue lands here."
+                : `${total} QR booking${total === 1 ? "" : "s"} so far.`
           }
         />
       </div>
 
-      {q.isLoading ? (
+      {/* Error before loading and before the empty state. The pager lives in
+          the success branch, so a failed page-3 fetch would otherwise strand
+          the reader with no way back to page 2 — hence the Back action. */}
+      {q.isError ? (
+        <div className="card">
+          <QueryError
+            error={q.error}
+            onRetry={() => void q.refetch()}
+            isRetrying={q.isFetching}
+            action={
+              page > 1 ? (
+                <button
+                  type="button"
+                  className="btn-secondary !h-11 min-w-[44px] inline-flex items-center justify-center gap-1.5"
+                  onClick={() => setPage((p) => p - 1)}
+                >
+                  <ChevronLeft className="w-4 h-4 shrink-0" />
+                  Back to page {page - 1}
+                </button>
+              ) : undefined
+            }
+          />
+        </div>
+      ) : q.isLoading ? (
         <ListSkeleton rows={6} />
       ) : rows.length === 0 ? (
         <div className="card">

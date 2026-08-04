@@ -16,6 +16,8 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Loader } from "@/components/Loader";
 import { StickyBar } from "@/components/StickyBar";
+import { QueryError, queryErrorMessage } from "@/components/kit";
+import { useToast } from "@/components/Toast";
 import { api } from "@/lib/api";
 
 interface Notification {
@@ -66,6 +68,7 @@ type FilterMode = "all" | "unread";
 export default function Notifications() {
   const navigate = useNavigate();
   const qc = useQueryClient();
+  const { toast } = useToast();
   const [filter, setFilter] = useState<FilterMode>("all");
 
   const q = useQuery({
@@ -83,12 +86,27 @@ export default function Notifications() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["notifications"] });
     },
+    onError: (e) => toast(queryErrorMessage(e, "Couldn't mark that as read."), "error"),
   });
   const markAll = useMutation({
     mutationFn: () => api.post("/notifications/read-all"),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["notifications"] }),
+    onError: (e) =>
+      toast(queryErrorMessage(e, "Couldn't mark everything as read."), "error"),
   });
 
+  // Error before loading. On a failed fetch `q.data` is undefined, so the
+  // fallbacks below would render "All caught up", a 0 badge and "Nothing yet."
+  // — a confident inbox-is-empty claim for a request that never landed.
+  if (q.isError)
+    return (
+      <QueryError
+        error={q.error}
+        onRetry={() => void q.refetch()}
+        isRetrying={q.isFetching}
+        message="Your notifications didn't load, so none are listed. This is not an empty inbox — try again."
+      />
+    );
   if (q.isLoading) return <Loader label="Loading notifications…" />;
 
   const items = q.data?.items ?? [];

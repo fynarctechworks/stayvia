@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { AlertTriangle, Clock } from "@/lib/micons";
+import { AlertTriangle, Clock, RefreshCw } from "@/lib/micons";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "@/auth/AuthContext";
@@ -124,7 +124,7 @@ function saveChimedSet(set: Set<string>) {
 // sticky alert bar + floating counter chip. Plays one chime per reservation
 // when it first crosses into "overdue".
 export function CheckoutAlerts() {
-  const { session } = useAuth();
+  const { session, can } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -142,15 +142,26 @@ export function CheckoutAlerts() {
     || location.pathname.startsWith("/guests/")
     || location.pathname.startsWith("/settings");
 
-  const { data } = useQuery({
+  // /dashboard is permission-gated server-side (view_dashboard), so a role
+  // without it 403s this poll forever. Gate the client the same way: an
+  // unreachable alert feed is worth reporting, a feed this user was never
+  // entitled to is not.
+  const canSeeAlerts = can("view_dashboard");
+
+  const alertsQ = useQuery({
     queryKey: ["dashboard"],
     queryFn: () => api.get<DashboardData>("/dashboard"),
-    enabled: !!session && !onLogin,
+    enabled: !!session && !onLogin && canSeeAlerts,
     // Match the existing Dashboard page's polling cadence so this doesn't
     // add server load — we share the cache key.
     refetchInterval: 30_000,
     staleTime: 15_000,
   });
+  const { data } = alertsQ;
+  // The cache key is shared with the Dashboard page and ArrivalAlerts, so a
+  // disabled observer here can still read their error — only claim a failure
+  // for a user this component actually polls for.
+  const alertsFailed = canSeeAlerts && alertsQ.isError;
 
   // Clock tick so minutesLeft labels stay accurate without a server roundtrip.
   const [now, setNow] = useState(() => Date.now());
@@ -194,8 +205,11 @@ export function CheckoutAlerts() {
   const overdueStays = data?.overdue?.reservations ?? [];
 
   // Bail only when there's genuinely nothing to show — neither a
-  // same-day alert window nor a multi-day overdue stay.
-  if (onLogin || (decorated.length === 0 && overdueStays.length === 0)) return null;
+  // same-day alert window nor a multi-day overdue stay. A failed poll is
+  // NOT "nothing to show": silence here reads as "nobody is overdue", so
+  // the failure strip below has to render in its place.
+  if (onLogin || (!alertsFailed && decorated.length === 0 && overdueStays.length === 0))
+    return null;
 
   const overdueRows = decorated.filter((d) => d.level === "overdue");
   const imminentRows = decorated.filter((d) => d.level === "imminent");
@@ -264,6 +278,38 @@ export function CheckoutAlerts() {
 
   return (
     <>
+      {/* Poll failed. Anything below this strip is last-known-good at best
+          and missing at worst, so say so rather than let an empty bar imply
+          an all-clear. Not blinking: it's a system fault, not a late guest. */}
+      {alertsFailed && (
+        <div
+          role="alert"
+          className="border-b border-warnBorder bg-warnBg text-warnFg"
+        >
+          <div className="px-4 py-2 flex flex-wrap items-center gap-x-3 gap-y-1.5">
+            <AlertTriangle className="w-4 h-4 shrink-0" />
+            <div className="font-bold text-[11px] uppercase tracking-[0.08em] leading-tight">
+              Check-out alerts aren't loading
+            </div>
+            <div className="text-[11px] text-inkBody">
+              {decorated.length > 0 || overdueStays.length > 0
+                ? "The rows below are the last update that came through — newer overdue stays may be missing."
+                : "No overdue or due-soon stay can be shown right now. This is not an all-clear."}
+            </div>
+            <button
+              type="button"
+              onClick={() => void alertsQ.refetch()}
+              disabled={alertsQ.isFetching}
+              aria-busy={alertsQ.isFetching || undefined}
+              className="ml-auto inline-flex items-center gap-1.5 px-3 h-8 text-[11px] font-bold rounded-sm bg-surface border border-warnBorder text-warnFg hover:bg-surfaceAlt disabled:opacity-60 transition-colors focus-visible:ring-2 focus-visible:ring-brand outline-none"
+            >
+              <RefreshCw className={`w-3.5 h-3.5 ${alertsQ.isFetching ? "animate-spin" : ""}`} />
+              {alertsQ.isFetching ? "Retrying…" : "Try again"}
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Multi-day overdue stays. Highest priority — guests who never
           checked out on their scheduled date. Sticky at the very top so
           it follows staff to every page until resolved. Blinks (via the

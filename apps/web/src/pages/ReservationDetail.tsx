@@ -44,6 +44,7 @@ import { useDialog } from "@/components/Dialog";
 import { KycModal } from "@/components/KycModal";
 import { PdfPreviewModal } from "@/components/PdfPreviewModal";
 import { Loader } from "@/components/Loader";
+import { PageError, QueryError, queryErrorMessage } from "@/components/kit";
 import { OtpModal } from "@/components/OtpModal";
 import { RoomActionPopover } from "@/components/RoomActionPopover";
 import { StatusBadge } from "@/components/StatusBadge";
@@ -301,11 +302,12 @@ export default function ReservationDetail() {
   const [pdfPreview, setPdfPreview] = useState<{ url: string; title: string; filename: string } | null>(null);
   const { toast } = useToast();
 
-  const { data, isLoading } = useQuery({
+  const reservationQ = useQuery({
     queryKey: ["reservation", id],
     queryFn: () => api.get<Detail>(`/reservations/${id}`),
     enabled: !!id,
   });
+  const { data, isLoading } = reservationQ;
 
   const settingsQ = useQuery({
     queryKey: ["settings-public"],
@@ -545,8 +547,29 @@ export default function ReservationDetail() {
     });
   }
 
+  // A failed fetch is NOT a deleted booking. Reporting "Not found" for a
+  // transport failure sends staff looking for a reservation they just clicked.
+  if (reservationQ.isError)
+    return (
+      <PageError
+        error={reservationQ.error}
+        onRetry={() => reservationQ.refetch()}
+        isRetrying={reservationQ.isFetching}
+        backTo="/reservations"
+        backLabel="Back to reservations"
+      />
+    );
   if (isLoading) return <Loader size="lg" />;
-  if (!data) return <div>Not found</div>;
+  if (!data)
+    return (
+      <PageError
+        title="Reservation not found"
+        message="This booking no longer exists, or it belongs to a different hotel."
+        detail={null}
+        backTo="/reservations"
+        backLabel="Back to reservations"
+      />
+    );
 
   const r = data;
   const rooms = data.rooms;
@@ -3241,6 +3264,9 @@ function SwapRoomModal(props: {
       );
       qc.invalidateQueries({ queryKey: ["rooms"] });
     },
+    // A rejected PATCH leaves the tile DIRTY and unselectable; without this the
+    // pending state just ends and the tap reads as a miss.
+    onError: (e) => setErr(queryErrorMessage(e, "Couldn't mark the room clean.")),
   });
 
   const swap = useMutation({
@@ -3511,20 +3537,26 @@ function SwapRoomModal(props: {
           <div className="label mb-1">
             Move to room <span className="text-danger">*</span>
           </div>
-          {avail.isLoading && (
+          {avail.isError ? (
+            <QueryError
+              error={avail.error}
+              onRetry={() => avail.refetch()}
+              isRetrying={avail.isFetching}
+              title="Couldn't check availability"
+              message="The availability request failed, so no rooms can be offered for this swap. This does not mean the hotel is full — try again."
+            />
+          ) : avail.isLoading ? (
             <div className="text-sm text-textSecondary">Loading available rooms…</div>
-          )}
-          {avail.isError && (
-            <div className="text-sm text-danger">
-              Couldn't load availability: {(avail.error as Error).message}
-            </div>
-          )}
-          {!avail.isLoading && (avail.data?.length ?? 0) === 0 && (
-            <div className="text-sm text-textSecondary">
-              {props.isShortStay
-                ? `No rooms available on ${format(new Date(probeIn), "dd MMM")}.`
-                : `No rooms available for ${format(new Date(probeIn), "dd MMM")} → ${format(new Date(props.segmentTo), "dd MMM")}.`}
-            </div>
+          ) : (
+            // Only a successful check can say the hotel has nothing free.
+            avail.isSuccess &&
+            avail.data.length === 0 && (
+              <div className="text-sm text-textSecondary">
+                {props.isShortStay
+                  ? `No rooms available on ${format(new Date(probeIn), "dd MMM")}.`
+                  : `No rooms available for ${format(new Date(probeIn), "dd MMM")} → ${format(new Date(props.segmentTo), "dd MMM")}.`}
+              </div>
+            )
           )}
           {grouped.map(([floor, rooms]) => (
             <div key={String(floor)} className="mt-3">
@@ -3724,6 +3756,7 @@ function ChargeRow(props: {
   onSaved: () => void;
 }) {
   const dialog = useDialog();
+  const { toast } = useToast();
   const [editing, setEditing] = useState(false);
   const [description, setDescription] = useState(props.charge.description);
   const netAmount = Number(props.charge.amount);
@@ -3779,11 +3812,15 @@ function ChargeRow(props: {
       setEditing(false);
       props.onSaved();
     },
+    // A rejected PATCH (409 once invoiced, 403, 500) used to leave the row in
+    // edit mode with the typed value intact and no explanation.
+    onError: (e) => toast(queryErrorMessage(e, "Couldn't save this charge."), "error"),
   });
   const del = useMutation({
     mutationFn: () =>
       api.del(`/reservations/${props.reservationId}/charges/${props.charge.id}`),
     onSuccess: props.onSaved,
+    onError: (e) => toast(queryErrorMessage(e, "Couldn't delete this charge."), "error"),
   });
   // Same three fragments in both presentations — only the arrangement
   // differs between the desktop row and the phone card.
@@ -3847,6 +3884,7 @@ function ChargeRow(props: {
           {props.canDelete && (
             <button
               className="btn-secondary !h-11 lg:!h-7 !px-3 lg:!px-2 text-danger"
+              disabled={del.isPending}
               onClick={async () => {
                 const ok = await dialog.confirm({
                   title: "Delete charge",
@@ -4194,9 +4232,15 @@ function AddRoomModal(props: {
       );
       qc.invalidateQueries({ queryKey: ["rooms"] });
     },
+    // Otherwise the tile silently stays DIRTY and unselectable after the tap.
+    onError: (e) => setErr(queryErrorMessage(e, "Couldn't mark the room clean.")),
   });
 
-  const available = (avail.data ?? []).filter((r) => !props.existingRoomIds.includes(r.id));
+  // Only a successful check produces a room list — on failure this stays empty
+  // and the error branch below renders instead of "No rooms available".
+  const available = (avail.isSuccess ? avail.data : []).filter(
+    (r) => !props.existingRoomIds.includes(r.id),
+  );
   const availableById = new Map(available.map((r) => [r.id, r]));
   const pickedIds = Object.keys(picked);
 
@@ -4308,7 +4352,18 @@ function AddRoomModal(props: {
               · tap to add or remove ({pickedIds.length} selected)
             </span>
           </label>
-          {avail.isLoading ? (
+          {avail.isError ? (
+            // The sibling swap picker already handled this; without it here a
+            // failed check reads as a full hotel and the guest is refused a room.
+            <QueryError
+              className="my-2"
+              error={avail.error}
+              onRetry={() => avail.refetch()}
+              isRetrying={avail.isFetching}
+              title="Couldn't check availability"
+              message="The availability request failed, so no rooms can be offered for this range. This does not mean the hotel is full — try again."
+            />
+          ) : avail.isLoading ? (
             <div className="text-sm text-textSecondary py-3">Checking availability…</div>
           ) : available.length === 0 ? (
             <div className="text-sm text-textSecondary py-3">
@@ -5725,7 +5780,22 @@ function PerRoomCheckoutModal(props: {
 
   return (
     <ModalShell title={`Check out Room ${props.roomNumber}`} onClose={props.onClose}>
-      {quoteQ.isLoading || !quoteQ.data ? (
+      {quoteQ.isError ? (
+        // Previously `!quoteQ.data` pinned the modal on "Loading bill…" forever
+        // after a failed quote, with no amount, no method and no Confirm.
+        <QueryError
+          error={quoteQ.error}
+          onRetry={() => quoteQ.refetch()}
+          isRetrying={quoteQ.isFetching}
+          title="Couldn't load this room's bill"
+          message="The check-out quote failed, so no amount can be shown or collected yet. Try again, or use the booker's combined check-out."
+          action={
+            <button type="button" className="btn-secondary !h-11" onClick={props.onClose}>
+              Close
+            </button>
+          }
+        />
+      ) : quoteQ.isLoading || !quoteQ.data ? (
         <div className="text-sm text-textSecondary py-6 text-center">Loading bill…</div>
       ) : (
         <div className="space-y-4">
@@ -5836,9 +5906,25 @@ function PerRoomCheckoutModal(props: {
                     <option value="bank_transfer">Bank transfer</option>
                     <option value="unpaid">Unpaid · collect later</option>
                     <option value="wallet" disabled={walletBalance <= 0.009}>
-                      Wallet credit · available {inr(walletBalance)}
+                      {walletQ.isError
+                        ? "Wallet credit · unavailable"
+                        : `Wallet credit · available ${inr(walletBalance)}`}
                     </option>
                   </select>
+                  {/* An errored preview also reads as ₹0 available. Say the
+                      lookup failed rather than telling the guest they have
+                      no credit. */}
+                  {walletQ.isError && (
+                    <button
+                      type="button"
+                      onClick={() => walletQ.refetch()}
+                      disabled={walletQ.isFetching}
+                      className="text-[11px] text-dangerFg mt-1 text-left underline disabled:opacity-60"
+                    >
+                      Wallet credit couldn't be checked - the guest may still have
+                      credit. {walletQ.isFetching ? "Retrying…" : "Retry"}
+                    </button>
+                  )}
                   {method === "wallet" && (
                     <div className="text-[11px] text-textSecondary mt-1">
                       Redeems {inr(amount)} from the guest's wallet. Wallet covers up to{" "}
@@ -6785,6 +6871,19 @@ function CheckoutModal(props: {
           />
         )}
 
+        {/* A failed lookup makes hasPrevious false, which is byte-identical to
+            a guest with a clean record — the guest would walk out owing money
+            the desk was never shown. */}
+        {outstandingQ.isError && (
+          <QueryError
+            error={outstandingQ.error}
+            onRetry={() => outstandingQ.refetch()}
+            isRetrying={outstandingQ.isFetching}
+            title="Couldn't check previous unpaid balance"
+            message="Older bookings and invoices for this guest didn't load, so any earlier dues are NOT included in the suggested final payment. Retry before completing check-out."
+          />
+        )}
+
         {hasPrevious && (
           <div className="rounded-sm border-2 border-dangerBorder bg-dangerBg p-3 space-y-2">
             <label className="flex items-start gap-2 cursor-pointer">
@@ -6877,9 +6976,24 @@ function CheckoutModal(props: {
               <option value="bank_transfer">Bank Transfer</option>
               <option value="unpaid">Unpaid · Collect later</option>
               <option value="wallet" disabled={walletBalance <= 0.009 || !balanceRemaining}>
-                Wallet credit · available {inr(walletBalance)}
+                {walletQ.isError
+                  ? "Wallet credit · unavailable"
+                  : `Wallet credit · available ${inr(walletBalance)}`}
               </option>
             </select>
+            {/* An errored preview also collapses to ₹0. Don't let that be read
+                as "this guest has no credit". */}
+            {walletQ.isError && (
+              <button
+                type="button"
+                onClick={() => walletQ.refetch()}
+                disabled={walletQ.isFetching}
+                className="text-[11px] text-dangerFg mt-1 text-left underline disabled:opacity-60"
+              >
+                Wallet credit couldn't be checked - the guest may still have credit.{" "}
+                {walletQ.isFetching ? "Retrying…" : "Retry"}
+              </button>
+            )}
             {isWallet && (
               <div className="text-[11px] text-textSecondary mt-1 leading-tight">
                 Redeems from the guest's wallet only. Covers up to{" "}

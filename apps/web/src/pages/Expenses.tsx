@@ -34,7 +34,7 @@ import {
   rangeForPreset,
   type DatePresetKey,
 } from "@/components/DatePresetBar";
-import { ListSkeleton } from "@/components/kit";
+import { ListSkeleton, QueryError } from "@/components/kit";
 import { StickyBar } from "@/components/StickyBar";
 import { Money } from "@/components/Money";
 import { useToast } from "@/components/Toast";
@@ -132,7 +132,7 @@ export default function Expenses() {
     [dateFrom, dateTo, category, statusFilter, q, page],
   );
 
-  const { data: listData, isLoading } = useQuery({
+  const listQ = useQuery({
     queryKey: ["expenses", queryParams],
     queryFn: () => getList<ExpenseRow>("/expenses", queryParams),
   });
@@ -143,9 +143,18 @@ export default function Expenses() {
       api.get<ExpenseSummary>("/expenses/summary", queryParams as never),
   });
 
-  const rows = listData?.data ?? [];
-  const total = listData?.meta.total ?? 0;
+  const rows = listQ.data?.data ?? [];
+  const total = listQ.data?.meta.total ?? 0;
   const totalPages = Math.max(1, Math.ceil(total / PER_PAGE));
+
+  // The KPI strip and the table read from two different endpoints, so either
+  // can fail alone. Whichever surface shows the failure retries both, so one
+  // click brings the whole page back.
+  const retryBoth = () => {
+    void listQ.refetch();
+    void summaryQ.refetch();
+  };
+  const isRetrying = listQ.isFetching || summaryQ.isFetching;
 
   const filtersActive =
     !!category || !!statusFilter || !!q.trim() || preset !== "month";
@@ -173,7 +182,20 @@ export default function Expenses() {
       </div>
 
       {/* KPI strip — sums across the FULL filtered set (server-side),
-          not just the current page. */}
+          not just the current page. A failed aggregate is rendered as an
+          error, never as ₹0 — "Pending ₹0" would tell staff every vendor
+          bill is settled and "Input GST ₹0" would understate a GST filing.
+          When the list failed too, the body below carries the one error +
+          retry rather than stacking two identical panels. */}
+      {summaryQ.isError ? (
+        listQ.isError ? null : (
+          <QueryError
+            error={summaryQ.error}
+            onRetry={retryBoth}
+            isRetrying={isRetrying}
+          />
+        )
+      ) : (
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         <div className="card !rounded-[14px]">
           <div className="label">Total</div>
@@ -217,6 +239,7 @@ export default function Expenses() {
           </div>
         </div>
       </div>
+      )}
 
       {/* Per-category breakdown — only rendered when there's data. */}
       {(summaryQ.data?.byCategory.length ?? 0) > 0 && (
@@ -333,7 +356,9 @@ export default function Expenses() {
       </div>
       </StickyBar>
 
-      {isLoading ? (
+      {listQ.isError ? (
+        <QueryError error={listQ.error} onRetry={retryBoth} isRetrying={isRetrying} />
+      ) : listQ.isLoading ? (
         <ListSkeleton rows={6} />
       ) : rows.length === 0 ? (
         <div className="card flex flex-col items-center justify-center py-16 text-center text-textSecondary">

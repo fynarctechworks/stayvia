@@ -17,6 +17,7 @@ import { RESERVATION_STATUSES, type ReservationStatus } from "@stayvia/shared";
 import { CalendarDays, ChevronLeft, ChevronRight, Gift, X } from "@/lib/micons";
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { QueryError } from "@/components/kit";
 import { Loader } from "@/components/Loader";
 import { api } from "@/lib/api";
 
@@ -96,7 +97,7 @@ export default function CalendarPage() {
 
   const monthParam = format(cursor, "yyyy-MM");
 
-  const { data, isLoading } = useQuery({
+  const calendarQ = useQuery({
     queryKey: ["calendar", monthParam],
     queryFn: () =>
       api.get<{
@@ -107,6 +108,7 @@ export default function CalendarPage() {
       }>("/calendar", { month: monthParam }),
     refetchInterval: 60_000,
   });
+  const { data, isLoading, isError } = calendarQ;
 
   // Wrap in useMemo so the `?? []` fallback returns the SAME array
   // reference between renders when the API result hasn't changed.
@@ -164,8 +166,15 @@ export default function CalendarPage() {
           <h1 className="text-[clamp(22px,3vw,28px)] font-semibold tracking-[-0.5px] text-ink">
             Calendar
           </h1>
+          {/* Never state a booking count off a query that failed or hasn't
+              answered yet — "0 bookings" is what staff quote availability
+              from. */}
           <div className="text-sm text-textSecondary mt-1.5">
-            {totals.total} booking{totals.total === 1 ? "" : "s"} in {format(cursor, "MMMM yyyy")}.
+            {isError
+              ? `Couldn't load ${format(cursor, "MMMM yyyy")} — the count below is unavailable.`
+              : isLoading
+                ? `Loading ${format(cursor, "MMMM yyyy")}…`
+                : `${totals.total} booking${totals.total === 1 ? "" : "s"} in ${format(cursor, "MMMM yyyy")}.`}
           </div>
         </div>
         <div className="flex items-center gap-2.5 flex-wrap sm:justify-end w-full sm:w-auto">
@@ -208,7 +217,9 @@ export default function CalendarPage() {
           />
         </div>
       </div>
-      <div className="flex flex-wrap items-center gap-x-3 gap-y-2 sm:gap-4">
+      {/* Legend counts come off `totals`, so it stays hidden while the month
+          is unknown rather than showing every status at no count. */}
+      <div className={`flex flex-wrap items-center gap-x-3 gap-y-2 sm:gap-4 ${isError ? "hidden" : ""}`}>
         {legendStatuses.map((s) => (
           <span key={s} className="inline-flex items-center gap-1.5 text-xs text-inkBody">
             <span className={`inline-block w-3 h-3 rounded-[4px] border ${statusStyle(s)}`} />
@@ -222,7 +233,17 @@ export default function CalendarPage() {
         ))}
       </div>
 
-      {isLoading ? (
+      {/* Error branch first: an empty grid reads as "the hotel is wide open",
+          which is the single most expensive thing this page can get wrong. */}
+      {isError ? (
+        <QueryError
+          error={calendarQ.error}
+          onRetry={() => calendarQ.refetch()}
+          isRetrying={calendarQ.isFetching}
+          title="Couldn't load the calendar"
+          message={`The bookings for ${format(cursor, "MMMM yyyy")} didn't load, so this month is unknown — not empty. Don't quote availability from this screen until it loads.`}
+        />
+      ) : isLoading ? (
         <Loader label="Loading calendar…" />
       ) : (
         <div className="card !p-0 overflow-hidden">
@@ -341,9 +362,11 @@ export default function CalendarPage() {
                     {format(selectedDay, "EEEE, d MMMM yyyy")}
                   </h2>
                   <div className="text-xs text-textSecondary">
-                    {selectedBookings.length === 0
-                      ? "No bookings"
-                      : `${selectedBookings.length} booking${selectedBookings.length === 1 ? "" : "s"}`}
+                    {isError
+                      ? "Bookings unavailable"
+                      : selectedBookings.length === 0
+                        ? "No bookings"
+                        : `${selectedBookings.length} booking${selectedBookings.length === 1 ? "" : "s"}`}
                   </div>
                 </div>
               </div>
@@ -356,7 +379,20 @@ export default function CalendarPage() {
               </button>
             </header>
             <div className="overflow-y-auto px-4 sm:px-6 py-2">
-              {selectedBookings.length === 0 ? (
+              {/* The modal can outlive a month change that failed, so it gets
+                  its own error branch instead of inheriting a stale "no
+                  bookings on this day". */}
+              {isError ? (
+                <div className="py-4">
+                  <QueryError
+                    error={calendarQ.error}
+                    onRetry={() => calendarQ.refetch()}
+                    isRetrying={calendarQ.isFetching}
+                    title="Couldn't load this day"
+                    message="The month's bookings didn't load, so this day is unknown — not empty."
+                  />
+                </div>
+              ) : selectedBookings.length === 0 ? (
                 <div className="py-12 text-center text-textSecondary">
                   <CalendarDays className="w-8 h-8 mx-auto mb-2 opacity-40" />
                   <div className="text-sm">No bookings on this day.</div>

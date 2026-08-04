@@ -10,7 +10,7 @@ import { useNavigate } from "react-router-dom";
 import { BedDouble, CheckCircle2, ChevronRight, Clock, Loader2, QrCode, Users, X } from "@/lib/micons";
 import { useDialog } from "@/components/Dialog";
 import { KycModal } from "@/components/KycModal";
-import { EmptyState, ListSkeleton, PageHeader } from "@/components/kit";
+import { EmptyState, ListSkeleton, PageHeader, QueryError, Skeleton } from "@/components/kit";
 import { useToast } from "@/components/Toast";
 import { ApiError, api, getList } from "@/lib/api";
 import { inr } from "@/lib/utils";
@@ -126,9 +126,14 @@ export default function BookingRequests() {
       <PageHeader
         title="Booking Requests"
         subtitle={
-          items.length === 0
-            ? "QR self-bookings land here for the desk to confirm."
-            : `${items.length} request${items.length === 1 ? "" : "s"} waiting - each expires 30 minutes after booking.`
+          // A failed fetch leaves `items` empty; the calm "land here" line
+          // would then read as "nothing came through", which is the one
+          // thing the desk must not tell a guest on a failure.
+          q.isError
+            ? "The queue didn't load - requests may be waiting."
+            : items.length === 0
+              ? "QR self-bookings land here for the desk to confirm."
+              : `${items.length} request${items.length === 1 ? "" : "s"} waiting - each expires 30 minutes after booking.`
         }
         actions={
           <button
@@ -140,7 +145,18 @@ export default function BookingRequests() {
         }
       />
 
-      {q.isLoading ? (
+      {/* Error branch first: a hold the desk never sees expires in 30
+          minutes, so "no requests right now" is only sayable when the
+          fetch actually came back empty. */}
+      {q.isError ? (
+        <div className="card">
+          <QueryError
+            error={q.error}
+            onRetry={() => void q.refetch()}
+            isRetrying={q.isFetching}
+          />
+        </div>
+      ) : q.isLoading ? (
         <ListSkeleton rows={3} />
       ) : items.length === 0 ? (
         <div className="card">
@@ -364,6 +380,26 @@ function RequestReviewOverlay({
     </div>
   );
 
+  // Fields that come from the separate guest-record lookup. The desk verifies
+  // identity against these, and the faint "-" means "the guest left this
+  // blank" — so a failed (or still-running) lookup must not borrow it.
+  const guestField = (label: string, value: string | null | undefined, mono = false) => (
+    <div>
+      <div className="text-[10px] font-bold uppercase tracking-[0.06em] text-inkMuted">{label}</div>
+      <div className={`text-sm mt-0.5 ${mono ? "font-mono" : ""}`}>
+        {guestQ.isError ? (
+          <span className="text-dangerFg font-semibold">Couldn&rsquo;t load</span>
+        ) : guestQ.isLoading ? (
+          <Skeleton className="h-4 w-20 mt-1" />
+        ) : value?.trim() ? (
+          <span className="text-ink">{value}</span>
+        ) : (
+          <span className="text-inkFaint">-</span>
+        )}
+      </div>
+    </div>
+  );
+
   const doc = (label: string, url: string | null | undefined) => (
     <div className="min-w-0">
       <div className="text-[10px] font-bold uppercase tracking-[0.06em] text-inkMuted mb-1">{label}</div>
@@ -441,8 +477,8 @@ function RequestReviewOverlay({
                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-4 gap-y-3">
                   {field("Full name", d.guest.fullName)}
                   {field("Phone", d.guest.phone, true)}
-                  {field("Email", g?.email)}
-                  {field("Gender", g?.gender)}
+                  {guestField("Email", g?.email)}
+                  {guestField("Gender", g?.gender)}
                   {field(
                     "ID proof",
                     d.guest.idProofType
@@ -450,12 +486,20 @@ function RequestReviewOverlay({
                       : null,
                     true,
                   )}
-                  {field("Nationality", g?.nationality)}
-                  {field("State", g?.state)}
-                  {field("City", g?.city)}
-                  {field("GSTIN", g?.gstin, true)}
+                  {guestField("Nationality", g?.nationality)}
+                  {guestField("State", g?.state)}
+                  {guestField("City", g?.city)}
+                  {guestField("GSTIN", g?.gstin, true)}
                 </div>
-                <div className="mt-3">{field("Address", g?.address)}</div>
+                <div className="mt-3">{guestField("Address", g?.address)}</div>
+                {guestQ.isError && (
+                  <QueryError
+                    className="mt-3"
+                    error={guestQ.error}
+                    onRetry={() => void guestQ.refetch()}
+                    isRetrying={guestQ.isFetching}
+                  />
+                )}
                 {d.specialRequests && (
                   <div className="mt-3">{field("Special requests", d.specialRequests)}</div>
                 )}
@@ -471,10 +515,24 @@ function RequestReviewOverlay({
                     className="text-xs font-semibold text-brand-deep hover:text-brand transition-colors"
                     onClick={() => setKycOpen(true)}
                   >
-                    {kyc?.photoUrl || kyc?.frontUrl ? "Replace..." : "Capture at desk..."}
+                    {/* Without the lookup we don't know whether documents
+                        exist, so neither "Replace" nor "Capture" is sayable. */}
+                    {kycQ.isError
+                      ? "Capture / replace..."
+                      : kyc?.photoUrl || kyc?.frontUrl
+                        ? "Replace..."
+                        : "Capture at desk..."}
                   </button>
                 </div>
-                {kycQ.isLoading ? (
+                {/* Error first: the dashed "Not uploaded" placeholders below
+                    are a statement about the guest, not about the request. */}
+                {kycQ.isError ? (
+                  <QueryError
+                    error={kycQ.error}
+                    onRetry={() => void kycQ.refetch()}
+                    isRetrying={kycQ.isFetching}
+                  />
+                ) : kycQ.isLoading ? (
                   <div className="py-6 grid place-items-center">
                     <Loader2 className="w-5 h-5 animate-spin text-brand-deep" />
                   </div>
@@ -486,8 +544,9 @@ function RequestReviewOverlay({
                   </div>
                 )}
                 <p className="text-[11px] text-textSecondary mt-2">
-                  Match the photo and ID against the guest in front of you. Confirming marks
-                  KYC as verified.
+                  {kycQ.isError
+                    ? "Confirming still marks KYC as verified server-side - so only confirm after checking the guest's ID in person, since their uploaded documents didn't load here."
+                    : "Match the photo and ID against the guest in front of you. Confirming marks KYC as verified."}
                 </p>
               </section>
 

@@ -49,6 +49,7 @@ import {
   YAxis,
 } from "recharts";
 import { useDialog } from "@/components/Dialog";
+import { QueryError, queryErrorMessage } from "@/components/kit";
 import { Loader } from "@/components/Loader";
 import { useToast } from "@/components/Toast";
 import { api, getList } from "@/lib/api";
@@ -264,7 +265,14 @@ export default function Reports() {
       ),
     staleTime: 60_000,
   });
-  const gateEnabled = !!settingsPublic.data?.complimentaryGateEnabled;
+  // Fail CLOSED. `?? false` collapsed "we don't know yet / the request
+  // failed" into "no gate configured", and nothing re-checks server-side
+  // (/reports/credit-bookings only requires view_reports) — so a 500 on
+  // /settings/public was enough to open a report the property deliberately
+  // put a code on. Until the settings load, assume the gate is on.
+  const gateEnabled = settingsPublic.data
+    ? !!settingsPublic.data.complimentaryGateEnabled
+    : true;
   // Hiding off = complimentary bookings are public in every normal view, so
   // the dedicated Complimentary report is redundant — drop the More toggle
   // and its tabs entirely. Defaults to the hidden-mode layout until the
@@ -715,6 +723,28 @@ function EmptyState({
   );
 }
 
+// Shared failure surface for a report tab body. The date toolbar and tab
+// strip stay on screen above it, so this is the inline block rather than a
+// full-page error. Pass `message` only where the tab needs to spell out what
+// the missing numbers would have been — otherwise the derived copy (which
+// distinguishes a 403 from an outage) is the better wording.
+function ReportError({
+  q,
+  message,
+}: {
+  q: { error: unknown; isFetching: boolean; refetch: () => unknown };
+  message?: ReactNode;
+}) {
+  return (
+    <QueryError
+      error={q.error}
+      onRetry={() => q.refetch()}
+      isRetrying={q.isFetching}
+      message={message}
+    />
+  );
+}
+
 function ChartCard({
   title,
   subtitle,
@@ -748,7 +778,7 @@ function ChartCard({
 // ============================================================
 
 function OccupancyTab({ from, to }: { from: string; to: string }) {
-  const { data } = useQuery({
+  const q = useQuery({
     queryKey: ["rpt-occ", from, to],
     queryFn: () =>
       api.get<{
@@ -757,6 +787,8 @@ function OccupancyTab({ from, to }: { from: string; to: string }) {
         daily: { day: string; occupied: number; total: number; percentage: number }[];
       }>("/reports/occupancy", { date_from: from, date_to: to }),
   });
+  const data = q.data;
+  if (q.isError) return <ReportError q={q} />;
   if (!data) return <Loader />;
 
   const peak = data.daily.reduce((m, d) => (d.percentage > m ? d.percentage : m), 0);
@@ -830,7 +862,7 @@ function OccupancyTab({ from, to }: { from: string; to: string }) {
 }
 
 function RevenueTab({ from, to }: { from: string; to: string }) {
-  const { data } = useQuery({
+  const revQ = useQuery({
     queryKey: ["rpt-rev", from, to],
     queryFn: () =>
       api.get<{
@@ -844,13 +876,16 @@ function RevenueTab({ from, to }: { from: string; to: string }) {
   // Reuse the collections endpoint for the by-payment-method split so the
   // Revenue tab can show how the money came in (Cash / UPI / Card …) for
   // the same range — no separate trip to the Collections tab.
-  const { data: collections } = useQuery({
+  const collectionsQ = useQuery({
     queryKey: ["rpt-rev-collections", from, to],
     queryFn: () =>
       api.get<{
         byMethod: { method: string; count: number; total: string }[];
       }>("/reports/collections", { date_from: from, date_to: to }),
   });
+  const data = revQ.data;
+  const collections = collectionsQ.data;
+  if (revQ.isError) return <ReportError q={revQ} />;
   if (!data) return <Loader />;
 
   const dailyChart = data.daily.map((d) => ({
@@ -1044,7 +1079,14 @@ function RevenueTab({ from, to }: { from: string; to: string }) {
         <div className="text-sm font-semibold text-ink mb-2">
           Collections by payment method
         </div>
-        {byMethod.length === 0 ? (
+        {collectionsQ.isError ? (
+          <ReportError
+            q={collectionsQ}
+            message="The payment-method split didn't load. No payment figures are shown here - that is not the same as no payments received."
+          />
+        ) : collectionsQ.isLoading ? (
+          <div className="text-sm text-textSecondary py-1">Loading payments…</div>
+        ) : byMethod.length === 0 ? (
           <div className="text-sm text-textSecondary py-1">
             No payments received in this range.
           </div>
@@ -1132,6 +1174,7 @@ function invStatusTone(status: InvoiceListRow["status"]): string {
 
 function InvoicesTab({ from, to }: { from: string; to: string }) {
   const navigate = useNavigate();
+  const { toast } = useToast();
   const [status, setStatus] = useState<InvoiceStatusFilter>("all");
   const [scope, setScope] = useState<InvoiceScopeFilter>("all");
   const [q, setQ] = useState("");
@@ -1143,7 +1186,7 @@ function InvoicesTab({ from, to }: { from: string; to: string }) {
     setPage(1);
   }, [status, scope, q, from, to]);
 
-  const { data, isLoading } = useQuery({
+  const listQ = useQuery({
     queryKey: ["rpt-invoices", from, to, status, scope, q, page],
     queryFn: () =>
       getList<InvoiceListRow>("/invoices", {
@@ -1181,6 +1224,7 @@ function InvoicesTab({ from, to }: { from: string; to: string }) {
       }),
   });
 
+  const data = listQ.data;
   const rows = data?.rows ?? [];
   const total = data?.meta?.total ?? 0;
   const perPage = data?.meta?.per_page ?? 50;
@@ -1216,7 +1260,10 @@ function InvoicesTab({ from, to }: { from: string; to: string }) {
         ...(scope !== "all" ? { scope } : {}),
         ...(q.trim() ? { q: q.trim() } : {}),
       });
-      if (out.rows.length === 0) return;
+      if (out.rows.length === 0) {
+        toast("Nothing to export for these filters.", "info");
+        return;
+      }
       const csv = Papa.unparse(out.rows);
       const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
       const url = URL.createObjectURL(blob);
@@ -1225,6 +1272,10 @@ function InvoicesTab({ from, to }: { from: string; to: string }) {
       a.download = `invoices-${from}-${to}-full.csv`;
       a.click();
       URL.revokeObjectURL(url);
+    } catch (e) {
+      // Without this the button just flips back to "Export CSV" and staff
+      // retry the expensive server export, or report the range as empty.
+      toast(queryErrorMessage(e, "Couldn't export these invoices."), "error");
     } finally {
       setExporting(false);
     }
@@ -1232,22 +1283,32 @@ function InvoicesTab({ from, to }: { from: string; to: string }) {
 
   return (
     <div className="space-y-4">
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        <Kpi label="Invoices" value={total} Icon={Receipt} />
-        <Kpi label="Gross billed" value={inr(sums.gross)} Icon={TrendingUp} />
-        <Kpi
-          label="Settled"
-          value={inr(settled)}
-          Icon={Wallet}
-          tone="success"
+      {/* The aggregate is a separate endpoint from the list, so it can fail
+          on its own and print ₹0 tiles above a table full of real invoices.
+          Never show a money figure derived from a request that failed. */}
+      {summaryQ.isError || listQ.isError ? (
+        <QueryError
+          error={summaryQ.isError ? summaryQ.error : listQ.error}
+          onRetry={() => {
+            if (listQ.isError) listQ.refetch();
+            if (summaryQ.isError) summaryQ.refetch();
+          }}
+          isRetrying={summaryQ.isFetching || listQ.isFetching}
+          message="The invoice totals didn't load, so no figures are shown here. These are not zeros - don't read or report ₹0 off this screen."
         />
-        <Kpi
-          label="Outstanding"
-          value={inr(sums.owing)}
-          Icon={AlertTriangle}
-          tone={sums.owing > 0.009 ? "danger" : undefined}
-        />
-      </div>
+      ) : (
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+          <Kpi label="Invoices" value={total} Icon={Receipt} />
+          <Kpi label="Gross billed" value={inr(sums.gross)} Icon={TrendingUp} />
+          <Kpi label="Settled" value={inr(settled)} Icon={Wallet} tone="success" />
+          <Kpi
+            label="Outstanding"
+            value={inr(sums.owing)}
+            Icon={AlertTriangle}
+            tone={sums.owing > 0.009 ? "danger" : undefined}
+          />
+        </div>
+      )}
 
       <div className="card !p-3 flex flex-wrap items-center gap-2">
         <div className="flex flex-wrap gap-1">
@@ -1303,7 +1364,14 @@ function InvoicesTab({ from, to }: { from: string; to: string }) {
         />
       </div>
 
-      {isLoading ? (
+      {listQ.isError ? (
+        <QueryError
+          error={listQ.error}
+          onRetry={() => listQ.refetch()}
+          isRetrying={listQ.isFetching}
+          message="The invoice list didn't load, so no rows are shown. This range is not empty - the request failed."
+        />
+      ) : listQ.isLoading ? (
         <Loader />
       ) : rows.length === 0 ? (
         <EmptyState
@@ -1472,7 +1540,7 @@ function InvoicesTab({ from, to }: { from: string; to: string }) {
 }
 
 function CollectionsTab({ from, to }: { from: string; to: string }) {
-  const { data } = useQuery({
+  const q = useQuery({
     queryKey: ["rpt-col", from, to],
     queryFn: () =>
       api.get<{
@@ -1480,6 +1548,14 @@ function CollectionsTab({ from, to }: { from: string; to: string }) {
         payments: { id: string; amount: string; paymentMethod: string; paymentDate: string }[];
       }>("/reports/collections", { date_from: from, date_to: to }),
   });
+  const data = q.data;
+  if (q.isError)
+    return (
+      <ReportError
+        q={q}
+        message="The collections report didn't load, so no totals are shown. This is not ₹0 collected - re-run it before reconciling cash."
+      />
+    );
   if (!data) return <Loader />;
 
   const grand = data.byMethod.reduce((s, m) => s + Number(m.total), 0);
@@ -1607,7 +1683,7 @@ function CollectionsTab({ from, to }: { from: string; to: string }) {
 }
 
 function GstTab({ from, to }: { from: string; to: string }) {
-  const { data } = useQuery({
+  const q = useQuery({
     queryKey: ["rpt-gst", from, to],
     queryFn: () =>
       api.get<{
@@ -1629,6 +1705,14 @@ function GstTab({ from, to }: { from: string; to: string }) {
         };
       }>("/reports/gst-summary", { date_from: from, date_to: to }),
   });
+  const data = q.data;
+  if (q.isError)
+    return (
+      <ReportError
+        q={q}
+        message="The GST summary didn't load, so no tax figures are shown. Nothing here is a filed-able zero - re-run it before preparing a return."
+      />
+    );
   if (!data) return <Loader />;
 
   const cn = data.creditNotes;
@@ -1817,11 +1901,17 @@ function OutstandingTab() {
   const qc = useQueryClient();
   const dialog = useDialog();
   const { toast } = useToast();
-  const { data } = useQuery({
+  // This is the ONE report that needs view_revenue (the tab strip and the
+  // route only require view_reports), so a custom role can reach it and get
+  // a permanent 403. Stop the 30s poll once the query has failed — it would
+  // otherwise re-fire the same rejection forever behind the same UI; the
+  // error surface below carries an explicit Retry instead.
+  const q = useQuery({
     queryKey: ["rpt-out"],
     queryFn: () => api.get<OutstandingResp>("/reports/outstanding"),
-    refetchInterval: 30_000,
+    refetchInterval: (query) => (query.state.status === "error" ? false : 30_000),
   });
+  const data = q.data;
 
   const markReceived = useMutation({
     mutationFn: ({ id, method }: { id: string; method: string }) =>
@@ -1853,6 +1943,7 @@ function OutstandingTab() {
     if (chosen) markReceived.mutate({ id: p.paymentId, method: chosen });
   }
 
+  if (q.isError) return <ReportError q={q} />;
   if (!data) return <Loader />;
   const { invoices, pendingPayments, byGuest, totalOutstanding } = data;
 
@@ -2184,7 +2275,7 @@ function DailyLedgerTab({ from, to }: { from: string; to: string }) {
     net: number;
     rooms: LedgerRoom[];
   }
-  const { data, isLoading } = useQuery({
+  const q = useQuery({
     queryKey: ["rpt-daily-ledger", from, to],
     queryFn: () =>
       api.get<{
@@ -2200,6 +2291,7 @@ function DailyLedgerTab({ from, to }: { from: string; to: string }) {
   });
   const [expanded, setExpanded] = useState<string | null>(null);
 
+  const data = q.data;
   const daily = data?.daily ?? [];
   const totals = data?.totals;
   // Hide leading/trailing dead days only when the range is long; a
@@ -2210,7 +2302,17 @@ function DailyLedgerTab({ from, to }: { from: string; to: string }) {
   // same filtered set.
   const visibleDays = daily.filter(hasAnything);
 
-  if (isLoading) return <Loader label="Building the day book…" />;
+  // This is the screen an owner reconciles the cash drawer against, so a
+  // failed fetch must never reach the KPI row: four ₹0 tiles over "Nothing
+  // recorded in this range" is indistinguishable from a dead month.
+  if (q.isError)
+    return (
+      <ReportError
+        q={q}
+        message="The day book didn't load, so no rooms, collections or expenses are shown. This range is not empty and these are not zeros - re-run it before reconciling cash."
+      />
+    );
+  if (q.isLoading) return <Loader label="Building the day book…" />;
 
   return (
     <div className="space-y-4">
@@ -2513,7 +2615,7 @@ function DailyLedgerTab({ from, to }: { from: string; to: string }) {
 }
 
 function RoomsTab({ from, to }: { from: string; to: string }) {
-  const { data = [] } = useQuery({
+  const q = useQuery({
     queryKey: ["rpt-rooms", from, to],
     queryFn: () =>
       api.get<
@@ -2531,6 +2633,8 @@ function RoomsTab({ from, to }: { from: string; to: string }) {
         }[]
       >("/reports/room-performance", { date_from: from, date_to: to }),
   });
+  if (q.isError) return <ReportError q={q} />;
+  const data = q.data ?? [];
 
   const total = data.reduce((s, r) => s + Number(r.revenue), 0);
   const totalBookings = data.reduce((s, r) => s + r.bookings, 0);
@@ -2679,7 +2783,7 @@ function RoomsTab({ from, to }: { from: string; to: string }) {
 
 function CreditTab({ from, to }: { from: string; to: string }) {
   const navigate = useNavigate();
-  const { data } = useQuery({
+  const q = useQuery({
     queryKey: ["rpt-credit", from, to],
     queryFn: () =>
       api.get<{
@@ -2710,6 +2814,8 @@ function CreditTab({ from, to }: { from: string; to: string }) {
         }[];
       }>("/reports/credit-bookings", { date_from: from, date_to: to }),
   });
+  const data = q.data;
+  if (q.isError) return <ReportError q={q} />;
   if (!data) return <Loader />;
 
   return (
@@ -2887,7 +2993,7 @@ function CreditTab({ from, to }: { from: string; to: string }) {
 }
 
 function GuestsTab({ from, to }: { from: string; to: string }) {
-  const { data = [] } = useQuery({
+  const q = useQuery({
     queryKey: ["rpt-guests", from, to],
     queryFn: () =>
       api.get<
@@ -2902,6 +3008,8 @@ function GuestsTab({ from, to }: { from: string; to: string }) {
   });
 
   const navigate = useNavigate();
+  if (q.isError) return <ReportError q={q} />;
+  const data = q.data ?? [];
   const top = data[0];
   const totalRevenue = data.reduce((s, g) => s + Number(g.revenue), 0);
 

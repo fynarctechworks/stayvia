@@ -29,6 +29,7 @@ import {
 } from "@/lib/micons";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { QueryError } from "@/components/kit";
 import { api } from "@/lib/api";
 
 interface SearchResp {
@@ -161,7 +162,7 @@ export function CommandPalette() {
     return () => clearTimeout(handle);
   }, [query]);
 
-  const { data, isFetching } = useQuery({
+  const searchQ = useQuery({
     queryKey: ["palette-search", debounced],
     queryFn: () => api.get<SearchResp>("/search", { q: debounced, limit: 6 }),
     // Don't fetch on empty or one-char queries — those mean "show me
@@ -169,6 +170,7 @@ export function CommandPalette() {
     enabled: open && debounced.length >= 2,
     staleTime: 10_000,
   });
+  const { data, isFetching } = searchQ;
 
   // Build the flat item list (in display order). We render groups but
   // navigation needs a flat list for the keyboard arrow indexing.
@@ -342,15 +344,32 @@ export function CommandPalette() {
           </kbd>
         </div>
         <div className="max-h-[60vh] overflow-y-auto">
-          {items.length === 0 ? (
-            <div className="px-3 py-10 text-sm text-textSecondary text-center">
-              {debounced.length < 2
-                ? "Type at least 2 characters to search."
-                : "No results."}
+          {/* A failed search must never read as "this hotel has no such guest"
+              — that's how duplicate guests get created. The quick actions
+              below still render (they're local), so the banner sits above
+              them rather than replacing the list. */}
+          {searchQ.isError && (
+            <div className="p-3">
+              <QueryError
+                error={searchQ.error}
+                onRetry={() => searchQ.refetch()}
+                isRetrying={searchQ.isFetching}
+                title="Search didn't run"
+                message="Reservations, guests and rooms couldn't be searched. Nothing below is a search result — try again before assuming a guest isn't on file."
+              />
             </div>
-          ) : (
-            rendered
           )}
+          {items.length > 0
+            ? rendered
+            : !searchQ.isError && (
+                <div className="px-3 py-10 text-sm text-textSecondary text-center">
+                  {debounced.length < 2
+                    ? "Type at least 2 characters to search."
+                    : isFetching
+                      ? "Searching…"
+                      : "No results."}
+                </div>
+              )}
         </div>
         <div className="px-3.5 py-2.5 border-t border-divider bg-surfaceAlt flex items-center justify-between text-[10px] text-inkMuted">
           <span className="flex items-center gap-2">

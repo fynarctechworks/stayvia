@@ -2,6 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { format, formatDistanceToNow, isToday, isYesterday, startOfMonth, startOfWeek, startOfYear } from "date-fns";
 import { Activity as ActivityIcon, Calendar } from "@/lib/micons";
 import { useMemo, useState } from "react";
+import { QueryError } from "@/components/kit";
 import { Loader } from "@/components/Loader";
 import { StickyBar } from "@/components/StickyBar";
 import { TimePicker12h } from "@/components/TimePicker12h";
@@ -65,13 +66,16 @@ export default function Activity() {
   // query until both dates are filled in.
   const customIncomplete = range === "custom" && (!customFrom || !customTo);
 
-  const { data = [], isLoading } = useQuery({
+  const activityQ = useQuery({
     queryKey: ["activity", { from, to }],
     queryFn: () =>
       api.get<ActivityRow[]>("/activity", { date_from: from, date_to: to }),
     refetchInterval: 30_000,
     enabled: !customIncomplete,
   });
+  const { isLoading } = activityQ;
+  const rows = activityQ.data;
+  const data = useMemo(() => rows ?? [], [rows]);
 
   // Apply the time-of-day filter client-side. Server already scoped by date,
   // so we just need to check each row's local HH:mm against the window. If
@@ -112,9 +116,15 @@ export default function Activity() {
           <ActivityIcon className="w-6 h-6 text-brand-deep" /> Recent activity
         </h1>
         <div className="text-xs text-inkMuted">
-          {timeFiltered.length === data.length
-            ? `${data.length} entr${data.length === 1 ? "y" : "ies"}`
-            : `${timeFiltered.length} of ${data.length} entries`}
+          {/* A failed fetch must never be counted as zero entries — this is the
+              page staff read to answer "did anyone touch that invoice?". */}
+          {activityQ.isError
+            ? "Couldn't load activity"
+            : isLoading
+              ? "Loading…"
+              : timeFiltered.length === data.length
+                ? `${data.length} entr${data.length === 1 ? "y" : "ies"}`
+                : `${timeFiltered.length} of ${data.length} entries`}
         </div>
       </div>
 
@@ -216,7 +226,16 @@ export default function Activity() {
       </div>
       </StickyBar>
 
-      {isLoading ? (
+      {activityQ.isError ? (
+        <div className="card">
+          <QueryError
+            error={activityQ.error}
+            onRetry={() => activityQ.refetch()}
+            isRetrying={activityQ.isFetching}
+            message="The audit log didn't load, so this range is missing entries — it is not a quiet period. Try again, and check with an administrator if it keeps failing."
+          />
+        </div>
+      ) : isLoading ? (
         <Loader label="Loading activity…" />
       ) : groups.length === 0 ? (
         <div className="card flex flex-col items-center justify-center py-16 text-center text-textSecondary">

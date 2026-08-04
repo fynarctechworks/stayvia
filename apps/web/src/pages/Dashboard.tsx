@@ -18,7 +18,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "@/auth/AuthContext";
 import { Can } from "@/auth/Can";
 import { useRoomTypes } from "@/hooks/useRoomTypes";
-import { KpiCard, KpiSkeletonRow, StackedAvailability } from "@/components/kit";
+import { KpiCard, KpiSkeletonRow, QueryError, StackedAvailability } from "@/components/kit";
 import { RoomActionPopover } from "@/components/RoomActionPopover";
 import { api } from "@/lib/api";
 import { inr } from "@/lib/utils";
@@ -105,11 +105,12 @@ interface DashboardData {
 export default function Dashboard() {
   const navigate = useNavigate();
   const { profile } = useAuth();
-  const { data, isLoading } = useQuery({
+  const dashQ = useQuery({
     queryKey: ["dashboard"],
     queryFn: () => api.get<DashboardData>("/dashboard"),
     refetchInterval: 30_000,
   });
+  const { data, isLoading } = dashQ;
 
   // Warm Concierge greeting header ("Good morning, <name>") — pure
   // presentation, derived from the clock + the signed-in profile.
@@ -131,6 +132,43 @@ export default function Dashboard() {
     </div>
   );
 
+  const actionButtons = (
+    <div className="flex items-center gap-2.5 w-full sm:w-auto">
+      <button
+        onClick={() => navigate("/reservations/new?mode=booking")}
+        className="btn-secondary inline-flex items-center justify-center gap-2 flex-1 sm:flex-none"
+      >
+        <CalendarPlus className="w-4 h-4" /> Pre-booking
+      </button>
+      <button
+        onClick={() => navigate("/reservations/new?mode=walkin")}
+        className="btn-primary inline-flex items-center justify-center gap-2 flex-1 sm:flex-none"
+      >
+        <UserPlus className="w-4 h-4" /> New walk-in
+      </button>
+    </div>
+  );
+
+  // Failure before loading: on error `isLoading` is false and `data` stays
+  // undefined, so the skeleton branch below would hold grey KPI blocks on
+  // screen forever with nothing saying the request died.
+  if (dashQ.isError) {
+    return (
+      <div className="space-y-[22px]">
+        <div className="flex items-end justify-between flex-wrap gap-4">
+          {headerBlock}
+          {actionButtons}
+        </div>
+        <QueryError
+          error={dashQ.error}
+          onRetry={() => dashQ.refetch()}
+          isRetrying={dashQ.isFetching}
+          message="Today's occupancy, arrivals, departures and collections didn't load. The figures are missing, not zero — check the room and reservation pages until this comes back."
+        />
+      </div>
+    );
+  }
+
   if (isLoading || !data) {
     return (
       <div className="space-y-[22px]">
@@ -145,20 +183,7 @@ export default function Dashboard() {
     <div className="space-y-[22px]">
       <div className="flex items-end justify-between flex-wrap gap-4">
         {headerBlock}
-        <div className="flex items-center gap-2.5 w-full sm:w-auto">
-          <button
-            onClick={() => navigate("/reservations/new?mode=booking")}
-            className="btn-secondary inline-flex items-center justify-center gap-2 flex-1 sm:flex-none"
-          >
-            <CalendarPlus className="w-4 h-4" /> Pre-booking
-          </button>
-          <button
-            onClick={() => navigate("/reservations/new?mode=walkin")}
-            className="btn-primary inline-flex items-center justify-center gap-2 flex-1 sm:flex-none"
-          >
-            <UserPlus className="w-4 h-4" /> New walk-in
-          </button>
-        </div>
+        {actionButtons}
       </div>
 
       {/* Overdue check-out alert now lives in the app-wide sticky
@@ -623,6 +648,18 @@ function GetStartedCard() {
   });
 
   if (dismissed) return null;
+
+  // Every `done` below is a `?? 0`/`!!` on query data, so a failed probe reads
+  // as "not done". This card only ever ADDS work: on a dead /rooms or
+  // /settings/public a fully configured hotel gets told "0 of 4 done - add
+  // room types", which is the same lie as an empty list. Say nothing unless
+  // all four signals actually came back.
+  const signalsReady =
+    typesQ.isSuccess &&
+    roomsQ.isSuccess &&
+    pubQ.isSuccess &&
+    (!isAdmin || staffQ.isSuccess);
+  if (!signalsReady) return null;
 
   const steps = [
     // Room types must exist before the first room can be created, so they

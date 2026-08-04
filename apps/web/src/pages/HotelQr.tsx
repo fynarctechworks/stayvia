@@ -7,6 +7,7 @@
 // Styled to match the in-room QR page: gradient hero, soft cards, tactile
 // selection, sticky booking bar. Guest-facing, so it earns the polish.
 import {
+  useCallback,
   useEffect,
   useMemo,
   useState,
@@ -14,6 +15,7 @@ import {
 } from "react";
 import { useParams } from "react-router-dom";
 import {
+  AlertTriangle,
   BadgeIndianRupee,
   BedDouble,
   Check,
@@ -26,6 +28,7 @@ import {
   Loader2,
   MapPin,
   Plus,
+  RefreshCw,
   Snowflake,
   Users,
   Wifi,
@@ -70,6 +73,9 @@ export default function HotelQr() {
 
   const [catalog, setCatalog] = useState<QrCatalog | null>(null);
   const [notFound, setNotFound] = useState(false);
+  // "Didn't load" is not "unknown code". A walk-in standing at the desk
+  // shouldn't be told the framed QR is invalid because the API blinked.
+  const [loadFailed, setLoadFailed] = useState(false);
   const [loading, setLoading] = useState(true);
 
   const [step, setStep] = useState<Step>("browse");
@@ -111,17 +117,24 @@ export default function HotelQr() {
     holdExpiresAt: string;
   } | null>(null);
 
-  useEffect(() => {
-    (async () => {
-      try {
-        setCatalog(await publicQr.get<QrCatalog>(`/public/qr/hotel/${token}`));
-      } catch {
-        setNotFound(true);
-      } finally {
-        setLoading(false);
-      }
-    })();
+  const load = useCallback(async () => {
+    setLoading(true);
+    setNotFound(false);
+    setLoadFailed(false);
+    try {
+      setCatalog(await publicQr.get<QrCatalog>(`/public/qr/hotel/${token}`));
+    } catch (e) {
+      // Only a real 404 means this code isn't ours.
+      if (e instanceof PublicApiError && e.status === 404) setNotFound(true);
+      else setLoadFailed(true);
+    } finally {
+      setLoading(false);
+    }
   }, [token]);
+
+  useEffect(() => {
+    void load();
+  }, [load]);
 
   const chosenRooms: QrCatalogRoom[] = useMemo(
     () => (catalog?.rooms ?? []).filter((r) => selected.includes(r.id)),
@@ -166,6 +179,9 @@ export default function HotelQr() {
   function toggleRoom(id: string) {
     const adding = !selected.includes(id);
     if (adding && selected.length >= 3) return;
+    // Acting on the failure clears it — a "room was taken" banner must not
+    // outlive the pick that answers it.
+    setError("");
     setSelected((prev) =>
       adding ? [...prev, id] : prev.filter((x) => x !== id),
     );
@@ -275,6 +291,38 @@ export default function HotelQr() {
       </div>
     );
   }
+  if (loadFailed) {
+    return (
+      <div className="min-h-screen bg-bg grid place-items-center p-6 text-center">
+        <div className="max-w-xs">
+          <div className="w-14 h-14 rounded-2xl bg-warnBg text-warnFg grid place-items-center mx-auto mb-4">
+            <AlertTriangle className="w-6 h-6" />
+          </div>
+          <div className="text-xl font-semibold text-textPrimary">
+            This page didn't load
+          </div>
+          <p className="text-sm text-textSecondary mt-1.5 leading-relaxed">
+            The code is fine — we just couldn't load tonight's rooms. Check your
+            connection and try again.
+          </p>
+          <PrimaryButton className="mt-4" disabled={loading} onClick={() => void load()}>
+            {loading ? (
+              <>
+                <Loader2 className="w-4 h-4 animate-spin" /> Trying…
+              </>
+            ) : (
+              <>
+                <RefreshCw className="w-4 h-4" /> Try again
+              </>
+            )}
+          </PrimaryButton>
+          <p className="text-[11px] text-textSecondary mt-3">
+            Still not working? Please ask at the front desk.
+          </p>
+        </div>
+      </div>
+    );
+  }
   if (notFound || !catalog) {
     return (
       <div className="min-h-screen bg-bg grid place-items-center p-6 text-center">
@@ -315,6 +363,30 @@ export default function HotelQr() {
         {/* ---- browse ---- */}
         {step === "browse" && (
           <>
+            {/* A failed booking can dump the guest back here (a room was taken
+                while they filled the form). Without this the picks just vanish
+                and nothing on screen says why — they'd redo the whole form
+                blind. The 'details' and 'otp' steps render `error` too. */}
+            {error && (
+              <div
+                role="alert"
+                className="rounded-lg border border-dangerBorder bg-dangerBg p-3.5 flex items-start gap-3"
+              >
+                <AlertTriangle className="w-5 h-5 text-dangerFg shrink-0 mt-0.5" />
+                <div className="min-w-0">
+                  <div className="text-sm font-semibold text-textPrimary">
+                    We couldn't confirm that booking
+                  </div>
+                  <p className="text-[13px] text-textSecondary mt-1 leading-relaxed">
+                    {error}
+                  </p>
+                  <p className="text-[11px] text-textSecondary mt-1.5">
+                    Your details are saved — pick a room below and continue.
+                  </p>
+                </div>
+              </div>
+            )}
+
             {catalog.rooms.length === 0 && (
               <Card>
                 <p className="text-sm text-textSecondary">

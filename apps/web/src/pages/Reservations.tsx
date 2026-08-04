@@ -15,7 +15,7 @@ import {
   rangeForPreset,
   type DatePresetKey,
 } from "@/components/DatePresetBar";
-import { EmptyState, ListSkeleton } from "@/components/kit";
+import { EmptyState, ListSkeleton, QueryError } from "@/components/kit";
 import { StickyBar } from "@/components/StickyBar";
 import { StatusBadge } from "@/components/StatusBadge";
 import { api } from "@/lib/api";
@@ -119,7 +119,7 @@ export default function Reservations() {
     ? allRooms.filter((r) => String(r.floor) === floor)
     : allRooms;
 
-  const { data = [], isLoading } = useQuery({
+  const listQ = useQuery({
     queryKey: ["reservations", { status, q, dateFrom, dateTo, floor, roomId }],
     queryFn: () =>
       api.get<Reservation[]>("/reservations", {
@@ -133,6 +133,10 @@ export default function Reservations() {
         room_id: roomId || undefined,
       }),
   });
+  // Only trust the list once the request actually succeeded — on failure the
+  // count in the header and the empty state below would both read as "no
+  // arrivals today", which is the opposite of what happened.
+  const data = listQ.isSuccess ? listQ.data : [];
 
   // Hotel-policy times. We fall back to these when a reservation hasn't been
   // checked in yet (so we can't show the real timestamp).
@@ -152,7 +156,11 @@ export default function Reservations() {
             Reservations
           </h1>
           <p className="text-sm text-textSecondary mt-1">
-            {data.length} reservation{data.length === 1 ? "" : "s"}
+            {listQ.isError
+              ? "Couldn't load reservations"
+              : listQ.isLoading
+                ? "Loading reservations…"
+                : `${data.length} reservation${data.length === 1 ? "" : "s"}`}
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -294,7 +302,16 @@ export default function Reservations() {
       </div>
       </StickyBar>
 
-      {isLoading ? (
+      {listQ.isError ? (
+        <div className="card">
+          <QueryError
+            error={listQ.error}
+            onRetry={() => listQ.refetch()}
+            isRetrying={listQ.isFetching}
+            message="The reservations list didn't load, so this page is missing bookings — it is not an empty day. Try again, and check with an administrator if it keeps failing."
+          />
+        </div>
+      ) : listQ.isLoading ? (
         <ListSkeleton rows={6} />
       ) : data.length === 0 ? (
         <div className="card">

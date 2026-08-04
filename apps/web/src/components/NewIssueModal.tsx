@@ -9,6 +9,7 @@ import {
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { X } from "@/lib/micons";
 import { useState } from "react";
+import { QueryError } from "@/components/kit";
 import { api } from "@/lib/api";
 
 interface RoomLite {
@@ -148,6 +149,19 @@ export function NewIssueModal({
                     </option>
                   ))}
               </select>
+            )}
+            {/* Without this, a failed room fetch shows a dropdown holding only
+                "Pick a room…" — indistinguishable from a hotel with no rooms,
+                and the submit guard then blames the user for not picking one. */}
+            {roomsQ.isError && (
+              <div className="mt-2">
+                <QueryError
+                  error={roomsQ.error}
+                  onRetry={() => void roomsQ.refetch()}
+                  isRetrying={roomsQ.isFetching}
+                  message="The room list didn't load, so this issue can't be filed against a room yet. Try again."
+                />
+              </div>
             )}
           </div>
 

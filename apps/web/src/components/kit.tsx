@@ -4,7 +4,9 @@
 // behave identically: 44px touch targets, visible focus, 150-300ms hovers,
 // tabular numbers for money.
 import type { ReactNode } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
+import { AlertTriangle, ArrowLeft, Lock, RefreshCw } from "@/lib/micons";
+import { ApiError } from "@/lib/api";
 
 // Page title row — title left, actions right, always the same rhythm.
 export function PageHeader({
@@ -175,6 +177,264 @@ export function EmptyState({
       <div className="font-medium text-ink text-sm">{title}</div>
       {hint && <div className="text-xs text-textSecondary mt-1 max-w-sm mx-auto">{hint}</div>}
       {action && <div className="mt-3">{action}</div>}
+    </div>
+  );
+}
+
+// ── Query failure surfaces ────────────────────────────────────────────────
+// A failed request must never be dressed up as "nothing here". EmptyState is
+// only for a query that SUCCEEDED and returned nothing; anything that threw
+// gets QueryError (inline, inside a page/card body) or PageError (full page,
+// for routes that early-return before their own header/back button renders).
+
+type ErrorTone = "danger" | "warning";
+interface ErrorCopy {
+  title: string;
+  message: string;
+  tone: ErrorTone;
+}
+
+function statusOf(error: unknown): number | undefined {
+  return error instanceof ApiError ? error.status : undefined;
+}
+
+// Maps a thrown value to staff-readable copy. A 403 is deliberately worded as
+// an access change, not a system failure — the request worked, the answer was
+// "not for you", and the fix is an administrator, not a retry.
+function describeError(error: unknown): ErrorCopy {
+  const status = statusOf(error);
+  if (status === 403) {
+    return {
+      title: "You don't have access to this",
+      message:
+        "Your permissions may have changed. Ask an administrator to check your role, then try again.",
+      tone: "warning",
+    };
+  }
+  if (status === 404) {
+    return {
+      title: "Not found",
+      message: "This record no longer exists, or it belongs to a different hotel.",
+      tone: "warning",
+    };
+  }
+  if (status === undefined) {
+    return {
+      title: "Can't reach Stayvia",
+      message: "The request didn't get through. Check your connection and try again.",
+      tone: "danger",
+    };
+  }
+  return {
+    title: "Couldn't load this",
+    message:
+      "The request failed, so this data is missing — not empty. Try again, and check with an administrator if it keeps failing.",
+    tone: "danger",
+  };
+}
+
+function detailOf(error: unknown, copy: ErrorCopy): string | undefined {
+  const raw =
+    error instanceof Error ? error.message : typeof error === "string" ? error : "";
+  const trimmed = raw.trim();
+  if (!trimmed || trimmed === copy.message) return undefined;
+  return trimmed;
+}
+
+// One-line message for toasts on failed MUTATIONS: `toast(queryErrorMessage(e), "error")`.
+// Prefers the server's own message (it's the specific one — "Room is occupied",
+// "Invoice already settled") except on 403, where the permission copy is clearer
+// than the raw "Forbidden".
+export function queryErrorMessage(
+  error: unknown,
+  fallback = "Something went wrong. Please try again.",
+): string {
+  const copy = describeError(error);
+  if (statusOf(error) === 403) return copy.message;
+  const detail = detailOf(error, copy);
+  if (detail) return detail;
+  return copy.message || fallback;
+}
+
+function RetryButton({
+  onRetry,
+  isRetrying,
+  label,
+  variant,
+}: {
+  onRetry: () => void;
+  isRetrying: boolean;
+  label: string;
+  variant: "primary" | "secondary";
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onRetry}
+      disabled={isRetrying}
+      aria-busy={isRetrying || undefined}
+      className={`${
+        variant === "primary" ? "btn-primary" : "btn-secondary"
+      } !h-11 min-w-[44px] inline-flex items-center justify-center gap-1.5 disabled:opacity-60 cursor-pointer focus-visible:ring-2 focus-visible:ring-brand outline-none`}
+    >
+      <RefreshCw className={`w-4 h-4 shrink-0 ${isRetrying ? "animate-spin" : ""}`} />
+      {isRetrying ? "Retrying…" : label}
+    </button>
+  );
+}
+
+// Inline failure block. Drops into a page body, a `card`, or a SectionCard in
+// place of the list/table that failed. Most call sites pass only { error, onRetry }.
+export function QueryError({
+  error,
+  onRetry,
+  isRetrying = false,
+  title,
+  message,
+  detail,
+  retryLabel = "Try again",
+  action,
+  className = "",
+}: {
+  error?: unknown;
+  onRetry?: () => void;
+  isRetrying?: boolean;
+  title?: string;
+  message?: ReactNode;
+  detail?: ReactNode;
+  retryLabel?: string;
+  action?: ReactNode;
+  className?: string;
+}) {
+  const copy = describeError(error);
+  const warning = copy.tone === "warning";
+  const Icon = warning ? Lock : AlertTriangle;
+  const derivedDetail = detailOf(error, copy);
+  const shownDetail = detail !== undefined ? detail : derivedDetail;
+  return (
+    <div
+      role="alert"
+      className={`rounded-md border p-4 ${
+        warning ? "border-warnBorder bg-warnBg" : "border-dangerBorder bg-dangerBg"
+      } ${className}`}
+    >
+      <div className="flex items-start gap-3">
+        <div
+          className={`w-8 h-8 rounded-md grid place-items-center shrink-0 ${
+            warning ? "bg-surface text-warnFg" : "bg-surface text-dangerFg"
+          }`}
+        >
+          <Icon className="w-4 h-4" />
+        </div>
+        <div className="flex-1 min-w-0">
+          <div className="font-semibold text-ink text-sm">{title ?? copy.title}</div>
+          <div className="text-xs text-inkBody mt-1 leading-relaxed">
+            {message ?? copy.message}
+          </div>
+          {shownDetail && (
+            <div className="text-[11px] text-textSecondary mt-1.5 break-words">
+              {shownDetail}
+            </div>
+          )}
+          {(onRetry || action) && (
+            <div className="mt-3 flex flex-wrap items-center gap-2">
+              {onRetry && (
+                <RetryButton
+                  onRetry={onRetry}
+                  isRetrying={isRetrying}
+                  label={retryLabel}
+                  variant="secondary"
+                />
+              )}
+              {action}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Full-page failure, for routes that early-return before rendering their own
+// header (RoomDetail, MaintenanceDetail, …). Always carries a way out: those
+// pages' own back button hasn't rendered yet, so without one the user is stuck.
+export function PageError({
+  error,
+  onRetry,
+  isRetrying = false,
+  title,
+  message,
+  detail,
+  retryLabel = "Try again",
+  backTo,
+  backLabel = "Go back",
+  action,
+}: {
+  error?: unknown;
+  onRetry?: () => void;
+  isRetrying?: boolean;
+  title?: string;
+  message?: ReactNode;
+  detail?: ReactNode;
+  retryLabel?: string;
+  backTo?: string;
+  backLabel?: string;
+  action?: ReactNode;
+}) {
+  const navigate = useNavigate();
+  const copy = describeError(error);
+  const warning = copy.tone === "warning";
+  const Icon = warning ? Lock : AlertTriangle;
+  const derivedDetail = detailOf(error, copy);
+  const shownDetail = detail !== undefined ? detail : derivedDetail;
+  const goBack = () => {
+    if (backTo) {
+      navigate(backTo);
+      return;
+    }
+    // A directly-opened URL (fresh tab, pasted link, QR scan) has no in-app
+    // history to pop — navigate(-1) would be a no-op and strand the user on
+    // this error — so fall back to the dashboard.
+    if (typeof window !== "undefined" && window.history.length > 1) navigate(-1);
+    else navigate("/");
+  };
+  return (
+    <div role="alert" className="flex items-center justify-center min-h-[50vh] py-12 px-4">
+      <div className="card max-w-md w-full text-center !p-8">
+        <div
+          className={`w-14 h-14 rounded-full grid place-items-center mx-auto ${
+            warning ? "bg-warnBg text-warnFg" : "bg-dangerBg text-dangerFg"
+          }`}
+        >
+          <Icon className="w-7 h-7" />
+        </div>
+        <h1 className="text-xl font-bold text-ink mt-4">{title ?? copy.title}</h1>
+        <p className="text-sm text-textSecondary mt-2 leading-relaxed">
+          {message ?? copy.message}
+        </p>
+        {shownDetail && (
+          <p className="text-xs text-inkMuted mt-1.5 break-words">{shownDetail}</p>
+        )}
+        <div className="flex flex-wrap justify-center gap-2 mt-5">
+          <button
+            type="button"
+            onClick={goBack}
+            className="btn-secondary !h-11 min-w-[44px] inline-flex items-center justify-center gap-1.5 cursor-pointer focus-visible:ring-2 focus-visible:ring-brand outline-none"
+          >
+            <ArrowLeft className="w-4 h-4 shrink-0" />
+            {backLabel}
+          </button>
+          {onRetry && (
+            <RetryButton
+              onRetry={onRetry}
+              isRetrying={isRetrying}
+              label={retryLabel}
+              variant="primary"
+            />
+          )}
+          {action}
+        </div>
+      </div>
     </div>
   );
 }

@@ -47,7 +47,7 @@ import {
 } from "@/lib/micons";
 import { useAuth } from "@/auth/AuthContext";
 import { useDialog } from "@/components/Dialog";
-import { EmptyState, FilterChip, ListSkeleton, PageHeader } from "@/components/kit";
+import { EmptyState, FilterChip, ListSkeleton, PageHeader, QueryError } from "@/components/kit";
 import { useToast } from "@/components/Toast";
 import { ApiError, api, getList } from "@/lib/api";
 
@@ -255,8 +255,11 @@ export default function GuestRequests() {
     if (ok) setStatus.mutate({ id: r.id, status: "cancelled" });
   }
 
-  const subtitle =
-    filter === "active"
+  // A failed fetch leaves `total` at 0, so the counted subtitles below would
+  // read as a calm, empty queue. Say the queue is unknown instead.
+  const subtitle = q.isError
+    ? "The queue didn't load - requests may be waiting."
+    : filter === "active"
       ? total === 0
         ? "In-room QR requests land here the moment a guest taps a tile."
         : `${total} request${total === 1 ? "" : "s"} need${total === 1 ? "s" : ""} action${
@@ -277,14 +280,24 @@ export default function GuestRequests() {
               key={f.key}
               label={f.label}
               active={filter === f.key}
-              count={filter === f.key ? total : undefined}
+              count={filter === f.key && !q.isError ? total : undefined}
               onClick={() => setFilter(f.key)}
             />
           ))}
         </div>
       </div>
 
-      {q.isLoading ? (
+      {/* Error before loading, and before the empty state: "nothing waiting"
+          is only true when the fetch came back with nothing. */}
+      {q.isError ? (
+        <div className="card">
+          <QueryError
+            error={q.error}
+            onRetry={() => void q.refetch()}
+            isRetrying={q.isFetching}
+          />
+        </div>
+      ) : q.isLoading ? (
         <ListSkeleton rows={3} />
       ) : items.length === 0 ? (
         <div className="card">

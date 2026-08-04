@@ -24,6 +24,7 @@ import { useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useAuth } from "@/auth/AuthContext";
 import { useDialog } from "@/components/Dialog";
+import { PageError } from "@/components/kit";
 import { Loader } from "@/components/Loader";
 import { useToast } from "@/components/Toast";
 import { api } from "@/lib/api";
@@ -52,11 +53,12 @@ export default function ExpenseDetail() {
 
   const [editOpen, setEditOpen] = useState(false);
 
-  const { data, isLoading, error } = useQuery({
+  const expenseQ = useQuery({
     queryKey: ["expense", id],
     queryFn: () => api.get<ExpenseDetailResponse>(`/expenses/${id}`),
     enabled: !!id,
   });
+  const data = expenseQ.data;
 
   const del = useMutation({
     mutationFn: () => api.del(`/expenses/${id}`),
@@ -95,22 +97,20 @@ export default function ExpenseDetail() {
     if (ok) del.mutate();
   }
 
-  if (isLoading) return <Loader />;
-  if (error || !data) {
+  // A 500 / dropped connection / 403 is not the same thing as a deleted
+  // record: PageError words each case for itself (404 still reads "Not
+  // found") and always keeps a way back to the list.
+  if (expenseQ.isError)
     return (
-      <div className="space-y-4">
-        <button
-          className="btn-secondary inline-flex items-center gap-2"
-          onClick={() => navigate("/expenses")}
-        >
-          <ArrowLeft className="w-4 h-4" /> Back to Expenses
-        </button>
-        <div className="card text-textSecondary text-center py-10">
-          Expense not found.
-        </div>
-      </div>
+      <PageError
+        error={expenseQ.error}
+        onRetry={() => void expenseQ.refetch()}
+        isRetrying={expenseQ.isFetching}
+        backTo="/expenses"
+        backLabel="Back to Expenses"
+      />
     );
-  }
+  if (!data) return <Loader />;
 
   const isPending = data.paymentMethod === "pending";
   const amount = Number(data.amount);

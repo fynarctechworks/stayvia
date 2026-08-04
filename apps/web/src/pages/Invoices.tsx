@@ -17,10 +17,11 @@ import {
   rangeForPreset,
   type DatePresetKey,
 } from "@/components/DatePresetBar";
-import { ListSkeleton } from "@/components/kit";
+import { ListSkeleton, QueryError, queryErrorMessage } from "@/components/kit";
 import { StickyBar } from "@/components/StickyBar";
 import { Money } from "@/components/Money";
 import { PdfPreviewModal } from "@/components/PdfPreviewModal";
+import { useToast } from "@/components/Toast";
 import { api, getList } from "@/lib/api";
 import { inr } from "@/lib/utils";
 
@@ -65,6 +66,7 @@ function statusTone(status: string): string {
 
 export default function Invoices() {
   const navigate = useNavigate();
+  const { toast } = useToast();
   const [status, setStatus] = useState("");
   const [scope, setScope] = useState("");
   const [q, setQ] = useState("");
@@ -82,7 +84,7 @@ export default function Invoices() {
     number: string;
   } | null>(null);
 
-  const { data, isLoading } = useQuery({
+  const listQ = useQuery({
     queryKey: ["invoices", { status, scope, q, dateFrom, dateTo, page }],
     queryFn: () =>
       getList<InvoiceRow>("/invoices", {
@@ -118,9 +120,18 @@ export default function Invoices() {
       }),
   });
 
-  const rows = data?.data ?? [];
-  const total = data?.meta.total ?? 0;
+  const rows = listQ.data?.data ?? [];
+  const total = listQ.data?.meta.total ?? 0;
   const totalPages = Math.max(1, Math.ceil(total / PER_PAGE));
+
+  // Both queries feed money on screen, so a failure of either has to be
+  // shown, never folded into a zero. `retryBoth` is handed to whichever
+  // surface is rendering the failure so one click revives the page.
+  const retryBoth = () => {
+    void listQ.refetch();
+    void summaryQ.refetch();
+  };
+  const isRetrying = listQ.isFetching || summaryQ.isFetching;
 
   const totals = {
     grand: Number(summaryQ.data?.gross ?? 0),
@@ -153,7 +164,10 @@ export default function Invoices() {
         date_from: dateFrom || undefined,
         date_to: dateTo || undefined,
       });
-      if (out.rows.length === 0) return;
+      if (out.rows.length === 0) {
+        toast("Nothing to export for these filters.", "info");
+        return;
+      }
       const csv = Papa.unparse(out.rows);
       const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
       const url = URL.createObjectURL(blob);
@@ -163,6 +177,8 @@ export default function Invoices() {
       a.download = `invoices-${dateFrom || "all"}-${dateTo || today}-full.csv`;
       a.click();
       URL.revokeObjectURL(url);
+    } catch (e) {
+      toast(queryErrorMessage(e, "Couldn't export these invoices. Please try again."), "error");
     } finally {
       setExporting(false);
     }
@@ -179,12 +195,14 @@ export default function Invoices() {
         <div>
           <h1 className="text-2xl font-semibold tracking-tight text-ink">Invoices</h1>
           <p className="text-sm text-textSecondary mt-1">
-            {total} invoice{total === 1 ? "" : "s"} - issued, partial, paid, and voided
+            {listQ.isError
+              ? "Invoice count unavailable - the list didn't load"
+              : `${total} invoice${total === 1 ? "" : "s"} - issued, partial, paid, and voided`}
           </p>
         </div>
         <button
           onClick={exportAll}
-          disabled={total === 0 || exporting}
+          disabled={total === 0 || exporting || listQ.isError}
           className="inline-flex items-center gap-1.5 px-3.5 h-10 text-[13px] font-semibold rounded-sm border border-borderControl bg-surface text-inkBody hover:bg-surfaceAlt transition-colors disabled:opacity-40 disabled:hover:bg-surface"
         >
           <Download className="w-3.5 h-3.5" />
@@ -192,13 +210,40 @@ export default function Invoices() {
         </button>
       </div>
 
+      {/* Totals. A failed query is never rendered as ₹0: if the aggregate
+          failed the tiles are replaced by the error (unless the list failed
+          too, in which case the body below carries one error + retry rather
+          than stacking two identical panels). The count tile comes from the
+          list query, so it reports its own failure separately. */}
+      {summaryQ.isError ? (
+        listQ.isError ? null : (
+          <QueryError
+            error={summaryQ.error}
+            onRetry={retryBoth}
+            isRetrying={isRetrying}
+          />
+        )
+      ) : (
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         <div className="card !rounded-[14px]">
           <div className="label">Invoices</div>
-          <div className="text-2xl font-bold font-mono text-ink mt-1.5">{total}</div>
-          <div className="text-[11px] text-inkMuted mt-1">
-            matching current filters
-          </div>
+          {listQ.isError ? (
+            <>
+              <div className="text-lg font-semibold text-dangerFg mt-1.5">
+                Unavailable
+              </div>
+              <div className="text-[11px] text-inkMuted mt-1">
+                the list didn't load
+              </div>
+            </>
+          ) : (
+            <>
+              <div className="text-2xl font-bold font-mono text-ink mt-1.5">{total}</div>
+              <div className="text-[11px] text-inkMuted mt-1">
+                matching current filters
+              </div>
+            </>
+          )}
         </div>
         <div className="card !rounded-[14px]">
           <div className="label">Total billed</div>
@@ -219,6 +264,7 @@ export default function Invoices() {
           <div className="text-[11px] text-inkMuted mt-1">balance due</div>
         </div>
       </div>
+      )}
 
       {/* Date range presets. Sits on its own row so the buttons stay
           readable; the filter card below holds search / status / scope. */}
@@ -313,7 +359,9 @@ export default function Invoices() {
       </div>
       </StickyBar>
 
-      {isLoading ? (
+      {listQ.isError ? (
+        <QueryError error={listQ.error} onRetry={retryBoth} isRetrying={isRetrying} />
+      ) : listQ.isLoading ? (
         <ListSkeleton rows={6} />
       ) : rows.length === 0 ? (
         <div className="card flex flex-col items-center justify-center py-16 text-center text-textSecondary">

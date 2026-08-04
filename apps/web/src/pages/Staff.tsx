@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useAuth } from "@/auth/AuthContext";
 import { EmailInput } from "@/components/EmailInput";
 import { useDialog } from "@/components/Dialog";
+import { EmptyState, ListSkeleton, QueryError, queryErrorMessage } from "@/components/kit";
 import { RolesManager } from "@/components/RolesManager";
 import { useToast } from "@/components/Toast";
 import { api } from "@/lib/api";
@@ -48,19 +49,22 @@ export default function StaffPage() {
   const [view, setView] = useState<"staff" | "roles">(canStaff ? "staff" : "roles");
   const [showAdd, setShowAdd] = useState(false);
   const [editing, setEditing] = useState<Staff | null>(null);
-  const { data = [] } = useQuery({
+  const staffQ = useQuery({
     queryKey: ["staff"],
     queryFn: () => api.get<Staff[]>("/staff"),
     enabled: canStaff,
   });
+  const data = staffQ.data ?? [];
 
   const deactivate = useMutation({
     mutationFn: (id: string) => api.del(`/staff/${id}`),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["staff"] }),
+    onError: (e) => toast(queryErrorMessage(e), "error"),
   });
   const reactivate = useMutation({
     mutationFn: (id: string) => api.put(`/staff/${id}`, { isActive: true }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["staff"] }),
+    onError: (e) => toast(queryErrorMessage(e), "error"),
   });
   const hardDelete = useMutation({
     mutationFn: (id: string) => api.del(`/staff/${id}/hard`),
@@ -116,6 +120,35 @@ export default function StaffPage() {
         <RolesManager />
       ) : (
       <>
+      {/* A failed GET /staff used to fall through the `data = []` default and
+          render bare column headers — a roster that reads "this hotel has no
+          staff" to the very person signed in as staff. Error first, then
+          loading, and the empty state only once the request succeeded. */}
+      {staffQ.isError ? (
+        <div className="card">
+          <QueryError
+            error={staffQ.error}
+            onRetry={() => staffQ.refetch()}
+            isRetrying={staffQ.isFetching}
+            message="The staff list didn't load, so this roster is missing people — the team has not been emptied. Try again, and check with an administrator if it keeps failing."
+          />
+        </div>
+      ) : staffQ.isLoading ? (
+        <ListSkeleton rows={4} />
+      ) : data.length === 0 ? (
+        <div className="card">
+          <EmptyState
+            icon={<UserPlus className="w-5 h-5" />}
+            title="No staff yet"
+            hint="Add a team member to give them their own sign-in and role."
+            action={
+              <button className="btn-primary inline-flex items-center gap-2" onClick={() => setShowAdd(true)}>
+                <UserPlus className="w-4 h-4" /> Add Staff
+              </button>
+            }
+          />
+        </div>
+      ) : (
       <div className="card !p-0 overflow-hidden">
         {/* Desktop column headers — the mobile cards label themselves, so
             this row only exists from md up. */}
@@ -275,6 +308,7 @@ export default function StaffPage() {
           })}
         </ul>
       </div>
+      )}
       {showAdd && <AddStaffModal onClose={() => setShowAdd(false)} />}
       {editing && <EditStaffModal staff={editing} onClose={() => setEditing(null)} />}
       </>
@@ -315,13 +349,14 @@ function EditStaffModal({ staff, onClose }: { staff: Staff; onClose: () => void 
         `/rbac/users/${staff.id}/effective`,
       ),
   });
-  const { data: existingOverrides } = useQuery({
+  const overridesQ = useQuery({
     queryKey: ["rbac-overrides", staff.id],
     queryFn: () =>
       api.get<{ permissionKey: string; effect: "grant" | "deny" }[]>(
         `/rbac/users/${staff.id}/overrides`,
       ),
   });
+  const existingOverrides = overridesQ.data;
 
   const [selectedRoleId, setSelectedRoleId] = useState<string | null>(null);
   const [overrides, setOverrides] = useState<Record<string, "grant" | "deny">>({});
@@ -360,12 +395,16 @@ function EditStaffModal({ staff, onClose }: { staff: Staff; onClose: () => void 
         await api.put(`/rbac/users/${staff.id}/role`, { roleId: selectedRoleId });
       }
 
-      // 3. Overrides
-      const arr = Object.entries(overrides).map(([permissionKey, effect]) => ({
-        permissionKey,
-        effect,
-      }));
-      await api.put(`/rbac/users/${staff.id}/overrides`, { overrides: arr });
+      // 3. Overrides — only when the current set actually loaded. A failed GET
+      // leaves local `overrides` at {}, and PUTting that would wipe every
+      // real per-user grant/deny on the account while reporting "Saved".
+      if (overridesQ.isSuccess) {
+        const arr = Object.entries(overrides).map(([permissionKey, effect]) => ({
+          permissionKey,
+          effect,
+        }));
+        await api.put(`/rbac/users/${staff.id}/overrides`, { overrides: arr });
+      }
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["staff"] });
@@ -502,7 +541,21 @@ function EditStaffModal({ staff, onClose }: { staff: Staff; onClose: () => void 
           </Field>
         </div>
 
-        {selectedRole && (
+        {/* Without the saved overrides we cannot state this user's effective
+            permissions, and the override editor would render as if they had
+            none. Say so instead — the save path skips the overrides PUT while
+            this is failing, so the stored set is left untouched. */}
+        {overridesQ.isError && (
+          <QueryError
+            error={overridesQ.error}
+            onRetry={() => overridesQ.refetch()}
+            isRetrying={overridesQ.isFetching}
+            title="Couldn't load this user's permission overrides"
+            message="Their individual grants and denials are unknown, so they can't be shown or edited right now. Saving still updates the profile and role, and leaves the existing overrides exactly as they are."
+          />
+        )}
+
+        {selectedRole && !overridesQ.isError && (
           <div className="bg-surfaceAlt border border-divider rounded-md px-3 py-2 text-xs text-textSecondary">
             <span className="font-semibold text-ink">{selectedRole.label}</span> grants{" "}
             {selectedRole.permissions.includes("*") ? (
@@ -520,7 +573,7 @@ function EditStaffModal({ staff, onClose }: { staff: Staff; onClose: () => void 
           </div>
         )}
 
-        {selectedRole && !selectedRole.permissions.includes("*") && catalog && (
+        {selectedRole && !selectedRole.permissions.includes("*") && catalog && !overridesQ.isError && (
           <div>
             <button
               type="button"

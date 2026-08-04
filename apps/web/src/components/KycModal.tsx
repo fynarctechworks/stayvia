@@ -1,6 +1,7 @@
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { ShieldCheck, Upload } from "@/lib/micons";
 import { useState } from "react";
+import { QueryError } from "@/components/kit";
 import { api } from "@/lib/api";
 
 interface KycStatus {
@@ -25,10 +26,11 @@ export function KycModal({
   const [photo, setPhoto] = useState<File | null>(null);
   const [err, setErr] = useState<string | null>(null);
 
-  const { data: status, refetch } = useQuery({
+  const statusQ = useQuery({
     queryKey: ["kyc", guestId],
     queryFn: () => api.get<KycStatus>(`/guests/${guestId}/kyc`),
   });
+  const { data: status, refetch } = statusQ;
 
   const upload = useMutation({
     mutationFn: async () => {
@@ -63,6 +65,21 @@ export function KycModal({
         <div className="text-[12.5px] leading-relaxed text-inkMuted mb-4">
           Upload a clear photo/scan of the guest's government ID proof (Aadhaar, PAN, Passport, or Driving License). Required by Form C / Foreigners Order before check-in.
         </div>
+
+        {/* Without `status` this modal silently claims the guest has no KYC on
+            file: no "Verified" banner, no thumbnails, every label reads
+            "(required)". Staff then re-upload and overwrite documents that
+            were already there. */}
+        {statusQ.isError && (
+          <div className="mb-3">
+            <QueryError
+              error={statusQ.error}
+              onRetry={() => void refetch()}
+              isRetrying={statusQ.isFetching}
+              message="This guest's existing KYC didn't load, so nothing below reflects what is already on file. Uploading now will replace whatever is stored."
+            />
+          </div>
+        )}
 
         {status?.verified && (
           <div className="mb-3 rounded-sm bg-successBg border border-successBorder text-success text-sm px-3 py-2">

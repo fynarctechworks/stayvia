@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { format } from "date-fns";
-import { BedDouble, Bell, CalendarPlus, CheckCircle2, ExternalLink, FileImage, Pencil, Plus, ShieldCheck, Trash2, Upload, User, Wallet, X } from "@/lib/micons";
+import { AlertTriangle, BedDouble, Bell, CalendarPlus, CheckCircle2, ExternalLink, FileImage, Pencil, Plus, ShieldCheck, Trash2, Upload, User, Wallet, X } from "@/lib/micons";
 import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { Can } from "@/auth/Can";
@@ -8,6 +8,8 @@ import { useAuth } from "@/auth/AuthContext";
 import { useDialog } from "@/components/Dialog";
 import { KycModal } from "@/components/KycModal";
 import { Loader } from "@/components/Loader";
+import { PageError, QueryError, queryErrorMessage } from "@/components/kit";
+import { useToast } from "@/components/Toast";
 import { Combobox } from "@/components/Combobox";
 import { EmailInput } from "@/components/EmailInput";
 import { api } from "@/lib/api";
@@ -107,11 +109,12 @@ export default function GuestProfile() {
   const [tab, setTab] = useState<Tab>("profile");
   const [editing, setEditing] = useState(false);
 
-  const { data, isLoading } = useQuery({
+  const guestQ = useQuery({
     queryKey: ["guest", id],
     queryFn: () => api.get<Guest>(`/guests/${id}`),
     enabled: !!id,
   });
+  const data = guestQ.data;
 
   // Delete a guest with no stay history. The server enforces the
   // "no stays" rule too; here we just rely on it returning 409 with
@@ -173,7 +176,20 @@ export default function GuestProfile() {
   });
   const outstanding = outstandingQ.data?.byGuest.find((g) => g.guestId === id)?.balance ?? 0;
 
-  if (isLoading || !data) return <Loader size="lg" />;
+  // A failed guest fetch must not wear the loading spinner: this route is
+  // reached from bookmarks and old phone numbers, so 404 is a normal outcome
+  // and the page's own header (and its way back to /guests) is below here.
+  if (guestQ.isError)
+    return (
+      <PageError
+        error={guestQ.error}
+        onRetry={() => guestQ.refetch()}
+        isRetrying={guestQ.isFetching}
+        backTo="/guests"
+        backLabel="Back to guests"
+      />
+    );
+  if (guestQ.isLoading || !data) return <Loader size="lg" />;
 
   return (
     <div className="space-y-5 w-full">
@@ -194,11 +210,23 @@ export default function GuestProfile() {
           <h1 className="text-xl sm:text-2xl font-semibold tracking-tight text-ink break-words">{data.fullName}</h1>
           <div className="text-sm text-inkMuted font-mono mt-0.5">{data.phone}</div>
           <div className="mt-2 flex flex-wrap items-center gap-2">
-            {outstanding > 0 && (
-              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-[6px] bg-dangerBg text-dangerFg text-xs font-semibold">
-                <span className="w-1.5 h-1.5 rounded-full bg-dangerFg" />
-                Outstanding {inr(outstanding)}
+            {/* A failed outstanding lookup must not read as "nothing owed" —
+                the absence of this chip is what staff take as settled. */}
+            {outstandingQ.isError ? (
+              <span
+                className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-[6px] bg-warnBg text-warnFg text-xs font-semibold"
+                title={queryErrorMessage(outstandingQ.error)}
+              >
+                <AlertTriangle className="w-3.5 h-3.5" />
+                Outstanding unknown - couldn't load
               </span>
+            ) : (
+              outstanding > 0 && (
+                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-[6px] bg-dangerBg text-dangerFg text-xs font-semibold">
+                  <span className="w-1.5 h-1.5 rounded-full bg-dangerFg" />
+                  Outstanding {inr(outstanding)}
+                </span>
+              )
             )}
             {data.walletBalance > 0 && (
               <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-[6px] bg-successBg text-success text-xs font-semibold">
@@ -625,13 +653,26 @@ interface OutstandingResponse {
 
 function BalanceBreakdown({ guestId }: { guestId: string }) {
   const navigate = useNavigate();
-  const { data, isLoading } = useQuery({
+  const q = useQuery({
     queryKey: ["guest-outstanding", guestId],
     queryFn: () => api.get<OutstandingResponse>(`/guests/${guestId}/outstanding`),
     staleTime: 30_000,
   });
+  const data = q.data;
 
-  if (isLoading || !data) return null;
+  // This panel only mounts when the guest's stats already say money is owed,
+  // so rendering nothing on a failed fetch hides a known debt behind what
+  // looks like a settled account. Say the breakdown is missing instead.
+  if (q.isError)
+    return (
+      <QueryError
+        error={q.error}
+        onRetry={() => q.refetch()}
+        isRetrying={q.isFetching}
+        message="This guest has an outstanding balance, but the breakdown of unpaid invoices and open stays didn't load - so don't treat this account as settled. Ask an administrator if it keeps failing."
+      />
+    );
+  if (q.isLoading || !data) return null;
   if (data.total <= 0.009) return null;
 
   const items: {
@@ -817,12 +858,25 @@ interface KycStatus {
 function KycSection({ guestId, idProofType }: { guestId: string; idProofType: string }) {
   const qc = useQueryClient();
   const dialog = useDialog();
+  const { toast } = useToast();
   const [showUpload, setShowUpload] = useState(false);
   const [preview, setPreview] = useState<{ url: string; label: string } | null>(null);
 
-  const { data, isLoading } = useQuery({
+  const kycQ = useQuery({
     queryKey: ["kyc", guestId],
     queryFn: () => api.get<KycStatus>(`/guests/${guestId}/kyc`),
+  });
+  const data = kycQ.data;
+
+  const removeDoc = useMutation({
+    mutationFn: (field: "photo" | "front" | "back") =>
+      api.del(`/guests/${guestId}/kyc/${field}`),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["kyc", guestId] });
+      qc.invalidateQueries({ queryKey: ["guest", guestId] });
+      toast("Document removed", "success");
+    },
+    onError: (e) => toast(queryErrorMessage(e), "error"),
   });
 
   async function removeFile(field: "photo" | "front" | "back", label: string) {
@@ -833,9 +887,7 @@ function KycSection({ guestId, idProofType }: { guestId: string; idProofType: st
       cancelLabel: "Keep",
     });
     if (!ok) return;
-    await api.del(`/guests/${guestId}/kyc/${field}`);
-    qc.invalidateQueries({ queryKey: ["kyc", guestId] });
-    qc.invalidateQueries({ queryKey: ["guest", guestId] });
+    removeDoc.mutate(field);
   }
 
   const proofLabel = idProofType.replace("_", " ");
@@ -853,16 +905,28 @@ function KycSection({ guestId, idProofType }: { guestId: string; idProofType: st
             </span>
           )}
         </div>
-        <button
-          onClick={() => setShowUpload(true)}
-          className="text-xs font-semibold inline-flex items-center gap-1 px-3 min-h-[44px] sm:min-h-0 sm:py-1 rounded-sm border border-borderControl text-textSecondary hover:bg-surfaceAlt hover:text-brand-deep transition-colors"
-        >
-          <Upload className="w-3 h-3" />
-          {data?.frontUrl ? "Replace" : "Upload"}
-        </button>
+        {/* Without a successful read we don't know whether anything is on
+            file, and "Upload" would imply nothing is. Hide the action until
+            the status is known; the error block below carries the retry. */}
+        {!kycQ.isError && (
+          <button
+            onClick={() => setShowUpload(true)}
+            className="text-xs font-semibold inline-flex items-center gap-1 px-3 min-h-[44px] sm:min-h-0 sm:py-1 rounded-sm border border-borderControl text-textSecondary hover:bg-surfaceAlt hover:text-brand-deep transition-colors"
+          >
+            <Upload className="w-3 h-3" />
+            {data?.frontUrl ? "Replace" : "Upload"}
+          </button>
+        )}
       </div>
 
-      {isLoading ? (
+      {kycQ.isError ? (
+        <QueryError
+          error={kycQ.error}
+          onRetry={() => kycQ.refetch()}
+          isRetrying={kycQ.isFetching}
+          message="The KYC status for this guest didn't load, so nothing is shown here. This does NOT mean their ID is missing - don't re-scan or record the stay as KYC-incomplete on the strength of this screen."
+        />
+      ) : kycQ.isLoading ? (
         <div className="text-sm text-textSecondary">Loading documents…</div>
       ) : !data?.frontUrl && !data?.backUrl && !data?.photoUrl ? (
         <div className="flex items-center gap-3 py-4 text-sm text-textSecondary">
@@ -1146,10 +1210,11 @@ function WalletSection({ guestId }: { guestId: string }) {
   const [note, setNote] = useState("");
   const [err, setErr] = useState<string | null>(null);
 
-  const { data } = useQuery({
+  const ledgerQ = useQuery({
     queryKey: ["ledger", guestId],
     queryFn: () => api.get<{ balance: number; entries: LedgerEntry[] }>(`/guests/${guestId}/ledger`),
   });
+  const data = ledgerQ.data;
 
   const cashout = useMutation({
     mutationFn: () =>
@@ -1179,7 +1244,7 @@ function WalletSection({ guestId }: { guestId: string }) {
             Wallet Credit
           </div>
         </div>
-        {balance > 0 && (
+        {!ledgerQ.isError && balance > 0 && (
           <button
             className="text-xs font-semibold inline-flex items-center gap-1 px-3 min-h-[44px] sm:min-h-0 sm:py-1 rounded-sm border border-borderControl text-textSecondary hover:bg-surfaceAlt hover:text-brand-deep transition-colors"
             onClick={() => setShowCashout(true)}
@@ -1189,8 +1254,25 @@ function WalletSection({ guestId }: { guestId: string }) {
         )}
       </div>
 
-      <div className="text-2xl font-bold text-ink">{inr(balance)}</div>
-      <div className="text-xs text-inkMuted mt-0.5">Available for future bookings - no expiry</div>
+      {/* Never print ₹0.00 off a failed ledger read — that number gets said
+          out loud to the guest and their real credit is collected in cash. */}
+      {ledgerQ.isError ? (
+        <QueryError
+          error={ledgerQ.error}
+          onRetry={() => ledgerQ.refetch()}
+          isRetrying={ledgerQ.isFetching}
+          message="The wallet balance didn't load, so no amount is shown. This is not a zero balance - don't tell the guest they have no credit until this loads."
+        />
+      ) : ledgerQ.isLoading ? (
+        <div className="text-sm text-textSecondary">Loading wallet…</div>
+      ) : (
+        <>
+          <div className="text-2xl font-bold text-ink">{inr(balance)}</div>
+          <div className="text-xs text-inkMuted mt-0.5">
+            Available for future bookings - no expiry
+          </div>
+        </>
+      )}
 
       {data?.entries && data.entries.length > 0 && (
         <div className="mt-4">
@@ -1319,12 +1401,22 @@ function TagsEditor({ tags }: { guestId: string; tags: string[] }) {
 
 function StaysTab({ guestId }: { guestId: string }) {
   const navigate = useNavigate();
-  const { data, isLoading } = useQuery({
+  const q = useQuery({
     queryKey: ["guest-reservations", guestId],
     queryFn: () => api.get<GuestReservation[]>(`/guests/${guestId}/reservations`),
   });
+  const data = q.data;
 
-  if (isLoading) return <Loader />;
+  if (q.isError)
+    return (
+      <QueryError
+        error={q.error}
+        onRetry={() => q.refetch()}
+        isRetrying={q.isFetching}
+        message="This guest's stay history didn't load, so none of it is listed. Treat this as unknown history, not a first-time guest."
+      />
+    );
+  if (q.isLoading) return <Loader />;
   if (!data || data.length === 0) {
     return (
       <div className="card text-textSecondary text-sm flex items-center gap-3 py-6">
@@ -1449,12 +1541,14 @@ function StayCard({ r, onOpen }: { r: GuestReservation; onOpen: () => void }) {
 
 function NotesTab({ guestId }: { guestId: string }) {
   const qc = useQueryClient();
+  const { toast } = useToast();
   const [body, setBody] = useState("");
 
-  const { data: notes = [], isLoading } = useQuery({
+  const notesQ = useQuery({
     queryKey: ["guest-notes", guestId],
     queryFn: () => api.get<GuestNote[]>(`/guests/${guestId}/notes`),
   });
+  const notes = notesQ.data ?? [];
 
   const add = useMutation({
     mutationFn: () => api.post(`/guests/${guestId}/notes`, { body }),
@@ -1462,6 +1556,7 @@ function NotesTab({ guestId }: { guestId: string }) {
       setBody("");
       qc.invalidateQueries({ queryKey: ["guest-notes", guestId] });
     },
+    onError: (e) => toast(queryErrorMessage(e, "Couldn't save the note."), "error"),
   });
 
   return (
@@ -1485,7 +1580,14 @@ function NotesTab({ guestId }: { guestId: string }) {
         </div>
       </div>
 
-      {isLoading ? (
+      {notesQ.isError ? (
+        <QueryError
+          error={notesQ.error}
+          onRetry={() => notesQ.refetch()}
+          isRetrying={notesQ.isFetching}
+          message="This guest's notes didn't load, so none are listed. Existing notes are still there."
+        />
+      ) : notesQ.isLoading ? (
         <Loader />
       ) : notes.length === 0 ? (
         <div className="card text-textSecondary text-sm">No notes yet.</div>
@@ -1507,16 +1609,18 @@ function NotesTab({ guestId }: { guestId: string }) {
 
 function FollowUpsTab({ guestId }: { guestId: string }) {
   const qc = useQueryClient();
+  const { toast } = useToast();
   const [task, setTask] = useState("");
   // Desk-local day. toISOString() is the UTC day, which during 00:00-05:30
   // IST is yesterday — the follow-up seeded a past due date and the row
   // rendered "Overdue" the instant it was created.
   const [dueDate, setDueDate] = useState(format(new Date(), "yyyy-MM-dd"));
 
-  const { data: items = [], isLoading } = useQuery({
+  const followupsQ = useQuery({
     queryKey: ["guest-followups", guestId],
     queryFn: () => api.get<FollowUp[]>(`/guests/${guestId}/follow-ups`),
   });
+  const items = followupsQ.data ?? [];
 
   const add = useMutation({
     mutationFn: () => api.post(`/guests/${guestId}/follow-ups`, { task, dueDate }),
@@ -1524,12 +1628,14 @@ function FollowUpsTab({ guestId }: { guestId: string }) {
       setTask("");
       qc.invalidateQueries({ queryKey: ["guest-followups", guestId] });
     },
+    onError: (e) => toast(queryErrorMessage(e, "Couldn't add the follow-up."), "error"),
   });
 
   const patch = useMutation({
     mutationFn: (vars: { id: string; status: "done" | "cancelled" | "pending" }) =>
       api.patch(`/guests/${guestId}/follow-ups/${vars.id}`, { status: vars.status }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["guest-followups", guestId] }),
+    onError: (e) => toast(queryErrorMessage(e, "Couldn't update the follow-up."), "error"),
   });
 
   const pending = items.filter((i) => i.status === "pending");
@@ -1564,7 +1670,14 @@ function FollowUpsTab({ guestId }: { guestId: string }) {
         </div>
       </div>
 
-      {isLoading ? (
+      {followupsQ.isError ? (
+        <QueryError
+          error={followupsQ.error}
+          onRetry={() => followupsQ.refetch()}
+          isRetrying={followupsQ.isFetching}
+          message="This guest's follow-ups didn't load, so none are listed. Pending tasks may still be outstanding."
+        />
+      ) : followupsQ.isLoading ? (
         <Loader />
       ) : (
         <>

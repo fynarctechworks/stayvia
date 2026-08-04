@@ -20,7 +20,7 @@ import {
 import type { LucideIcon } from "@/lib/micons";
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { EmptyState, ListSkeleton } from "@/components/kit";
+import { EmptyState, ListSkeleton, QueryError } from "@/components/kit";
 import { StickyBar } from "@/components/StickyBar";
 import { Combobox } from "@/components/Combobox";
 import { EmailInput } from "@/components/EmailInput";
@@ -127,7 +127,7 @@ export default function Guests() {
   const [page, setPage] = useState(1);
   const [showAdd, setShowAdd] = useState(false);
 
-  const { data, isLoading } = useQuery({
+  const guestsQ = useQuery({
     queryKey: ["guests", { search, tag, hasFollowup, page }],
     queryFn: () =>
       getList<Guest>("/guests", {
@@ -139,6 +139,7 @@ export default function Guests() {
       }),
   });
 
+  const data = guestsQ.data;
   const guests = data?.data ?? [];
   // The list comes back server-filtered, so a zero-length page means very
   // different things depending on what's switched on. Key the empty state
@@ -230,7 +231,15 @@ export default function Guests() {
       </div>
       </StickyBar>
 
-      {isLoading ? (
+      {guestsQ.isError ? (
+        <div className="card">
+          <QueryError
+            error={guestsQ.error}
+            onRetry={() => guestsQ.refetch()}
+            isRetrying={guestsQ.isFetching}
+          />
+        </div>
+      ) : guestsQ.isLoading ? (
         <ListSkeleton rows={6} />
       ) : guests.length === 0 ? (
         <div className="card">

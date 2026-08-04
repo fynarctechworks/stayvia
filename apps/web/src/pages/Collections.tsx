@@ -25,6 +25,7 @@ import { CheckCircle2, FileText, Receipt, User, Wallet } from "@/lib/micons";
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useDialog } from "@/components/Dialog";
+import { PageError } from "@/components/kit";
 import { Loader } from "@/components/Loader";
 import { StickyBar } from "@/components/StickyBar";
 import { Money, useMaskedInr } from "@/components/Money";
@@ -111,11 +112,12 @@ export default function Collections() {
   const maskedInr = useMaskedInr();
   const [search, setSearch] = useState("");
 
-  const { data } = useQuery({
+  const outstandingQ = useQuery({
     queryKey: ["collections"],
     queryFn: () => api.get<OutstandingResp>("/reports/outstanding"),
     refetchInterval: 30_000,
   });
+  const data = outstandingQ.data;
 
   const markReceived = useMutation({
     mutationFn: ({ id, method }: { id: string; method: string }) =>
@@ -194,6 +196,20 @@ export default function Collections() {
     [data, q],
   );
 
+  // Error branch first. `data` never arrives on a persistent 403 (this
+  // endpoint needs view_revenue) or a 500, and the old `if (!data)` spinner
+  // rendered that dead request as "still loading" forever — staff could not
+  // tell whether the property was owed ₹0 or ₹2,00,000.
+  if (outstandingQ.isError)
+    return (
+      <PageError
+        error={outstandingQ.error}
+        onRetry={() => void outstandingQ.refetch()}
+        isRetrying={outstandingQ.isFetching}
+        backTo="/"
+        backLabel="Back to dashboard"
+      />
+    );
   if (!data) return <Loader label="Loading collections…" />;
 
   // Top KPIs — sum every kind of outstanding so the headline number

@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Plus, Trash2 } from "@/lib/micons";
 import { useState } from "react";
 import { useDialog } from "@/components/Dialog";
+import { QueryError } from "@/components/kit";
 import { api } from "@/lib/api";
 import { invalidateRoomData } from "@/lib/invalidate";
 import { inr } from "@/lib/utils";
@@ -37,10 +38,11 @@ interface RoomTypeRow {
 export function RoomTypesManager() {
   const qc = useQueryClient();
   const dialog = useDialog();
-  const { data: types = [] } = useQuery({
+  const typesQ = useQuery({
     queryKey: ["room-types", true],
     queryFn: () => api.get<RoomTypeRow[]>("/settings/room-types", { all: "true" }),
   });
+  const types = typesQ.data ?? [];
 
   const [editing, setEditing] = useState<RoomTypeRow | null>(null);
   const [showAdd, setShowAdd] = useState(false);
@@ -75,6 +77,13 @@ export function RoomTypesManager() {
       qc.invalidateQueries({ queryKey: ["room-types-active"] });
       invalidateRoomData(qc);
     },
+    // Same channel handleDelete uses for its failures — otherwise the row just
+    // stays archived and the admin assumes Restore did nothing.
+    onError: (e) =>
+      void dialog.alert({
+        title: "Couldn't restore",
+        message: e instanceof Error ? e.message : String(e),
+      }),
   });
 
   async function handleDelete(t: RoomTypeRow) {
@@ -128,6 +137,17 @@ export function RoomTypesManager() {
         </button>
       </div>
 
+      {/* A failed fetch left `types` empty, and the table's own empty row says
+          "No room types yet. Add one to start creating rooms." — advice that
+          would have an admin re-create types the hotel already has. */}
+      {typesQ.isError ? (
+        <QueryError
+          error={typesQ.error}
+          onRetry={() => void typesQ.refetch()}
+          isRetrying={typesQ.isFetching}
+          message="The room types didn't load, so none are listed. This hotel's existing types are unchanged — don't add duplicates. Try again."
+        />
+      ) : (
       <div className="card p-0 overflow-x-auto">
         <table className="table-base table-fixed">
           <colgroup>
@@ -214,6 +234,7 @@ export function RoomTypesManager() {
           </tbody>
         </table>
       </div>
+      )}
 
       {(showAdd || editing) && (
         <RoomTypeModal

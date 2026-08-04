@@ -7,6 +7,8 @@ import { TimePicker12h } from "@/components/TimePicker12h";
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { Loader } from "@/components/Loader";
+import { QueryError, queryErrorMessage } from "@/components/kit";
+import { useToast } from "@/components/Toast";
 import { ArrowKeyGroup } from "@/components/ArrowKeyGroup";
 import { Combobox } from "@/components/Combobox";
 import { EmailInput } from "@/components/EmailInput";
@@ -182,6 +184,7 @@ function formatTime(hhmm: string | undefined | null): string {
 export default function NewReservation() {
   const navigate = useNavigate();
   const qc = useQueryClient();
+  const { toast } = useToast();
   const dialog = useDialog();
   const [searchParams] = useSearchParams();
   const preselectRoomId = searchParams.get("room");
@@ -367,10 +370,20 @@ export default function NewReservation() {
   // is never created until OTP succeeds, so abandoning the OTP modal /
   // closing the tab / refreshing is a true no-op — no ghost rows.
 
+  // Deep link from a guest profile's "New booking" button. This used to be a
+  // fetch with an empty catch, so a 403/500 left the Guest section blank and
+  // looked exactly like a link that carried no guest — staff re-searched or
+  // created a duplicate. As a query the failure is visible (and retryable)
+  // in the Guest section below.
+  const preselectGuestQ = useQuery({
+    queryKey: ["guest-preselect", preselectGuestId],
+    queryFn: () => api.get<Guest>(`/guests/${preselectGuestId}`),
+    enabled: !!preselectGuestId && !selectedGuest,
+  });
   useEffect(() => {
-    if (!preselectGuestId || selectedGuest) return;
-    api.get<Guest>(`/guests/${preselectGuestId}`).then(setSelectedGuest).catch(() => {});
-  }, [preselectGuestId, selectedGuest]);
+    if (!preselectGuestQ.data) return;
+    setSelectedGuest((cur) => cur ?? preselectGuestQ.data);
+  }, [preselectGuestQ.data]);
 
   useEffect(() => {
     setBookingSource(mode === "walkin" ? "walkin" : "phone_whatsapp");
@@ -788,6 +801,9 @@ export default function NewReservation() {
       );
       qc.invalidateQueries({ queryKey: ["rooms"] });
     },
+    // Without this the tile just stays DIRTY and unselectable after the
+    // pending state ends, which reads as a mis-tap rather than a refusal.
+    onError: (e) => toast(queryErrorMessage(e, "Couldn't mark the room clean."), "error"),
   });
 
   const create = useMutation({
@@ -1785,13 +1801,45 @@ export default function NewReservation() {
                 )}
               </div>
             )}
-            {selectedGuest && outstandingQ.data && outstandingQ.data.total > 0.009 && (
+            {preselectGuestQ.isError && !selectedGuest && (
+              <QueryError
+                error={preselectGuestQ.error}
+                onRetry={() => preselectGuestQ.refetch()}
+                isRetrying={preselectGuestQ.isFetching}
+                title="Couldn't load the guest from that link"
+                message="The booking was opened for a specific guest, but their record didn't load — so nobody is selected yet. Try again, or search for them below."
+              />
+            )}
+            {selectedGuest && outstandingQ.isError && (
+              <QueryError
+                error={outstandingQ.error}
+                onRetry={() => outstandingQ.refetch()}
+                isRetrying={outstandingQ.isFetching}
+                title="Couldn't check past dues"
+                message="This guest's unpaid balance from previous bookings didn't load. Treat it as unknown, not as nil, before taking the booking."
+              />
+            )}
+            {selectedGuest && outstandingQ.isSuccess && outstandingQ.data.total > 0.009 && (
               <OutstandingBanner
                 data={outstandingQ.data}
                 guestName={selectedGuest.fullName}
               />
             )}
-            {guestsSearch.data && guestsSearch.data.length > 0 && !selectedGuest && (
+            {guestsSearch.isError && !selectedGuest && (
+              <QueryError
+                error={guestsSearch.error}
+                onRetry={() => guestsSearch.refetch()}
+                isRetrying={guestsSearch.isFetching}
+                title="Guest search failed"
+                message="No results could be loaded for this search — it does not mean the guest is new. Try again before creating a fresh guest record."
+              />
+            )}
+            {guestsSearch.isSuccess && guestsSearch.data.length === 0 && !selectedGuest && (
+              <div className="text-[13px] text-textSecondary px-1">
+                No guest on file matches "{guestQuery}".
+              </div>
+            )}
+            {guestsSearch.isSuccess && guestsSearch.data.length > 0 && !selectedGuest && (
               <div className="max-h-64 overflow-auto rounded-xl border border-borderc divide-y divide-divider">
                 {guestsSearch.data.map((g) => (
                   <button
@@ -2028,6 +2076,18 @@ export default function NewReservation() {
             />
           ) : (
             <>
+              {/* A failed guest lookup makes kycOnFile false, which is
+                  indistinguishable from "this guest has no documents". Say so,
+                  or staff re-scan an already-verified guest's ID. */}
+              {selectedGuest && walletQ.isError && (
+                <QueryError
+                  error={walletQ.error}
+                  onRetry={() => walletQ.refetch()}
+                  isRetrying={walletQ.isFetching}
+                  title="Couldn't check this guest's record"
+                  message="Their KYC status and wallet credit didn't load. They may already be verified and may hold credit — retry before re-capturing documents."
+                />
+              )}
               <div className="flex items-start gap-2">
                 <ShieldCheck className="w-4 h-4 text-brand-deep shrink-0 mt-0.5" />
                 <h2 className="text-base font-semibold text-ink leading-snug">
@@ -2139,6 +2199,20 @@ export default function NewReservation() {
             sleep at least `adults`. Extra beds added per room count toward
             capacity. When short, block submit and tell staff to add an
             extra bed or another room. */}
+        {/* Extra-person rates live in the room-types settings. If that query
+            failed, every rate reads as 0 — the same value as "this type has
+            no extra bed" — so the shortfall banner below would state a false
+            fact about the hotel's own configuration and send staff to fix a
+            setting that isn't broken. Say the lookup failed instead. */}
+        {selectedRooms.length > 0 && roomTypesQ.isError && (
+          <QueryError
+            error={roomTypesQ.error}
+            onRetry={() => roomTypesQ.refetch()}
+            isRetrying={roomTypesQ.isFetching}
+            title="Couldn't load room types"
+            message="Extra-person rates and room-type pricing didn't load, so extra beds can't be added to this booking and the capacity check below is incomplete. Try again."
+          />
+        )}
         {selectedRooms.length > 0 && (
           capacityShortfall > 0 ? (
             <div className="rounded-xl border border-dangerBorder bg-dangerBg p-3 flex items-start gap-2">
@@ -2148,7 +2222,14 @@ export default function NewReservation() {
                   {adults} adult{adults === 1 ? "" : "s"}, but the selected room{selectedRooms.length === 1 ? "'s" : "s'"} guest limit is {effectiveCapacity}.
                 </div>
                 <div className="text-inkBody mt-0.5">
-                  {anyRoomAllowsExtraBed ? (
+                  {roomTypesQ.isError ? (
+                    <>
+                      Space for <strong>{capacityShortfall}</strong> more guest
+                      {capacityShortfall === 1 ? "" : "s"} needed. Whether these room
+                      types allow an extra person is unknown until the room-type
+                      settings load - retry above, or select another room.
+                    </>
+                  ) : anyRoomAllowsExtraBed ? (
                     <>
                       Add an extra person to a room below, or select another room -{" "}
                       space for <strong>{capacityShortfall}</strong> more guest
@@ -2183,6 +2264,16 @@ export default function NewReservation() {
               ? "Set a check-out time later than the check-in time to see available rooms."
               : "Select valid dates to see available rooms."}
           </div>
+        ) : availRooms.isError ? (
+          // Never fall through to "No rooms available" here — the hotel may be
+          // wide open and staff would turn the guest away on a failed request.
+          <QueryError
+            error={availRooms.error}
+            onRetry={() => availRooms.refetch()}
+            isRetrying={availRooms.isFetching}
+            title="Couldn't check availability"
+            message="The availability request failed, so no rooms can be listed for these dates. This does not mean the hotel is full — try again."
+          />
         ) : availRooms.isLoading ? (
           <Loader label="Loading availability…" size="sm" />
         ) : !availRooms.data?.length ? (
@@ -2696,6 +2787,19 @@ export default function NewReservation() {
       {/* Right rail — the booking summary follows the form down the page
           so the running total and the commit button are always in reach. */}
       <div className="w-full lg:flex-[1_1_300px] lg:w-auto min-w-0 space-y-4 lg:sticky lg:top-[80px]">
+
+      {/* The balance is only ₹0 when the lookup SUCCEEDED and said so. On a
+          failure the whole panel would vanish and the guest would be told
+          they have no credit, so the failure takes the panel's place. */}
+      {!isCreditBooking && selectedGuest && walletQ.isError && grandTotal > 0 && (
+        <QueryError
+          error={walletQ.error}
+          onRetry={() => walletQ.refetch()}
+          isRetrying={walletQ.isFetching}
+          title="Couldn't check wallet credit"
+          message="This guest's wallet balance didn't load, so no credit can be applied to this booking yet. Retry before telling them they have none."
+        />
+      )}
 
       {/* Wallet credit — only shown when an existing guest is selected and
           they actually have a positive balance. Discounts the booking. */}
@@ -3355,7 +3459,9 @@ function CoGuestCard(props: {
       api.get<Guest[]>("/guests", { search: props.query, per_page: 8 }),
     enabled: props.query.length >= 2 && props.mode === "existing",
   });
-  const results = (search.data ?? []).filter(
+  // Only a search that SUCCEEDED can say "nobody matches" — a failed one
+  // rendered as an empty list is how a returning guest gets entered twice.
+  const results = (search.isSuccess ? search.data : []).filter(
     (g) => !props.takenGuestIds.has(g.id),
   );
 
@@ -3484,6 +3590,20 @@ function CoGuestCard(props: {
                 kycPhoto={props.kycPhoto}
                 setKycPhoto={props.setKycPhoto}
               />
+            </div>
+          )}
+          {!props.selected && search.isError && (
+            <QueryError
+              error={search.error}
+              onRetry={() => search.refetch()}
+              isRetrying={search.isFetching}
+              title="Guest search failed"
+              message="No results could be loaded for this search — it does not mean this person is new. Try again before adding them as a new guest."
+            />
+          )}
+          {!props.selected && search.isSuccess && results.length === 0 && (
+            <div className="text-[13px] text-textSecondary px-1">
+              No guest on file matches "{props.query}".
             </div>
           )}
           {!props.selected && results.length > 0 && (

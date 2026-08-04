@@ -16,10 +16,11 @@ import {
   Wifi,
   X,
 } from "@/lib/micons";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useAuth } from "@/auth/AuthContext";
 import { useDialog } from "@/components/Dialog";
+import { QueryError, queryErrorMessage } from "@/components/kit";
 import { Loader } from "@/components/Loader";
 import QrCodeModal from "@/components/QrCodeModal";
 import { RoomTypesManager } from "@/components/RoomTypesManager";
@@ -60,9 +61,10 @@ export default function Rooms() {
   const [floor, setFloor] = useState<string>("");
   const [status, setStatus] = useState<string>("");
   const [type, setType] = useState<string>("");
-  const { data: roomTypes = [] } = useRoomTypes({ includeArchived: true });
+  const roomTypesQ = useRoomTypes({ includeArchived: true });
+  const roomTypes = roomTypesQ.data ?? [];
 
-  const { data: rooms = [], isLoading } = useQuery({
+  const roomsQ = useQuery({
     queryKey: ["rooms", { floor, status, type }],
     queryFn: () =>
       api.get<Room[]>("/rooms", {
@@ -71,11 +73,26 @@ export default function Rooms() {
         type: type || undefined,
       }),
   });
+  const { isLoading } = roomsQ;
+  const rooms = roomsQ.data ?? [];
 
-  const { data: allRooms = [] } = useQuery({
+  const allRoomsQ = useQuery({
     queryKey: ["rooms", "all"],
     queryFn: () => api.get<Room[]>("/rooms", {}),
   });
+  const allRooms = allRoomsQ.data ?? [];
+
+  // Both queries hit GET /rooms, so in an outage they fail together and the
+  // page has nothing true to say: no table, no property totals, no chip
+  // counts. That case replaces the whole body with one error instead of four
+  // separate ones.
+  const listFailed = roomsQ.isError;
+  const summaryFailed = allRoomsQ.isError;
+  const allFailed = listFailed && summaryFailed;
+  const retryAll = () => {
+    void roomsQ.refetch();
+    void allRoomsQ.refetch();
+  };
 
   // `rooms` is the SERVER-filtered list (floor/status/type), so it only
   // describes the current view — totalRooms and byFloor feed the subtitle
@@ -131,15 +148,21 @@ export default function Rooms() {
           </h1>
           {view === "rooms" && (
             <div className="text-sm text-textSecondary mt-1.5">
-              {summaryRooms.length === 0
-                ? "No rooms yet - add your first one to get started."
-                : hasFilter
-                  ? `Showing ${totalRooms} of ${summaryRooms.length} room${
-                      summaryRooms.length === 1 ? "" : "s"
-                    }.`
-                  : `${totalRooms} room${totalRooms === 1 ? "" : "s"} across ${byFloor.size} floor${
-                      byFloor.size === 1 ? "" : "s"
-                    }.`}
+              {/* "No rooms yet" is only true once the list actually came back
+                  empty — never while it is in flight, never when it failed. */}
+              {listFailed || summaryFailed
+                ? "Room counts couldn't be loaded."
+                : isLoading || allRoomsQ.isLoading
+                  ? "Loading rooms…"
+                  : summaryRooms.length === 0
+                    ? "No rooms yet - add your first one to get started."
+                    : hasFilter
+                      ? `Showing ${totalRooms} of ${summaryRooms.length} room${
+                          summaryRooms.length === 1 ? "" : "s"
+                        }.`
+                      : `${totalRooms} room${totalRooms === 1 ? "" : "s"} across ${byFloor.size} floor${
+                          byFloor.size === 1 ? "" : "s"
+                        }.`}
             </div>
           )}
         </div>
@@ -176,8 +199,29 @@ export default function Rooms() {
         <RoomTypesManager />
       ) : (
       <>
+      {allFailed ? (
+        <QueryError
+          error={roomsQ.error ?? allRoomsQ.error}
+          onRetry={retryAll}
+          isRetrying={roomsQ.isFetching || allRoomsQ.isFetching}
+          title="Couldn't load rooms"
+          message="The room list didn't load, so this page can't show the property — it is not empty. Don't add rooms from here until it loads."
+        />
+      ) : (
+      <>
       {/* 4 stat cards — the at-a-glance shape of the whole property, so they
           stay on the unfiltered counts even while a filter is active. */}
+      {summaryFailed ? (
+        // Occupancy tiles are read as fact by managers; four zeros off a
+        // failed request is worse than no tiles at all.
+        <QueryError
+          error={allRoomsQ.error}
+          onRetry={() => allRoomsQ.refetch()}
+          isRetrying={allRoomsQ.isFetching}
+          title="Room totals couldn't be loaded"
+          message="These tiles would read 0 for every status, which is not the same as an empty property."
+        />
+      ) : (
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3.5">
         {(
           [
@@ -212,6 +256,7 @@ export default function Rooms() {
           </div>
         ))}
       </div>
+      )}
       {/* Status chips — click to filter. On phone the chip row scrolls
           sideways in its own strip so the page itself never does; the
           floor/type selects drop below it full-width. */}
@@ -238,13 +283,18 @@ export default function Rooms() {
                       aria-hidden="true"
                     />
                     <span className="whitespace-nowrap">{c.label}</span>
-                    <span
-                      className={`inline-grid place-items-center min-w-[18px] h-[18px] px-1 rounded-full text-[10px] font-bold tabular-nums leading-none ${
-                        isActive ? "bg-white/20 text-white" : "bg-surfaceSubtle text-textSecondary"
-                      }`}
-                    >
-                      {count}
-                    </span>
+                    {/* No badge rather than a zero badge when the unfiltered
+                        list failed — the chips still filter, they just stop
+                        claiming how many rooms are behind each one. */}
+                    {!summaryFailed && (
+                      <span
+                        className={`inline-grid place-items-center min-w-[18px] h-[18px] px-1 rounded-full text-[10px] font-bold tabular-nums leading-none ${
+                          isActive ? "bg-white/20 text-white" : "bg-surfaceSubtle text-textSecondary"
+                        }`}
+                      >
+                        {count}
+                      </span>
+                    )}
                   </button>
                 );
               })}
@@ -274,6 +324,11 @@ export default function Rooms() {
               aria-label="Filter by type"
             >
               <option value="">All types</option>
+              {/* An empty list here would otherwise read as "this property has
+                  no room types". */}
+              {roomTypesQ.isError && (
+                <option disabled>Room types couldn't be loaded</option>
+              )}
               {roomTypes.map((t) => (
                 <option key={t.id} value={t.slug}>
                   {t.label}
@@ -297,7 +352,15 @@ export default function Rooms() {
       </div>
 
       {/* Rooms table — row click opens the room's detail page. */}
-      {isLoading ? (
+      {listFailed ? (
+        <QueryError
+          error={roomsQ.error}
+          onRetry={() => roomsQ.refetch()}
+          isRetrying={roomsQ.isFetching}
+          title="Couldn't load the room list"
+          message="This list is unknown, not empty. Don't create rooms from here until it loads — they may already exist."
+        />
+      ) : isLoading ? (
         <Loader />
       ) : rooms.length === 0 ? (
         <div className="card p-6 text-textSecondary">
@@ -439,6 +502,8 @@ export default function Rooms() {
           </ul>
         </div>
       )}
+      </>
+      )}
 
       {qrRoom && (
         <QrCodeModal
@@ -527,10 +592,12 @@ function RoomImagesManager({ roomId, roomNumber }: { roomId: string; roomNumber:
   const fileRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
 
-  const { data: images = [], isLoading } = useQuery({
+  const imagesQ = useQuery({
     queryKey: ["room-images", roomId],
     queryFn: () => api.get<RoomImg[]>(`/rooms/${roomId}/images`),
   });
+  const { isLoading } = imagesQ;
+  const images = imagesQ.data ?? [];
 
   async function upload(files: FileList) {
     if (!files.length) return;
@@ -555,10 +622,12 @@ function RoomImagesManager({ roomId, roomNumber }: { roomId: string; roomNumber:
     mutationFn: (imageId: string) =>
       api.patch(`/rooms/${roomId}/images/${imageId}`, { isPrimary: true }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["room-images", roomId] }),
+    onError: (e) => toast(queryErrorMessage(e, "Couldn't change the cover photo."), "error"),
   });
   const remove = useMutation({
     mutationFn: (imageId: string) => api.del(`/rooms/${roomId}/images/${imageId}`),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["room-images", roomId] }),
+    onError: (e) => toast(queryErrorMessage(e, "Couldn't remove that photo."), "error"),
   });
 
   // Cover first, then by sort order.
@@ -598,7 +667,17 @@ function RoomImagesManager({ roomId, roomNumber }: { roomId: string; roomNumber:
         />
       </div>
 
-      {isLoading ? (
+      {/* The dashed "no photos" prompt invites a duplicate re-upload, so it is
+          only shown once the fetch has actually succeeded. */}
+      {imagesQ.isError ? (
+        <QueryError
+          error={imagesQ.error}
+          onRetry={() => imagesQ.refetch()}
+          isRetrying={imagesQ.isFetching}
+          title="Couldn't load photos"
+          message={`Room ${roomNumber}'s photos didn't load. Any photos already on the guest booking page are still there — don't re-upload until this loads.`}
+        />
+      ) : isLoading ? (
         <div className="text-xs text-textSecondary py-3">Loading photos…</div>
       ) : ordered.length === 0 ? (
         <button
@@ -652,7 +731,9 @@ function RoomModal({ room, onClose }: { room: Room | null; onClose: () => void }
   const { profile } = useAuth();
   const isEdit = !!room;
   const canDelete = isEdit && profile?.role === "admin";
-  const { data: roomTypes = [] } = useRoomTypes({ includeArchived: isEdit });
+  const roomTypesQ = useRoomTypes({ includeArchived: isEdit });
+  // Stable reference — the default-fill effect below depends on this list.
+  const roomTypes = useMemo(() => roomTypesQ.data ?? [], [roomTypesQ.data]);
 
   const [form, setForm] = useState({
     roomNumber: room?.roomNumber ?? "",
@@ -690,7 +771,19 @@ function RoomModal({ room, onClose }: { room: Room | null; onClose: () => void }
   });
 
   async function confirmDelete() {
-    if (!room || !impact.data) return;
+    if (!room) return;
+    // The impact lookup is what tells us whether deleting is safe. If it
+    // failed, the button used to re-enable and every click hit a silent early
+    // return — say so instead of doing nothing.
+    if (impact.isError) {
+      await dialog.alert({
+        title: "Couldn't check this room",
+        message: `Stayvia couldn't check what deleting room ${room.roomNumber} would affect, so it can't be deleted safely right now.\n\n${queryErrorMessage(impact.error)}`,
+        tone: "danger",
+      });
+      return;
+    }
+    if (!impact.data) return;
     const i = impact.data;
     if (!i.canDelete) {
       await dialog.alert({
@@ -797,7 +890,19 @@ function RoomModal({ room, onClose }: { room: Room | null; onClose: () => void }
               unreadable in a half column on a phone. */}
           <div className="col-span-2">
             <Field label="Type">
-              {roomTypes.length === 0 ? (
+              {/* "No room types defined" sends an admin to go create types
+                  that already exist, so it waits for a successful fetch. */}
+              {roomTypesQ.isError ? (
+                <QueryError
+                  error={roomTypesQ.error}
+                  onRetry={() => roomTypesQ.refetch()}
+                  isRetrying={roomTypesQ.isFetching}
+                  title="Couldn't load room types"
+                  message="The type list didn't load, so this room can't be saved yet. This does not mean the property has no room types."
+                />
+              ) : roomTypesQ.isLoading ? (
+                <div className="text-xs text-textSecondary">Loading room types…</div>
+              ) : roomTypes.length === 0 ? (
                 <div className="text-xs text-danger">
                   No room types defined. Add some with the Room Types button first.
                 </div>
@@ -867,9 +972,11 @@ function RoomModal({ room, onClose }: { room: Room | null; onClose: () => void }
                 onClick={confirmDelete}
                 disabled={del.isPending || impact.isLoading}
                 title={
-                  impact.data && !impact.data.canDelete
-                    ? "Room is currently in use - cannot delete"
-                    : "Delete this room"
+                  impact.isError
+                    ? "Couldn't check this room's bookings - try again"
+                    : impact.data && !impact.data.canDelete
+                      ? "Room is currently in use - cannot delete"
+                      : "Delete this room"
                 }
               >
                 <Trash2 className="w-3.5 h-3.5" />
@@ -884,7 +991,9 @@ function RoomModal({ room, onClose }: { room: Room | null; onClose: () => void }
             <button
               className="btn-primary"
               onClick={() => save.mutate()}
-              disabled={save.isPending || !form.roomNumber}
+              // Without a room type the POST comes back as a raw Zod message
+              // that blames the operator for a GET that failed.
+              disabled={save.isPending || !form.roomNumber || !form.roomType}
             >
               {save.isPending ? (isEdit ? "Saving…" : "Creating…") : isEdit ? "Save" : "Create"}
             </button>
