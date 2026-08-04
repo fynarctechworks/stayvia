@@ -233,43 +233,22 @@ export function AppShell({ children }: { children: ReactNode }) {
         {/* Force the sidebar into expanded mode in the drawer. */}
         <Sidebar collapsed={false} onToggle={() => setMobileOpen(false)} mobile />
       </div>
-      {!focusMode && (
-        <div className="hidden md:block">
-          <Sidebar collapsed={collapsed} onToggle={toggleCollapsed} />
-        </div>
-      )}
+      {/* The app's own chrome stays put in focus mode. Focus mode takes the
+          BROWSER's furniture — tabs, address bar, bookmarks — and gives the
+          page the whole display. The sidebar and topbar are how staff work;
+          removing them is not focus, it is a different app. */}
+      <div className="hidden md:block">
+        <Sidebar collapsed={collapsed} onToggle={toggleCollapsed} />
+      </div>
 
       <div
         className={`relative transition-[margin] duration-200 ease-out ${
-          focusMode ? "md:ml-0" : collapsed ? "md:ml-[74px]" : "md:ml-60"
+          collapsed ? "md:ml-[74px]" : "md:ml-60"
         }`}
       >
-        {/* Focus mode hides the topbar as well as the sidebar, so this is the
-            only way back on screen. Fixed, quiet until hovered, and outside
-            the header so it survives the header being unmounted. Esc/F11 also
-            work (see the fullscreenchange listener), and so does F — but the
-            user has no way to know that, so there has to be a visible exit. */}
-        {focusMode && (
-          <button
-            type="button"
-            onClick={() => toggleFocusMode()}
-            aria-label="Exit focus mode"
-            title="Exit focus mode (F or Esc)"
-            className="fixed top-3 right-3 z-40 hidden md:grid w-10 h-10 place-items-center rounded-[11px] border border-borderControl bg-surface/80 text-inkMuted opacity-40 backdrop-blur-[6px] hover:opacity-100 hover:text-brand-deep focus-visible:opacity-100 transition-opacity"
-          >
-            <Minimize2 className="w-5 h-5" />
-          </button>
-        )}
-
         {/* Blurred sticky topbar: route title + hotel subtitle, global
-            search, bell, avatar. Hamburger appears < md. Hidden in focus
-            mode — "focus" that leaves a toolbar on screen is just a narrower
-            page. */}
-        <header
-          className={`sticky top-0 z-30 h-16 px-4 md:px-6 items-center gap-3 bg-paper/80 backdrop-blur-[10px] border-b border-borderc pt-safe ${
-            focusMode ? "flex md:hidden" : "flex"
-          }`}
-        >
+            search, bell, avatar. Hamburger appears < md. */}
+        <header className="sticky top-0 z-30 h-16 px-4 md:px-6 flex items-center gap-3 bg-paper/80 backdrop-blur-[10px] border-b border-borderc pt-safe">
           <button
             onClick={() => setMobileOpen(true)}
             aria-label="Open menu"
@@ -311,21 +290,17 @@ export function AppShell({ children }: { children: ReactNode }) {
               <span className="absolute top-[9px] right-[10px] w-2 h-2 rounded-full bg-danger ring-2 ring-surface" />
             )}
           </button>
-          {/* Focus mode: hides the sidebar so content goes edge-to-edge.
-              Lives in the topbar because the topbar stays visible in focus
-              mode (the sidebar does not). Shift+click also requests the
-              browser's real fullscreen. Keyboard: F / Shift+F. Desktop only —
-              the bottom tab bar owns the phone layout. */}
+          {/* Full screen: hands the display to the app by dropping the
+              BROWSER's tabs, address bar and bookmarks. Stayvia's own sidebar
+              and topbar stay — they are the tools, not the clutter. Keyboard:
+              F. Esc / F11 exit and the state follows (see the
+              fullscreenchange listener). */}
           <button
             type="button"
-            onClick={(e) => toggleFocusMode({ requestBrowserFullscreen: !e.shiftKey })}
+            onClick={() => toggleFocusMode()}
             className="hidden md:grid w-10 h-10 place-items-center rounded-[11px] border border-borderControl bg-surface text-inkBody hover:bg-surfaceAlt hover:text-brand-deep transition-colors shrink-0"
-            aria-label={focusMode ? "Exit focus mode" : "Enter focus mode"}
-            title={
-              focusMode
-                ? "Exit focus mode (F or Esc)"
-                : "Focus mode (F) - full screen, nothing but the page. Shift+click keeps browser chrome."
-            }
+            aria-label={focusMode ? "Exit full screen" : "Enter full screen"}
+            title={focusMode ? "Exit full screen (F or Esc)" : "Full screen (F)"}
           >
             {focusMode ? <Minimize2 className="w-5 h-5" /> : <Maximize2 className="w-5 h-5" />}
           </button>
@@ -357,10 +332,11 @@ export function AppShell({ children }: { children: ReactNode }) {
         </main>
       </div>
 
-      {/* Phone-first bottom tab bar. Hidden on md+ (sidebar handles nav)
-          and in focus mode (content goes edge-to-edge). "More" opens the
-          same drawer the top hamburger uses. */}
-      {!focusMode && <BottomNav onMore={() => setMobileOpen(true)} />}
+      {/* Phone-first bottom tab bar. Hidden on md+ (sidebar handles nav).
+          "More" opens the same drawer the top hamburger uses. Focus mode does
+          not hide it — it only surrenders the browser's chrome, and a phone
+          without its tab bar has no navigation left at all. */}
+      <BottomNav onMore={() => setMobileOpen(true)} />
 
     </div>
   );
