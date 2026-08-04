@@ -511,7 +511,9 @@ router.get("/export", requireAuth, requirePermission("view_invoices"), validate(
       guest_state: r.guestState ?? "",
       guest_id_proof_type: r.guestIdProofType ?? "",
       // Last 4 digits only — IDs are encrypted at rest for DPDP compliance.
-      // Staff with the right permission can decrypt via the guest profile.
+      // There is deliberately NO reveal path: maskGuest() in routes/guests.ts
+      // strips idProofNumberEncrypted from every response, so the full number
+      // is write-only once stored and last4 is all any surface can show.
       guest_id_proof_last4: r.guestIdProofLast4 ? `XXXX${r.guestIdProofLast4}` : "",
 
       // --- Hotel

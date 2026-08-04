@@ -14,6 +14,12 @@ export function encrypt(plaintext: string): string {
   return Buffer.concat([iv, tag, encrypted]).toString("base64");
 }
 
+// Intentionally uncalled by any route. Guest ID numbers are write-only in this
+// product: maskGuest() strips the ciphertext from every response and surfaces
+// last4 alone, so nothing in the app has a reason to reverse it. Kept as the
+// matching half of encrypt() — the data is recoverable if a lawful-disclosure
+// request ever demands it, and a one-way pair invites someone to assume the
+// column is a hash and "simplify" it into one.
 export function decrypt(payload: string): string {
   const data = Buffer.from(payload, "base64");
   const iv = data.subarray(0, IV_LENGTH);
