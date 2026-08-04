@@ -387,22 +387,26 @@ export function Sidebar({
 
       {/* Footer: collapse, sign out, user card. */}
       <div className="mt-auto p-2.5 border-t border-borderc flex flex-col gap-1.5">
+        {/* Icon only, and small: this is a chrome control, not a destination,
+            so it should not carry the same visual weight as the nav items
+            above it. Sits on the edge it collapses toward. Desktop-only (the
+            mobile drawer has its own close), so the 32px target is a mouse
+            target, not a thumb one. */}
         {!mobile && (
           <button
             onClick={onToggle}
             title={collapsed ? "Expand" : "Collapse"}
             aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
             className={cn(
-              "flex items-center gap-3 w-full py-[9px] rounded-[11px] text-[13px] font-semibold text-inkBody hover:bg-parchment transition-colors",
-              iconOnly ? "px-0 justify-center" : "px-[11px]",
+              "grid place-items-center w-8 h-8 rounded-[9px] text-inkMuted hover:bg-parchment hover:text-inkBody transition-colors",
+              iconOnly ? "self-center" : "self-end",
             )}
           >
             {collapsed ? (
-              <ChevronRight className="w-5 h-5 shrink-0" />
+              <ChevronRight className="w-4 h-4" />
             ) : (
-              <ChevronLeft className="w-5 h-5 shrink-0" />
+              <ChevronLeft className="w-4 h-4" />
             )}
-            {!iconOnly && <span className="flex-1 text-left">Collapse</span>}
           </button>
         )}
         <button
