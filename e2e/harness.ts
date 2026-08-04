@@ -130,6 +130,7 @@ export interface HotelFixture {
   reservationId: string;
   reservationNumber: string;
   invoiceId: string;
+  guestRequestId: string;
   razorpaySubscriptionId: string;
 }
 

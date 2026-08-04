@@ -104,6 +104,32 @@ test.describe("tenant isolation — hotel A's admin", () => {
     const json = await getJson(request, "/dashboard", tokenA);
     expect(json.data.occupancy.total).toBe(fx.hotelA.roomIds.length); // 3
   });
+
+  test("guest request list contains only A's requests", async ({ request }) => {
+    const json = await getJson(request, "/guest-requests", tokenA);
+    const ids = (json.data as Array<{ id: string }>).map((r) => r.id);
+    expect(ids).toContain(fx.hotelA.guestRequestId);
+    expect(ids).not.toContain(fx.hotelB.guestRequestId);
+  });
+
+  test("B's guest request is 404 by uuid", async ({ request }) => {
+    await getJson(request, `/guest-requests/${fx.hotelB.guestRequestId}`, tokenA, 404);
+  });
+
+  test("PATCH on B's guest request is 404 and leaves it untouched", async ({ request }) => {
+    const res = await request.patch(`${API_URL}/guest-requests/${fx.hotelB.guestRequestId}`, {
+      ...opts(tokenA),
+      data: { status: "acknowledged" },
+    });
+    expect(res.status()).toBe(404);
+    // As B: the request is still open and unacknowledged — the write really
+    // was rejected, not just hidden.
+    const detail = await getJson(request, `/guest-requests/${fx.hotelB.guestRequestId}`, tokenB);
+    expect(detail.data.status).toBe("open");
+    expect(detail.data.acknowledgedAt).toBeNull();
+    expect(detail.data.acknowledgedBy).toBeNull();
+  });
+
 });
 
 test.describe("tenant isolation — hotel B's admin (symmetric spot-checks)", () => {
@@ -126,5 +152,27 @@ test.describe("tenant isolation — hotel B's admin (symmetric spot-checks)", ()
   test("dashboard occupancy counts B's rooms only", async ({ request }) => {
     const json = await getJson(request, "/dashboard", tokenB);
     expect(json.data.occupancy.total).toBe(fx.hotelB.roomIds.length); // 2
+  });
+
+  test("guest requests: B never sees or touches A's rows", async ({ request }) => {
+    const list = await getJson(request, "/guest-requests", tokenB);
+    const ids = (list.data as Array<{ id: string }>).map((r) => r.id);
+    expect(ids).toContain(fx.hotelB.guestRequestId);
+    expect(ids).not.toContain(fx.hotelA.guestRequestId);
+
+    await getJson(request, `/guest-requests/${fx.hotelA.guestRequestId}`, tokenB, 404);
+
+    const patchRes = await request.patch(`${API_URL}/guest-requests/${fx.hotelA.guestRequestId}`, {
+      ...opts(tokenB),
+      data: { status: "cancelled" },
+    });
+    expect(patchRes.status()).toBe(404);
+
+    // As A: the row is untouched by any of the above.
+    const detail = await getJson(request, `/guest-requests/${fx.hotelA.guestRequestId}`, tokenA);
+    expect(detail.data.status).toBe("open");
+    expect(detail.data.acknowledgedAt).toBeNull();
+    expect(detail.data.housekeepingTaskId).toBeNull();
+    expect(detail.data.maintenanceIssueId).toBeNull();
   });
 });

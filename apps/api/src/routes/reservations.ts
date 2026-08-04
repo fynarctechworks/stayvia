@@ -5906,10 +5906,17 @@ router.get(
     const cgst = +(totalGst / 2).toFixed(2);
     const sgst = +(totalGst - cgst).toFixed(2);
     const grandTotal = +(subtotal + totalGst).toFixed(2);
+    // Wallet credit is money against the bill, exactly as it is at check-out
+    // (see the issue path below and lib/reservationBalance.ts, which is the
+    // single source of truth for this arithmetic). advancePaid carries only
+    // received PAYMENT rows — applying credit never writes one — so a preview
+    // that subtracts advancePaid alone overstates the balance by the credit
+    // and the desk collects that much too much.
     const totalPaid = Number(r[0]!.advancePaid);
-    const balanceDue = +(grandTotal - totalPaid).toFixed(2);
+    const walletCreditApplied = Number(r[0]!.walletCreditApplied ?? 0);
+    const balanceDue = +Math.max(0, grandTotal - totalPaid - walletCreditApplied).toFixed(2);
     const status: "issued" | "partial" | "paid" =
-      balanceDue <= 0.009 ? "paid" : totalPaid > 0 ? "partial" : "issued";
+      balanceDue <= 0.009 ? "paid" : totalPaid + walletCreditApplied > 0 ? "partial" : "issued";
 
     const previewInvoice = {
       id: "preview",
@@ -5929,6 +5936,10 @@ router.get(
       sgstAmount: String(sgst),
       grandTotal: String(grandTotal),
       totalPaid: String(totalPaid),
+      // Without this key the PDF's "Wallet credit applied" row is gated out
+      // (pdf.ts reads invoice.walletCreditApplied ?? 0), so the guest saw no
+      // trace of a credit that had already been spent against their bill.
+      walletCreditApplied: String(walletCreditApplied),
       balanceDue: String(balanceDue),
       status,
       notes: null as string | null,

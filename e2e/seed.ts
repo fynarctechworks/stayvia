@@ -8,6 +8,7 @@ import { writeFileSync } from "node:fs";
 
 import { db } from "../apps/api/src/db/client.js";
 import {
+  guestRequests,
   guests,
   invoices,
   reservationRooms,
@@ -141,6 +142,23 @@ async function seedHotel(spec: HotelSpec): Promise<HotelFixture> {
     })
     .returning({ id: invoices.id });
 
+  // In-room QR guest request, open, tied to the same room/stay/guest as
+  // everything else above. `kind: "cleaning"` so a "convert to housekeeping"
+  // payload validates against it, though the isolation suite's cross-tenant
+  // convert attempts are rejected before the kind is ever consulted.
+  const [guestRequest] = await db
+    .insert(guestRequests)
+    .values({
+      propertyId,
+      roomId: roomRows[0]!.id,
+      reservationId,
+      guestId,
+      kind: "cleaning",
+      status: "open",
+      note: `${spec.guestName} asked for the room to be cleaned.`,
+    })
+    .returning({ id: guestRequests.id });
+
   return {
     hotelName: spec.hotelName,
     propertyId,
@@ -153,6 +171,7 @@ async function seedHotel(spec: HotelSpec): Promise<HotelFixture> {
     reservationId,
     reservationNumber: spec.reservationNumber,
     invoiceId: invoice!.id,
+    guestRequestId: guestRequest!.id,
     razorpaySubscriptionId: spec.razorpaySubscriptionId,
   };
 }
