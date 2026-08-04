@@ -1,9 +1,18 @@
 import type { Session } from "@supabase/supabase-js";
 import { useQueryClient } from "@tanstack/react-query";
 import { createContext, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { api } from "@/lib/api";
+import { ApiError, api } from "@/lib/api";
 import { supabase } from "@/lib/supabase";
 import type { Role } from "@stayvia/shared";
+
+// "Authenticated, but this account cannot reach this hotel" — a deactivated
+// staff member, a deleted profile row, or an auth user that outlived the
+// database it belonged to. Distinct from 401 (stale token), which api.ts
+// already handles by bouncing to /login?expired=1.
+function isNoAccessError(err: unknown): boolean {
+  if (err instanceof ApiError) return err.status === 403;
+  return err instanceof Error && /deactivat|inactive|no.?profile|403/i.test(err.message);
+}
 
 interface Profile {
   id: string;
@@ -108,7 +117,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     api
       .get<{ profile: Profile }>("/auth/me")
       .then((r) => setProfile(r.profile))
-      .catch(() => setProfile(null))
+      .catch((err: unknown) => {
+        setProfile(null);
+        // A RESTORED session gets no equivalent of signIn's
+        // assertActiveAccount, so before this the app sat with a valid
+        // session and a null profile: the shell rendered, every query
+        // answered 403, and the user saw skeletons that never resolved —
+        // with no nav and therefore no way to sign out. It happens whenever
+        // the auth user outlives its profile row (staff deleted or
+        // deactivated mid-session, or a database restored underneath a live
+        // tab). Treat it exactly as signIn does: end the session and send
+        // them to the login page with a reason.
+        if (isNoAccessError(err)) void endSessionNoAccess();
+      })
       .finally(() => setLoading(false));
   }, [userId, profile?.id, mfaPending]);
 
@@ -153,11 +174,28 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } catch (err) {
       await supabase.auth.signOut();
       setSession(null);
-      const msg =
-        err instanceof Error && /deactivat|inactive|no.?profile|403/i.test(err.message)
+      throw new Error(
+        isNoAccessError(err)
           ? "This account has been deactivated. Contact your administrator."
-          : "Unable to sign in. Please try again.";
-      throw new Error(msg);
+          : "Unable to sign in. Please try again.",
+      );
+    }
+  }
+
+  // Tear down a session whose account can no longer reach this hotel, and
+  // land on /login with a reason. 401 is deliberately NOT handled here —
+  // api.ts already redirects those with ?expired=1, and a stale token is a
+  // different story from an account that no longer has access.
+  async function endSessionNoAccess(): Promise<void> {
+    try {
+      await supabase.auth.signOut();
+    } catch {
+      /* ignore — we are leaving this page regardless */
+    }
+    setSession(null);
+    setProfile(null);
+    if (typeof window !== "undefined" && !window.location.pathname.startsWith("/login")) {
+      window.location.replace("/login?noaccess=1");
     }
   }
 

@@ -69,6 +69,15 @@ export default function Login() {
     [location.search],
   );
 
+  // Shown when AuthContext ends a restored session because /auth/me answered
+  // 403 — the password was fine, the account simply has no access to a hotel
+  // any more. Worth distinguishing from "expired": retyping the password will
+  // NOT help, so the copy points at an administrator instead.
+  const noAccess = useMemo(
+    () => new URLSearchParams(location.search).get("noaccess") === "1",
+    [location.search],
+  );
+
   // Only redirect into the app when fully authenticated — a session that
   // still owes a second factor (mfaPending) must stay here for the
   // challenge step.
@@ -313,13 +322,26 @@ export default function Login() {
             </div>
           )}
 
-          {expired && !error && (
+          {expired && !noAccess && !error && (
             <div
               role="status"
               className="flex items-start gap-2 rounded-sm border border-warnBorder bg-warnBg px-3 py-2 text-warnFg text-sm"
             >
               <AlertCircle className="w-4 h-4 mt-0.5 shrink-0" />
               <span>Your session expired. Please sign in again.</span>
+            </div>
+          )}
+
+          {noAccess && !error && (
+            <div
+              role="status"
+              className="flex items-start gap-2 rounded-sm border border-dangerBorder bg-dangerBg px-3 py-2 text-dangerFg text-sm"
+            >
+              <AlertCircle className="w-4 h-4 mt-0.5 shrink-0" />
+              <span>
+                This account no longer has access to a hotel. Signing in again won't help —
+                ask your administrator to restore it.
+              </span>
             </div>
           )}
 
