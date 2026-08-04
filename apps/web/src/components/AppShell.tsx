@@ -87,16 +87,32 @@ export function AppShell({ children }: { children: ReactNode }) {
     });
   }
 
+  // True only while WE hold the browser's fullscreen for focus mode, so the
+  // fullscreenchange listener below can tell "the user pressed Esc / F11 to
+  // leave our fullscreen" from "fullscreen changed for some other reason".
+  const heldFullscreen = useRef(false);
+
   function toggleFocusMode(opts?: { requestBrowserFullscreen?: boolean }) {
+    // Focus mode means the whole viewport, chrome included — a plain click
+    // takes browser fullscreen too. It used to need Shift, which meant the
+    // obvious action produced a half-result: sidebar gone, browser furniture
+    // still there.
+    const wantFullscreen = opts?.requestBrowserFullscreen ?? true;
     setFocusMode((f) => {
       const next = !f;
       localStorage.setItem("hd:focusMode", next ? "1" : "0");
-      // Optional: also drive the browser's Fullscreen API (Shift+click
-      // or programmatic). On exit, release fullscreen if we held it.
       try {
-        if (opts?.requestBrowserFullscreen && next && document.fullscreenEnabled) {
-          void document.documentElement.requestFullscreen();
+        if (next && wantFullscreen && document.fullscreenEnabled) {
+          void document.documentElement.requestFullscreen().then(
+            () => {
+              heldFullscreen.current = true;
+            },
+            () => {
+              /* refused (no user gesture, kiosk policy) — focus mode still on */
+            },
+          );
         } else if (!next && document.fullscreenElement) {
+          heldFullscreen.current = false;
           void document.exitFullscreen();
         }
       } catch {
@@ -105,6 +121,21 @@ export function AppShell({ children }: { children: ReactNode }) {
       return next;
     });
   }
+
+  // Esc and F11 leave fullscreen without telling React, which would strand the
+  // user in a chrome-less shell: no sidebar, no topbar, no way back except the
+  // F key they may not know about. Mirror the browser's exit into our state.
+  useEffect(() => {
+    function onFullscreenChange() {
+      if (!document.fullscreenElement && heldFullscreen.current) {
+        heldFullscreen.current = false;
+        setFocusMode(false);
+        localStorage.setItem("hd:focusMode", "0");
+      }
+    }
+    document.addEventListener("fullscreenchange", onFullscreenChange);
+    return () => document.removeEventListener("fullscreenchange", onFullscreenChange);
+  }, []);
 
   // Keyboard shortcut: F to toggle focus mode. Ignored while the
   // user is typing in a text field. Shift+F also requests browser
@@ -213,9 +244,32 @@ export function AppShell({ children }: { children: ReactNode }) {
           focusMode ? "md:ml-0" : collapsed ? "md:ml-[74px]" : "md:ml-60"
         }`}
       >
+        {/* Focus mode hides the topbar as well as the sidebar, so this is the
+            only way back on screen. Fixed, quiet until hovered, and outside
+            the header so it survives the header being unmounted. Esc/F11 also
+            work (see the fullscreenchange listener), and so does F — but the
+            user has no way to know that, so there has to be a visible exit. */}
+        {focusMode && (
+          <button
+            type="button"
+            onClick={() => toggleFocusMode()}
+            aria-label="Exit focus mode"
+            title="Exit focus mode (F or Esc)"
+            className="fixed top-3 right-3 z-40 hidden md:grid w-10 h-10 place-items-center rounded-[11px] border border-borderControl bg-surface/80 text-inkMuted opacity-40 backdrop-blur-[6px] hover:opacity-100 hover:text-brand-deep focus-visible:opacity-100 transition-opacity"
+          >
+            <Minimize2 className="w-5 h-5" />
+          </button>
+        )}
+
         {/* Blurred sticky topbar: route title + hotel subtitle, global
-            search, bell, avatar. Hamburger appears < md. */}
-        <header className="sticky top-0 z-30 h-16 px-4 md:px-6 flex items-center gap-3 bg-paper/80 backdrop-blur-[10px] border-b border-borderc pt-safe">
+            search, bell, avatar. Hamburger appears < md. Hidden in focus
+            mode — "focus" that leaves a toolbar on screen is just a narrower
+            page. */}
+        <header
+          className={`sticky top-0 z-30 h-16 px-4 md:px-6 items-center gap-3 bg-paper/80 backdrop-blur-[10px] border-b border-borderc pt-safe ${
+            focusMode ? "flex md:hidden" : "flex"
+          }`}
+        >
           <button
             onClick={() => setMobileOpen(true)}
             aria-label="Open menu"
@@ -264,13 +318,13 @@ export function AppShell({ children }: { children: ReactNode }) {
               the bottom tab bar owns the phone layout. */}
           <button
             type="button"
-            onClick={(e) => toggleFocusMode({ requestBrowserFullscreen: e.shiftKey })}
+            onClick={(e) => toggleFocusMode({ requestBrowserFullscreen: !e.shiftKey })}
             className="hidden md:grid w-10 h-10 place-items-center rounded-[11px] border border-borderControl bg-surface text-inkBody hover:bg-surfaceAlt hover:text-brand-deep transition-colors shrink-0"
             aria-label={focusMode ? "Exit focus mode" : "Enter focus mode"}
             title={
               focusMode
-                ? "Exit focus mode (F) - Shift+click also exits browser fullscreen"
-                : "Focus mode (F) - hides sidebar. Shift+click also goes browser fullscreen."
+                ? "Exit focus mode (F or Esc)"
+                : "Focus mode (F) - full screen, nothing but the page. Shift+click keeps browser chrome."
             }
           >
             {focusMode ? <Minimize2 className="w-5 h-5" /> : <Maximize2 className="w-5 h-5" />}
