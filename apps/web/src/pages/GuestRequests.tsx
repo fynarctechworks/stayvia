@@ -10,16 +10,10 @@
 //
 // A guest request is a guest *communication*, not a work order: the card shows
 // the guest's own wording verbatim and nothing on this page can overwrite it
-// (the PATCH accepts `status` and nothing else). Staff either close it out
-// where it stands, or promote it into a real work item in one tap:
-//
-//   cleaning → housekeeping task     issue → maintenance issue
-//   amenity  → no target module; acknowledge / mark done only
-//
-// Convert is idempotent server-side, so a double-tap or a second person
-// clicking the same button returns the SAME work item rather than filing two.
-// Once a request is converted the button is replaced by a link to what it
-// became.
+// (the PATCH accepts `status` and nothing else). Staff either acknowledge it,
+// mark it done, or cancel it - this page does not create housekeeping tasks
+// or maintenance issues. A request that was converted elsewhere (earlier, or
+// via the API) still shows a link to what it became.
 //
 // Polling matches BookingRequests (10s): a guest standing in their room with a
 // wet towel should not be waiting on someone to hit refresh.
@@ -28,17 +22,10 @@ import {
   GUEST_REQUEST_KIND_LABELS,
   GUEST_REQUEST_OPEN_STATUSES,
   GUEST_REQUEST_STATUS_LABELS,
-  MAINTENANCE_CATEGORIES,
-  MAINTENANCE_CATEGORY_LABELS,
-  MAINTENANCE_SEVERITIES,
-  MAINTENANCE_SEVERITY_LABELS,
-  type GuestRequestConvertInput,
   type GuestRequestConvertTarget,
   type GuestRequestKind,
   type GuestRequestStaffStatus,
   type GuestRequestStatus,
-  type MaintenanceCategory,
-  type MaintenanceSeverity,
 } from "@stayvia/shared";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useState } from "react";
@@ -89,13 +76,6 @@ interface GuestRequestRow {
   guestName: string | null;
   housekeepingTaskId: string | null;
   maintenanceIssueId: string | null;
-}
-
-interface ConvertResponse {
-  alreadyConverted: boolean;
-  target: GuestRequestConvertTarget;
-  workItemId: string;
-  request: GuestRequestRow;
 }
 
 // ---------------------------------------------------------------- helpers
@@ -211,13 +191,9 @@ export default function GuestRequests() {
   const [filter, setFilter] = useState<QueueFilter>("active");
   // Card open in the detail overlay, held by id so the 10s poll keeps it fresh.
   const [detailId, setDetailId] = useState<string | null>(null);
-  // Request being converted (the convert form overlay).
-  const [convertId, setConvertId] = useState<string | null>(null);
-
   // Writes are gated exactly the way the API gates them, so the UI never
   // offers a button that comes back 403.
   const canWrite = can("update_housekeeping");
-  const canMaintain = can("manage_maintenance");
 
   const q = useQuery({
     queryKey: ["guest-requests", "list", filter],
@@ -235,16 +211,12 @@ export default function GuestRequests() {
   const openCount = items.filter((r) => r.status === "open").length;
 
   const detail = detailId ? items.find((r) => r.id === detailId) ?? null : null;
-  const converting = convertId ? items.find((r) => r.id === convertId) ?? null : null;
 
   // A row that scrolls out of the active filter after being actioned must not
   // leave a stuck overlay behind.
   useEffect(() => {
     if (detailId && !q.isLoading && !detail) setDetailId(null);
   }, [detailId, detail, q.isLoading]);
-  useEffect(() => {
-    if (convertId && !q.isLoading && !converting) setConvertId(null);
-  }, [convertId, converting, q.isLoading]);
 
   // Covers the page list AND the sidebar badge — both live under the
   // "guest-requests" key prefix.
@@ -270,35 +242,7 @@ export default function GuestRequests() {
     },
   });
 
-  const convert = useMutation({
-    mutationFn: (v: { id: string; body: GuestRequestConvertInput }) =>
-      api.post<ConvertResponse>(`/guest-requests/${v.id}/convert`, v.body),
-    onSuccess: (d) => {
-      toast(
-        d.alreadyConverted
-          ? "Already converted - opening the existing work item instead of creating a second one."
-          : d.target === "maintenance"
-            ? "Maintenance issue raised. It's on the Maintenance page now."
-            : "Housekeeping task created and the team has been notified.",
-        "success",
-      );
-      setConvertId(null);
-      void refresh();
-      // The maintenance module keeps its own caches.
-      void qc.invalidateQueries({ queryKey: ["maint-list"] });
-      void qc.invalidateQueries({ queryKey: ["maint-summary"] });
-      void qc.invalidateQueries({ queryKey: ["maint-room"] });
-    },
-    onError: (e) => {
-      toast(e instanceof ApiError ? e.message : "Could not convert the request", "error");
-      void refresh();
-    },
-  });
-
-  const busyId =
-    (setStatus.isPending && setStatus.variables?.id) ||
-    (convert.isPending && convert.variables?.id) ||
-    null;
+  const busyId = (setStatus.isPending && setStatus.variables?.id) || null;
 
   async function onCancel(r: GuestRequestRow) {
     const ok = await dialog.confirm({
@@ -367,11 +311,9 @@ export default function GuestRequests() {
               now={now}
               busy={busyId === r.id}
               canWrite={canWrite}
-              canMaintain={canMaintain}
               onOpen={() => setDetailId(r.id)}
               onAcknowledge={() => setStatus.mutate({ id: r.id, status: "acknowledged" })}
               onDone={() => setStatus.mutate({ id: r.id, status: "done" })}
-              onConvert={() => setConvertId(r.id)}
             />
           ))}
           {total > items.length && (
@@ -388,24 +330,10 @@ export default function GuestRequests() {
           now={now}
           busy={busyId === detail.id}
           canWrite={canWrite}
-          canMaintain={canMaintain}
           onClose={() => setDetailId(null)}
           onAcknowledge={() => setStatus.mutate({ id: detail.id, status: "acknowledged" })}
           onDone={() => setStatus.mutate({ id: detail.id, status: "done" })}
           onCancel={() => void onCancel(detail)}
-          onConvert={() => {
-            setDetailId(null);
-            setConvertId(detail.id);
-          }}
-        />
-      )}
-
-      {converting && (
-        <ConvertOverlay
-          row={converting}
-          pending={convert.isPending}
-          onClose={() => setConvertId(null)}
-          onSubmit={(body) => convert.mutate({ id: converting.id, body })}
         />
       )}
     </div>
@@ -419,31 +347,22 @@ function RequestCard({
   now,
   busy,
   canWrite,
-  canMaintain,
   onOpen,
   onAcknowledge,
   onDone,
-  onConvert,
 }: {
   row: GuestRequestRow;
   now: number;
   busy: boolean;
   canWrite: boolean;
-  canMaintain: boolean;
   onOpen: () => void;
   onAcknowledge: () => void;
   onDone: () => void;
-  onConvert: () => void;
 }) {
   const meta = KIND_META[row.kind];
   const Icon = meta.icon;
-  const target = GUEST_REQUEST_KIND_CONVERT_TARGET[row.kind];
   const linked = workItemFor(row);
   const closed = isTerminal(row.status);
-  // Convert into maintenance needs that module's own key — the API checks
-  // manage_maintenance on top of update_housekeeping for that branch.
-  const mayConvert =
-    canWrite && !!target && !linked && !closed && (target !== "maintenance" || canMaintain);
 
   return (
     <div className="card !p-[18px] space-y-3 min-w-0">
@@ -500,20 +419,6 @@ function RequestCard({
               Acknowledge
             </button>
           )}
-          {mayConvert && (
-            <button
-              className="btn-secondary flex-1 min-w-[112px] inline-flex items-center justify-center gap-1.5 disabled:opacity-60"
-              disabled={busy}
-              onClick={onConvert}
-            >
-              {target === "maintenance" ? (
-                <Wrench className="w-4 h-4" />
-              ) : (
-                <SprayCan className="w-4 h-4" />
-              )}
-              {target === "maintenance" ? "Raise issue" : "Create task"}
-            </button>
-          )}
           <button
             className="btn-primary flex-1 min-w-[112px] inline-flex items-center justify-center gap-1.5 disabled:opacity-60"
             disabled={busy}
@@ -567,31 +472,24 @@ function RequestDetailOverlay({
   now,
   busy,
   canWrite,
-  canMaintain,
   onClose,
   onAcknowledge,
   onDone,
   onCancel,
-  onConvert,
 }: {
   row: GuestRequestRow;
   now: number;
   busy: boolean;
   canWrite: boolean;
-  canMaintain: boolean;
   onClose: () => void;
   onAcknowledge: () => void;
   onDone: () => void;
   onCancel: () => void;
-  onConvert: () => void;
 }) {
   const meta = KIND_META[row.kind];
   const Icon = meta.icon;
-  const target = GUEST_REQUEST_KIND_CONVERT_TARGET[row.kind];
   const linked = workItemFor(row);
   const closed = isTerminal(row.status);
-  const mayConvert =
-    canWrite && !!target && !linked && !closed && (target !== "maintenance" || canMaintain);
 
   const field = (label: string, value: string | null | undefined, mono = false) => (
     <div className="min-w-0">
@@ -746,20 +644,6 @@ function RequestDetailOverlay({
                 <Check className="w-4 h-4" /> Acknowledge
               </button>
             )}
-            {mayConvert && (
-              <button
-                className="btn-secondary flex-1 min-w-[120px] inline-flex items-center justify-center gap-1.5 disabled:opacity-60"
-                disabled={busy}
-                onClick={onConvert}
-              >
-                {target === "maintenance" ? (
-                  <Wrench className="w-4 h-4" />
-                ) : (
-                  <SprayCan className="w-4 h-4" />
-                )}
-                {target === "maintenance" ? "Raise issue" : "Create task"}
-              </button>
-            )}
             <button
               className="btn-primary flex-1 min-w-[120px] inline-flex items-center justify-center gap-1.5 disabled:opacity-60"
               disabled={busy}
@@ -781,228 +665,6 @@ function RequestDetailOverlay({
             </button>
           </div>
         )}
-      </div>
-    </div>
-  );
-}
-
-// ---------------------------------------------------------------- convert
-
-// One overlay, two shapes — the payload is a discriminated union on `target`,
-// and the target is decided by the request's kind (the server re-derives it
-// from the stored row, so this is presentation only).
-function ConvertOverlay({
-  row,
-  pending,
-  onClose,
-  onSubmit,
-}: {
-  row: GuestRequestRow;
-  pending: boolean;
-  onClose: () => void;
-  onSubmit: (body: GuestRequestConvertInput) => void;
-}) {
-  const target = GUEST_REQUEST_KIND_CONVERT_TARGET[row.kind];
-  const note = row.note?.trim() ?? "";
-
-  // Prefilled from the guest's wording, editable before sending — the request
-  // row keeps the original either way.
-  const [category, setCategory] = useState<MaintenanceCategory>("other");
-  const [severity, setSeverity] = useState<MaintenanceSeverity>("normal");
-  const [title, setTitle] = useState(
-    (note || `Guest reported a problem in room ${row.roomNumber}`).slice(0, 200),
-  );
-  const [description, setDescription] = useState(
-    note
-      ? `Reported by the guest from the in-room QR: "${note}"`
-      : `The guest in room ${row.roomNumber} reported a problem from the in-room QR without adding details. Check with them at the room.`,
-  );
-  const [costEstimate, setCostEstimate] = useState("");
-  const [notes, setNotes] = useState("");
-
-  if (!target) return null;
-
-  const costInvalid =
-    costEstimate.trim() !== "" &&
-    (!Number.isFinite(Number(costEstimate)) || Number(costEstimate) < 0);
-  const blocked =
-    pending ||
-    (target === "maintenance" &&
-      (title.trim().length < 3 || description.trim().length < 3 || costInvalid));
-
-  function submit() {
-    if (blocked) return;
-    if (target === "maintenance") {
-      onSubmit({
-        target: "maintenance",
-        category,
-        severity,
-        title: title.trim(),
-        description: description.trim(),
-        // Optional on purpose: a guest saying "AC not cooling" gives the desk
-        // no basis for a number, and 0 would read as "free to fix".
-        ...(costEstimate.trim() === "" ? {} : { costEstimate: Number(costEstimate) }),
-      });
-    } else {
-      onSubmit({ target: "housekeeping", ...(notes.trim() ? { notes: notes.trim() } : {}) });
-    }
-  }
-
-  return (
-    <div
-      className="fixed inset-0 z-50 flex items-start md:items-center justify-center bg-inkDark/50 backdrop-blur-[2px] p-3 md:p-6 overflow-y-auto"
-      onClick={onClose}
-    >
-      <div
-        className="bg-surface rounded-2xl shadow-modal w-full max-w-xl my-auto overflow-hidden"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="flex items-center justify-between gap-2 px-5 py-3.5 border-b border-divider bg-surfaceAlt">
-          <div className="min-w-0">
-            <h2 className="text-[15px] font-semibold text-ink truncate">
-              {target === "maintenance" ? "Raise a maintenance issue" : "Create a housekeeping task"}
-            </h2>
-            <div className="text-xs text-textSecondary mt-0.5 truncate">
-              Room {row.roomNumber} - from the guest&rsquo;s request
-            </div>
-          </div>
-          <button
-            onClick={onClose}
-            aria-label="Close"
-            className="w-9 h-9 shrink-0 rounded-full grid place-items-center hover:bg-parchment transition-colors"
-          >
-            <X className="w-5 h-5" />
-          </button>
-        </div>
-
-        <div className="max-h-[calc(100vh-230px)] overflow-y-auto px-5 py-4 space-y-3.5">
-          {note && (
-            <blockquote className="rounded-md bg-surfaceSubtle border-l-2 border-brand-tint px-3 py-2 text-[13px] text-inkBody leading-snug break-words">
-              &ldquo;{note}&rdquo;
-            </blockquote>
-          )}
-
-          {target === "maintenance" ? (
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div>
-                <label className="label block mb-1" htmlFor="gr-category">
-                  Category
-                </label>
-                <select
-                  id="gr-category"
-                  className="input"
-                  value={category}
-                  onChange={(e) => setCategory(e.target.value as MaintenanceCategory)}
-                >
-                  {MAINTENANCE_CATEGORIES.map((c) => (
-                    <option key={c} value={c}>
-                      {MAINTENANCE_CATEGORY_LABELS[c]}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label className="label block mb-1" htmlFor="gr-severity">
-                  Severity
-                </label>
-                <select
-                  id="gr-severity"
-                  className="input"
-                  value={severity}
-                  onChange={(e) => setSeverity(e.target.value as MaintenanceSeverity)}
-                >
-                  {MAINTENANCE_SEVERITIES.map((s) => (
-                    <option key={s} value={s}>
-                      {MAINTENANCE_SEVERITY_LABELS[s]}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div className="sm:col-span-2">
-                <label className="label block mb-1" htmlFor="gr-title">
-                  Title
-                </label>
-                <input
-                  id="gr-title"
-                  className="input"
-                  value={title}
-                  maxLength={200}
-                  onChange={(e) => setTitle(e.target.value)}
-                  placeholder="Short summary - e.g. AC not cooling"
-                />
-              </div>
-              <div className="sm:col-span-2">
-                <label className="label block mb-1" htmlFor="gr-description">
-                  Description
-                </label>
-                <textarea
-                  id="gr-description"
-                  className="input min-h-[88px]"
-                  value={description}
-                  maxLength={2000}
-                  onChange={(e) => setDescription(e.target.value)}
-                  placeholder="What the technician needs to know"
-                />
-              </div>
-              <div className="sm:col-span-2">
-                <label className="label block mb-1" htmlFor="gr-cost">
-                  Estimated cost (₹) - optional
-                </label>
-                <input
-                  id="gr-cost"
-                  className="input"
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  value={costEstimate}
-                  onChange={(e) => setCostEstimate(e.target.value)}
-                  placeholder="Leave blank until someone has looked at it"
-                />
-                {costInvalid && (
-                  <div className="text-danger text-xs mt-1">Enter ₹0 or more, or leave it blank.</div>
-                )}
-              </div>
-            </div>
-          ) : (
-            <div>
-              <label className="label block mb-1" htmlFor="gr-notes">
-                Notes for housekeeping - optional
-              </label>
-              <textarea
-                id="gr-notes"
-                className="input min-h-[88px]"
-                value={notes}
-                maxLength={500}
-                onChange={(e) => setNotes(e.target.value)}
-                placeholder="Anything the room attendant should know before knocking"
-              />
-              <p className="text-xs text-textSecondary mt-2">
-                Creates a daily-refresh task for room {row.roomNumber} and notifies the
-                housekeeping team. The guest&rsquo;s own words are carried over.
-              </p>
-            </div>
-          )}
-        </div>
-
-        <div className="flex flex-wrap gap-2 px-5 py-3.5 border-t border-divider bg-surfaceAlt">
-          <button className="btn-secondary flex-1 min-w-[120px]" onClick={onClose} disabled={pending}>
-            Cancel
-          </button>
-          <button
-            className="btn-primary flex-1 min-w-[120px] inline-flex items-center justify-center gap-1.5 disabled:opacity-60"
-            disabled={blocked}
-            onClick={submit}
-          >
-            {pending ? (
-              <Loader2 className="w-4 h-4 animate-spin" />
-            ) : target === "maintenance" ? (
-              <Wrench className="w-4 h-4" />
-            ) : (
-              <SprayCan className="w-4 h-4" />
-            )}
-            {target === "maintenance" ? "Raise issue" : "Create task"}
-          </button>
-        </div>
       </div>
     </div>
   );
