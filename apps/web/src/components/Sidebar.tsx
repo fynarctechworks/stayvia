@@ -330,7 +330,37 @@ export function Sidebar({
             <div className="text-[10px] font-bold text-inkMuted tracking-[0.16em] mt-0.5">HOTEL OS</div>
           </div>
         )}
+        {/* Collapse lives beside the wordmark, on the edge it collapses
+            toward — chrome, not a destination, so it stays small and quiet
+            rather than sitting in the nav list. `ml-auto` pins it right while
+            expanded; when collapsed the header centres the logo and this is
+            hidden, so the rail is the logo alone and the toggle moves to the
+            header bar's own control. Desktop-only: the mobile drawer closes
+            by tapping outside. */}
+        {!mobile && !iconOnly && (
+          <button
+            onClick={onToggle}
+            title="Collapse"
+            aria-label="Collapse sidebar"
+            className="ml-auto shrink-0 grid place-items-center w-7 h-7 rounded-[8px] text-inkFaint hover:bg-parchment hover:text-inkBody transition-colors"
+          >
+            <ChevronLeft className="w-4 h-4" />
+          </button>
+        )}
       </div>
+
+      {/* Collapsed rail: the toggle drops below the logo, since the header
+          row has no space beside it at 74px. */}
+      {!mobile && iconOnly && (
+        <button
+          onClick={onToggle}
+          title="Expand"
+          aria-label="Expand sidebar"
+          className="mx-auto mt-2 grid place-items-center w-7 h-7 rounded-[8px] text-inkFaint hover:bg-parchment hover:text-inkBody transition-colors"
+        >
+          <ChevronRight className="w-4 h-4" />
+        </button>
+      )}
 
       <nav className="flex-1 px-2.5 py-1.5 overflow-y-auto overflow-x-hidden no-scrollbar">
         {NAV_SECTIONS.map((section) => {
@@ -385,30 +415,8 @@ export function Sidebar({
         })}
       </nav>
 
-      {/* Footer: collapse, sign out, user card. */}
+      {/* Footer: sign out, user card. */}
       <div className="mt-auto p-2.5 border-t border-borderc flex flex-col gap-1.5">
-        {/* Icon only, and small: this is a chrome control, not a destination,
-            so it should not carry the same visual weight as the nav items
-            above it. Sits on the edge it collapses toward. Desktop-only (the
-            mobile drawer has its own close), so the 32px target is a mouse
-            target, not a thumb one. */}
-        {!mobile && (
-          <button
-            onClick={onToggle}
-            title={collapsed ? "Expand" : "Collapse"}
-            aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
-            className={cn(
-              "grid place-items-center w-8 h-8 rounded-[9px] text-inkMuted hover:bg-parchment hover:text-inkBody transition-colors",
-              iconOnly ? "self-center" : "self-end",
-            )}
-          >
-            {collapsed ? (
-              <ChevronRight className="w-4 h-4" />
-            ) : (
-              <ChevronLeft className="w-4 h-4" />
-            )}
-          </button>
-        )}
         <button
           onClick={handleSignOut}
           title="Sign out"
