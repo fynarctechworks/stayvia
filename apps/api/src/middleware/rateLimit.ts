@@ -45,10 +45,19 @@ export const signupOtpLimiter = rateLimit({
 const byUserThenIp = (req: { user?: { id: string }; ip?: string }): string =>
   req.user?.id ?? req.ip ?? "unknown";
 
+// The e2e suite runs three Playwright projects (chromium, mobile, tablet) that
+// all inject the SAME hotel-A admin, so they share one per-user bucket and
+// burn 100 reads/min between them — producing 429s that look like product
+// failures but are pure harness contention. Disable limiting when the test
+// auth shim is on; config/env.ts hard-fails if that flag is ever set with
+// NODE_ENV=production, so this cannot loosen a real deployment.
+const e2e = process.env.E2E_AUTH_SHIM !== undefined;
+
 export const readLimiter = rateLimit({
   windowMs: 60 * 1000,
   max: 100,
   keyGenerator: byUserThenIp as never,
+  skip: () => e2e,
   standardHeaders: true,
   legacyHeaders: false,
 });
@@ -57,6 +66,7 @@ export const writeLimiter = rateLimit({
   windowMs: 60 * 1000,
   max: 30,
   keyGenerator: byUserThenIp as never,
+  skip: () => e2e,
   standardHeaders: true,
   legacyHeaders: false,
 });
