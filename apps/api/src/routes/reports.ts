@@ -827,12 +827,28 @@ router.get("/credit-bookings", requireAuth, requirePermission("view_reports"), a
   return ok(res, { from, to, totals, rows });
 });
 
+const GUEST_REPORT_LIMIT = 100;
+
 router.get("/guests", requireAuth, requirePermission("view_reports"), async (req, res) => {
-  const { from, to } = rangeDefaults(req as never);
+  const { from, to, fromStr, toStr } = rangeDefaults(req as never);
   const propertyId = req.propertyId;
   // Stays count includes comps (a stay happened, even if comped). Revenue
   // excludes comp-booking payments — those live in the Complimentary
   // report so the guest's "real revenue" isn't inflated.
+  //
+  // BOTH joins are date-scoped. Only the payments join used to be, so `stays`
+  // was the guest's LIFETIME reservation count and the ORDER BY ranked on it:
+  // a table captioned "most stays in the selected range" put a guest who last
+  // visited eight months ago at the top with "3 stays", and every guest who
+  // had ever stayed came back in the list with revenue 0. The stay is counted
+  // in the window it ARRIVES in, matching how the arrivals/occupancy reports
+  // attribute a booking to a day.
+  const inRange = and(
+    eq(reservations.guestId, guests.id),
+    eq(reservations.propertyId, propertyId),
+    gte(reservations.checkInDate, fromStr),
+    lte(reservations.checkInDate, toStr),
+  );
   const rows = await db
     .select({
       guestId: guests.id,
@@ -842,7 +858,7 @@ router.get("/guests", requireAuth, requirePermission("view_reports"), async (req
       revenue: sql<string>`COALESCE(SUM(${payments.amount}) filter (where ${payments.voided} = false AND ${payments.status} = 'received' AND ${reservations.bookingSource} <> 'complimentary'),0)::text`,
     })
     .from(guests)
-    .leftJoin(reservations, eq(reservations.guestId, guests.id))
+    .innerJoin(reservations, inRange)
     .leftJoin(
       payments,
       and(
@@ -854,8 +870,22 @@ router.get("/guests", requireAuth, requirePermission("view_reports"), async (req
     .where(eq(guests.propertyId, propertyId))
     .groupBy(guests.id)
     .orderBy(sql`count(distinct ${reservations.id}) DESC`)
-    .limit(100);
-  return ok(res, rows);
+    .limit(GUEST_REPORT_LIMIT);
+
+  // The page renders a "Guests" KPI. Off the capped array alone that KPI
+  // silently reads 100 for any property with more distinct guests in the
+  // window, so send the real count alongside the (capped) table rows.
+  const [totalRow] = await db
+    .select({ n: sql<number>`count(distinct ${guests.id})::int` })
+    .from(guests)
+    .innerJoin(reservations, inRange)
+    .where(eq(guests.propertyId, propertyId));
+
+  return ok(res, {
+    rows,
+    total: totalRow?.n ?? 0,
+    limit: GUEST_REPORT_LIMIT,
+  });
 });
 
 // ----------------------------------------------------------------------
@@ -894,7 +924,13 @@ router.get("/pace", requireAuth, requirePermission("view_reports"), async (req, 
         WHERE r.property_id = ${propertyId}
           AND r.status IN ('confirmed','checked_in','checked_out','hold','pending_payment')
           AND r.booking_source <> 'complimentary'
-          AND r.created_at::date <= (sd.d - (l.l || ' days')::interval)::date
+          -- created_at is timestamptz and the session TimeZone is the server
+          -- default (UTC on the production VPS), so a plain ::date resolves in
+          -- UTC and reports anything booked between 00:00 and 05:30 IST as
+          -- having been booked the previous day — always making the property
+          -- look like it is pacing further ahead than it is. Same AT TIME ZONE
+          -- treatment the daily-ledger query applies to payment_date.
+          AND (r.created_at AT TIME ZONE 'Asia/Kolkata')::date <= (sd.d - (l.l || ' days')::interval)::date
           AND daterange(r.check_in_date, GREATEST(r.check_out_date, r.check_in_date + 1), '[)') @> sd.d
       ), 0) AS nights
     FROM stay_days sd CROSS JOIN leads l
@@ -945,8 +981,11 @@ router.get("/pickup", requireAuth, requirePermission("view_reports"), async (req
         WHERE r.property_id = ${propertyId}
           AND r.status IN ('confirmed','checked_in','checked_out','hold','pending_payment')
           AND r.booking_source <> 'complimentary'
-          AND r.created_at >= (sd.d - interval '7 days')
-          AND r.created_at < sd.d
+          -- Bucket the booking by its IST calendar day (see /pace): comparing
+          -- a timestamptz against a bare date coerces the date to UTC
+          -- midnight, so IST-night bookings land in the wrong pickup window.
+          AND (r.created_at AT TIME ZONE 'Asia/Kolkata')::date >= (sd.d - interval '7 days')::date
+          AND (r.created_at AT TIME ZONE 'Asia/Kolkata')::date < sd.d
           AND daterange(r.check_in_date, GREATEST(r.check_out_date, r.check_in_date + 1), '[)') @> sd.d
       ), 0) AS pu7,
       COALESCE((
@@ -956,8 +995,8 @@ router.get("/pickup", requireAuth, requirePermission("view_reports"), async (req
         WHERE r.property_id = ${propertyId}
           AND r.status IN ('confirmed','checked_in','checked_out','hold','pending_payment')
           AND r.booking_source <> 'complimentary'
-          AND r.created_at >= (sd.d - interval '30 days')
-          AND r.created_at < sd.d
+          AND (r.created_at AT TIME ZONE 'Asia/Kolkata')::date >= (sd.d - interval '30 days')::date
+          AND (r.created_at AT TIME ZONE 'Asia/Kolkata')::date < sd.d
           AND daterange(r.check_in_date, GREATEST(r.check_out_date, r.check_in_date + 1), '[)') @> sd.d
       ), 0) AS pu30
     FROM stay_days sd

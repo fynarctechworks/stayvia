@@ -18,7 +18,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "@/auth/AuthContext";
 import { Can } from "@/auth/Can";
 import { useRoomTypes } from "@/hooks/useRoomTypes";
-import { KpiCard, KpiSkeletonRow, QueryError, StackedAvailability } from "@/components/kit";
+import { KpiCard, KpiSkeletonRow, QueryError, StaleDataNotice, StackedAvailability } from "@/components/kit";
 import { RoomActionPopover } from "@/components/RoomActionPopover";
 import { api } from "@/lib/api";
 import { inr } from "@/lib/utils";
@@ -152,7 +152,14 @@ export default function Dashboard() {
   // Failure before loading: on error `isLoading` is false and `data` stays
   // undefined, so the skeleton branch below would hold grey KPI blocks on
   // screen forever with nothing saying the request died.
-  if (dashQ.isError) {
+  //
+  // `!data` is load-bearing. This query polls every 30s and TanStack v5 keeps
+  // the last successful payload when a refetch fails (only `status` flips), so
+  // without it a single dropped background poll tore the whole board —
+  // occupancy, arrivals, departures, collections, room grid — off the screen
+  // and replaced it with "didn't load", every 30 seconds, on a flaky link.
+  // With data in cache the right answer is the staleness strip below.
+  if (dashQ.isError && !data) {
     return (
       <div className="space-y-[22px]">
         <div className="flex items-end justify-between flex-wrap gap-4">
@@ -185,6 +192,18 @@ export default function Dashboard() {
         {headerBlock}
         {actionButtons}
       </div>
+
+      {/* A poll failed but the board below is still the last good payload.
+          Say so rather than either wiping it or letting stale figures pass
+          for live ones. (CheckoutAlerts shares this query key and stays
+          quiet on the dashboard route so this is the only notice.) */}
+      {dashQ.isError && (
+        <StaleDataNotice
+          message="These figures are the last update that came through — arrivals, departures and collections may have moved since."
+          onRetry={() => void dashQ.refetch()}
+          isRetrying={dashQ.isFetching}
+        />
+      )}
 
       {/* Overdue check-out alert now lives in the app-wide sticky
           CheckoutAlerts bar (rendered in AppShell), so it follows

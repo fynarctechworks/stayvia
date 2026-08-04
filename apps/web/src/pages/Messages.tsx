@@ -4,7 +4,7 @@ import { ArrowLeft, Check, CheckCheck, Loader2, MessageSquare, Search, Send, Use
 import { useEffect, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { useAuth } from "@/auth/AuthContext";
-import { QueryError, queryErrorMessage } from "@/components/kit";
+import { QueryError, StaleDataNotice, queryErrorMessage } from "@/components/kit";
 import { useToast } from "@/components/Toast";
 import { api } from "@/lib/api";
 
@@ -204,14 +204,29 @@ export default function Messages() {
         <div className="overflow-y-auto flex-1">
           {/* A failed thread fetch leaves `threads` empty, which the block
               below would render as "No conversations yet." — and the unread
-              badge above as nothing. Neither is true when the request died. */}
-          {threadsQ.isError && (
+              badge above as nothing. Neither is true when the request died.
+              But this list POLLS (15s) and TanStack keeps the previous items
+              through a failed refetch, so the copy has to match what is
+              actually on screen: claiming "none are listed" directly above a
+              rendered thread list was simply false. Two surfaces: the hard
+              error only when there is nothing cached, a staleness strip when
+              the threads below are last-known-good. */}
+          {threadsQ.isError && !threadsQ.data && (
             <div className="p-3">
               <QueryError
                 error={threadsQ.error}
                 onRetry={() => void threadsQ.refetch()}
                 isRetrying={threadsQ.isFetching}
                 message="Your conversations didn't load, so none are listed and the unread count is unknown. This is not an empty inbox — try again."
+              />
+            </div>
+          )}
+          {threadsQ.isError && !!threadsQ.data && (
+            <div className="p-3">
+              <StaleDataNotice
+                message="This list is the last update that came through — a new message may not be shown and the unread counts may be behind."
+                onRetry={() => void threadsQ.refetch()}
+                isRetrying={threadsQ.isFetching}
               />
             </div>
           )}
@@ -255,7 +270,7 @@ export default function Messages() {
               </button>
             );
           })}
-          {!threadsQ.isError && threads.length === 0 && q === "" && (
+          {!(threadsQ.isError && !threadsQ.data) && threads.length === 0 && q === "" && (
             <div className="px-4 py-10 text-center text-[#667781]">
               <MessageSquare className="w-7 h-7 mx-auto mb-2 opacity-30" />
               <div className="text-xs leading-relaxed">
@@ -266,14 +281,21 @@ export default function Messages() {
             </div>
           )}
 
+          {/* The staff list only backs the optional "start a new conversation"
+              suggestions — the inbox above works without it. A full red panel
+              here made one outage stack three alert boxes across this rail and
+              the message pane. One quiet line with a retry is proportionate. */}
           {staffQ.isError && (
-            <div className="p-3">
-              <QueryError
-                error={staffQ.error}
-                onRetry={() => void staffQ.refetch()}
-                isRetrying={staffQ.isFetching}
-                message="The staff list didn't load, so there is nobody to start a new conversation with here."
-              />
+            <div className="px-4 py-2.5 text-[11px] text-[#667781] flex items-center gap-2 flex-wrap">
+              <span>Couldn't load the teammate list, so "start a conversation" is empty.</span>
+              <button
+                type="button"
+                onClick={() => void staffQ.refetch()}
+                disabled={staffQ.isFetching}
+                className="font-semibold text-[#00a884] hover:underline disabled:opacity-60"
+              >
+                {staffQ.isFetching ? "Retrying…" : "Try again"}
+              </button>
             </div>
           )}
           {freshStaff.length > 0 && (
@@ -354,13 +376,25 @@ export default function Messages() {
               {/* Error before the spinner: an empty wallpaper reads as a
                   conversation with no history, which is how a staff member
                   concludes nobody replied to them. */}
-              {msgsQ.isError && (
+              {msgsQ.isError && !msgsQ.data && (
                 <div className="py-4">
                   <QueryError
                     error={msgsQ.error}
                     onRetry={() => void msgsQ.refetch()}
                     isRetrying={msgsQ.isFetching}
                     message="This conversation didn't load, so no messages are shown. Don't read this as an empty chat."
+                  />
+                </div>
+              )}
+              {/* Poll (8s) failed with the conversation already rendered below:
+                  "no messages are shown" would be flatly contradicted by the
+                  bubbles under it, so say what's actually true instead. */}
+              {msgsQ.isError && !!msgsQ.data && (
+                <div className="py-3">
+                  <StaleDataNotice
+                    message="This conversation stopped refreshing — a reply sent since then may not be shown yet."
+                    onRetry={() => void msgsQ.refetch()}
+                    isRetrying={msgsQ.isFetching}
                   />
                 </div>
               )}

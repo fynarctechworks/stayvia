@@ -167,8 +167,14 @@ router.get("/summary", requireAuth, requirePermission("view_invoices"), validate
 
   const where = conditions.length ? and(...conditions) : undefined;
   // Voided invoices are excluded from EVERY money column (gross/paid/
-  // wallet/owing) so the identity holds: gross = paid + walletCredit
-  // + owing. Without the voided guard on `paid`, a refunded-then-voided
+  // wallet/owing) so the identity holds: gross = paid + owing.
+  //
+  // NB `paid` is SUM(total_paid) and total_paid already INCLUDES the row's
+  // wallet_credit_applied (see lib/reservationBalance.ts recomputeInvoiceTotals
+  // and both checkout branches). `walletCredit` is therefore a BREAKDOWN of
+  // `paid`, not an addend — adding the two together double-counts every rupee
+  // of credit redeemed and can push "settled" past "billed".
+  // Without the voided guard on `paid`, a refunded-then-voided
   // invoice would inflate Collected and break the math (which is what
   // produced the "Collected > Gross Billed" bug). Row count keeps voided
   // in so staff still see them on the page.
@@ -983,11 +989,21 @@ router.patch(
           // reporting output GST by ₹144 every time someone fixed a typo on
           // the billed-to name, and writing a negative balanceDue on an
           // already-paid invoice.
+          //
+          // ONLY room lines are stored that way. additional_charge rows carry
+          // a NET amount plus their own GST rate and are taxed EXCLUSIVELY on
+          // every build path regardless of the reservation's mode
+          // (invoiceBuilder.ts, both checkout branches, the preview, and
+          // recalcReservation, which says so in as many words). Running the
+          // inclusive gross-up over them inflated a ₹1,000 @18% laundry line
+          // from ₹180 to ₹219.51 of GST — and with it the grand total and the
+          // balance due — every time staff re-saved the invoice to fix a typo.
           const r = li.gstRate / 100;
-          const gstAmount =
-            gstMode === "inclusive" && r < 1
-              ? +((amount * r) / (1 - r)).toFixed(2)
-              : +(amount * r).toFixed(2);
+          const grossUp =
+            gstMode === "inclusive" && r < 1 && li.itemType !== "additional_charge";
+          const gstAmount = grossUp
+            ? +((amount * r) / (1 - r)).toFixed(2)
+            : +(amount * r).toFixed(2);
           const halfGst = +(gstAmount / 2).toFixed(2);
           subtotal += amount;
           totalCgst += halfGst;

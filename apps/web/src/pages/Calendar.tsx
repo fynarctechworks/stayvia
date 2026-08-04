@@ -17,7 +17,7 @@ import { RESERVATION_STATUSES, type ReservationStatus } from "@stayvia/shared";
 import { CalendarDays, ChevronLeft, ChevronRight, Gift, X } from "@/lib/micons";
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { QueryError } from "@/components/kit";
+import { QueryError, StaleDataNotice } from "@/components/kit";
 import { Loader } from "@/components/Loader";
 import { api } from "@/lib/api";
 
@@ -108,7 +108,14 @@ export default function CalendarPage() {
       }>("/calendar", { month: monthParam }),
     refetchInterval: 60_000,
   });
-  const { data, isLoading, isError } = calendarQ;
+  const { data, isLoading } = calendarQ;
+  // A failed 60s background poll is not the same as "no month loaded":
+  // TanStack keeps the previous month's payload, so wiping the grid on
+  // `isError` alone discarded a correct calendar every time the link
+  // hiccuped. `isBlind` is the genuine nothing-to-show case; when data is
+  // present the grid stays up under a staleness strip.
+  const isBlind = calendarQ.isError && !data;
+  const isStale = calendarQ.isError && !!data;
 
   // Wrap in useMemo so the `?? []` fallback returns the SAME array
   // reference between renders when the API result hasn't changed.
@@ -170,7 +177,7 @@ export default function CalendarPage() {
               answered yet — "0 bookings" is what staff quote availability
               from. */}
           <div className="text-sm text-textSecondary mt-1.5">
-            {isError
+            {isBlind
               ? `Couldn't load ${format(cursor, "MMMM yyyy")} — the count below is unavailable.`
               : isLoading
                 ? `Loading ${format(cursor, "MMMM yyyy")}…`
@@ -219,7 +226,7 @@ export default function CalendarPage() {
       </div>
       {/* Legend counts come off `totals`, so it stays hidden while the month
           is unknown rather than showing every status at no count. */}
-      <div className={`flex flex-wrap items-center gap-x-3 gap-y-2 sm:gap-4 ${isError ? "hidden" : ""}`}>
+      <div className={`flex flex-wrap items-center gap-x-3 gap-y-2 sm:gap-4 ${isBlind ? "hidden" : ""}`}>
         {legendStatuses.map((s) => (
           <span key={s} className="inline-flex items-center gap-1.5 text-xs text-inkBody">
             <span className={`inline-block w-3 h-3 rounded-[4px] border ${statusStyle(s)}`} />
@@ -233,9 +240,17 @@ export default function CalendarPage() {
         ))}
       </div>
 
+      {isStale && (
+        <StaleDataNotice
+          message={`This month is the last update that came through — a booking made since then may be missing. Confirm before quoting availability.`}
+          onRetry={() => void calendarQ.refetch()}
+          isRetrying={calendarQ.isFetching}
+        />
+      )}
+
       {/* Error branch first: an empty grid reads as "the hotel is wide open",
           which is the single most expensive thing this page can get wrong. */}
-      {isError ? (
+      {isBlind ? (
         <QueryError
           error={calendarQ.error}
           onRetry={() => calendarQ.refetch()}
@@ -362,7 +377,7 @@ export default function CalendarPage() {
                     {format(selectedDay, "EEEE, d MMMM yyyy")}
                   </h2>
                   <div className="text-xs text-textSecondary">
-                    {isError
+                    {isBlind
                       ? "Bookings unavailable"
                       : selectedBookings.length === 0
                         ? "No bookings"
@@ -382,7 +397,7 @@ export default function CalendarPage() {
               {/* The modal can outlive a month change that failed, so it gets
                   its own error branch instead of inheriting a stale "no
                   bookings on this day". */}
-              {isError ? (
+              {isBlind ? (
                 <div className="py-4">
                   <QueryError
                     error={calendarQ.error}

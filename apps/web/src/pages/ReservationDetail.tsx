@@ -363,6 +363,17 @@ export default function ReservationDetail() {
     setErr(null);
     const today = format(new Date(), "yyyy-MM-dd");
     if (r && r.checkInDate > today) {
+      // Early check-in re-prices the stay per NIGHT from today to check-out,
+      // which is meaningless for a day-use booking (flat rate, check-in ==
+      // check-out) and would corrupt it — the server refuses it for exactly
+      // that reason. Say so here instead of opening a modal whose confirm
+      // button can only fail.
+      if (r.stayType === "short_stay") {
+        setErr(
+          `This is a day-use booking for ${r.checkInDate}. It can't be brought forward by checking in early — change the booking date first (Edit dates), then check in.`,
+        );
+        return;
+      }
       // Two-step flow: open the EarlyCheckInModal which shows the financial
       // impact (old vs new totals) and only commits the date shift after the
       // user confirms a second time. When that finishes, we continue to OTP
@@ -6601,7 +6612,9 @@ function CheckoutModal(props: {
         const body: Record<string, unknown> = { invoiceMode };
         if (refundMode) body.refundMode = refundMode;
         if (refundNote.trim()) body.refundNote = refundNote.trim();
-        await api.post(`/reservations/${props.reservationId}/check-out`, body);
+        await api.post(`/reservations/${props.reservationId}/check-out`, body, {
+          idempotencyKey: `${idempotencyKey}-checkout`,
+        });
         return;
       }
 
@@ -6615,7 +6628,16 @@ function CheckoutModal(props: {
       }
       if (refundMode) body.refundMode = refundMode;
       if (refundNote.trim()) body.refundNote = refundNote.trim();
-      await api.post(`/reservations/${props.reservationId}/check-out`, body);
+      // Keyed like every other step in this chain. Without a key the server's
+      // idempotency middleware passes straight through to the handler, which
+      // sees status='checked_out' on a retry and 409s "Cannot check out a
+      // checked_out reservation" — so the mutation threw BEFORE step 2 and the
+      // cash already taken for the guest's previous bills was never recorded,
+      // behind an error message that named the wrong problem. With the key the
+      // middleware replays the stored 200 and the loop below runs.
+      await api.post(`/reservations/${props.reservationId}/check-out`, body, {
+        idempotencyKey: `${idempotencyKey}-checkout`,
+      });
 
       // Step 2: FIFO-distribute any remainder across the previous unpaid
       // items (real invoices + pre-invoice reservations). Both types are

@@ -221,12 +221,20 @@ export function Sidebar({
   // exactly what a guest sitting in their room with an open request is not.
   // So each indicator carries its query's failure state, and a failed count
   // renders a warning marker instead of nothing.
+  //
+  // Only when the count was NEVER obtained, though. These badges poll every
+  // 15-60s and TanStack keeps the last value through a failed refetch, so
+  // keying off `isError` alone turned a correct "3" into a "!" — strictly less
+  // information than the number it replaced — on one dropped poll. A slightly
+  // stale count beats no count; the marker is for genuine ignorance.
+  const failedWithNoCount = (q: { isError: boolean; data: unknown }) =>
+    q.isError && q.data === undefined;
   const indicatorFailed: Record<NonNullable<NavItem["indicator"]>, boolean> = {
-    collections: collectionsQ.isError,
-    guestRequests: guestRequestsQ.isError,
-    messages: messagesQ.isError,
-    notifications: notifQ.isError,
-    requests: requestsQ.isError,
+    collections: failedWithNoCount(collectionsQ),
+    guestRequests: failedWithNoCount(guestRequestsQ),
+    messages: failedWithNoCount(messagesQ),
+    notifications: failedWithNoCount(notifQ),
+    requests: failedWithNoCount(requestsQ),
   };
 
   function renderIndicator(item: NavItem) {

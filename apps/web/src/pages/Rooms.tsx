@@ -18,7 +18,7 @@ import {
 } from "@/lib/micons";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { useAuth } from "@/auth/AuthContext";
+import { usePermission } from "@/auth/AuthContext";
 import { useDialog } from "@/components/Dialog";
 import { QueryError, queryErrorMessage } from "@/components/kit";
 import { Loader } from "@/components/Loader";
@@ -46,7 +46,17 @@ interface Room {
 }
 
 export default function Rooms() {
-  const { profile } = useAuth();
+  // Gate on PERMISSIONS, not on the legacy profiles.role column.
+  //
+  // PUT /rbac/users/:id/role collapses every non-admin/non-housekeeping role
+  // key onto profiles.role = 'frontdesk', so the seeded "General Manager"
+  // role — which genuinely holds edit_rooms / delete_rooms / manage_settings
+  // on the API — arrived here as 'frontdesk' and saw no way to add, edit or
+  // delete a room, or to reach room types (making the dashboard's "Add room
+  // types" onboarding link a dead end). rbac.ts documents profiles.role as
+  // display-only with RBAC as the source of truth.
+  const canEditRooms = usePermission("edit_rooms");
+  const canManageSettings = usePermission("manage_settings");
   const navigate = useNavigate();
   // Room-type management moved here from Settings — admins flip between
   // the room grid and the type catalog with these tabs. ?tab=types deep-links
@@ -167,7 +177,7 @@ export default function Rooms() {
           )}
         </div>
         <div className="flex gap-2.5 flex-wrap">
-          {profile?.role === "admin" && (
+          {canManageSettings && (
             <button
               onClick={() => setView(view === "types" ? "rooms" : "types")}
               aria-pressed={view === "types"}
@@ -184,7 +194,7 @@ export default function Rooms() {
               )}
             </button>
           )}
-          {profile?.role === "admin" && view === "rooms" && (
+          {canEditRooms && view === "rooms" && (
             <button
               onClick={() => setShowAdd(true)}
               className="btn-primary inline-flex items-center gap-2"
@@ -195,7 +205,7 @@ export default function Rooms() {
         </div>
       </div>
 
-      {view === "types" && profile?.role === "admin" ? (
+      {view === "types" && canManageSettings ? (
         <RoomTypesManager />
       ) : (
       <>
@@ -427,7 +437,7 @@ export default function Rooms() {
                       >
                         <QrCode className="w-4 h-4" /> QR
                       </button>
-                      {profile?.role === "admin" && (
+                      {canEditRooms && (
                         <button
                           onClick={() => setEditing(r)}
                           className="inline-flex items-center gap-1.5 h-8 px-2.5 rounded-[9px] border border-borderControl bg-surface text-[12px] font-semibold text-inkBody hover:bg-surfaceAlt transition-colors"
@@ -485,7 +495,7 @@ export default function Rooms() {
                       >
                         <QrCode className="w-4 h-4" /> QR
                       </button>
-                      {profile?.role === "admin" && (
+                      {canEditRooms && (
                         <button
                           onClick={() => setEditing(r)}
                           className="flex-1 min-h-[44px] inline-flex items-center justify-center gap-1.5 rounded-[9px] border border-borderControl bg-surface text-[13px] font-semibold text-inkBody"
@@ -728,9 +738,11 @@ function RoomImagesManager({ roomId, roomNumber }: { roomId: string; roomNumber:
 function RoomModal({ room, onClose }: { room: Room | null; onClose: () => void }) {
   const qc = useQueryClient();
   const dialog = useDialog();
-  const { profile } = useAuth();
   const isEdit = !!room;
-  const canDelete = isEdit && profile?.role === "admin";
+  // Hook call is unconditional (rules of hooks); the isEdit gate is applied
+  // to the derived flag, not to whether the hook runs.
+  const canDeleteRooms = usePermission("delete_rooms");
+  const canDelete = isEdit && canDeleteRooms;
   const roomTypesQ = useRoomTypes({ includeArchived: isEdit });
   // Stable reference — the default-fill effect below depends on this list.
   const roomTypes = useMemo(() => roomTypesQ.data ?? [], [roomTypesQ.data]);

@@ -8,7 +8,7 @@ import {
   Search,
   UserPlus,
 } from "@/lib/micons";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   DatePresetBar,
@@ -18,7 +18,7 @@ import {
 import { EmptyState, ListSkeleton, QueryError } from "@/components/kit";
 import { StickyBar } from "@/components/StickyBar";
 import { StatusBadge } from "@/components/StatusBadge";
-import { api } from "@/lib/api";
+import { api, getList } from "@/lib/api";
 import { inr } from "@/lib/utils";
 
 interface Reservation {
@@ -81,6 +81,9 @@ const STATUS_OPTIONS = [
   "no_show",
 ];
 
+// Matches the server default (reservationListQuerySchema.per_page).
+const PER_PAGE = 25;
+
 export default function Reservations() {
   const navigate = useNavigate();
   const [status, setStatus] = useState("");
@@ -97,6 +100,12 @@ export default function Reservations() {
   // query string.
   const [floor, setFloor] = useState("");
   const [roomId, setRoomId] = useState("");
+  const [page, setPage] = useState(1);
+  // Any filter change re-slices the result set, so page 3 of the old filter is
+  // meaningless (and often past the end) under the new one.
+  useEffect(() => {
+    setPage(1);
+  }, [status, q, dateFrom, dateTo, floor, roomId]);
 
   // Rooms list for the picker. Cheap — small property — and the
   // dropdown options need both id (for the API filter) + number/floor
@@ -119,10 +128,17 @@ export default function Reservations() {
     ? allRooms.filter((r) => String(r.floor) === floor)
     : allRooms;
 
+  // GET /reservations is paginated server-side (reservationListQuerySchema
+  // defaults per_page to 25 and the route applies .limit/.offset). Fetching it
+  // through api.get threw away `meta.total` along with any hint that the
+  // response had been cut, so a month with 40 check-ins rendered 25 rows,
+  // captioned them "25 reservations", and left the other 15 unreachable —
+  // there was no pager on this page at all. Page explicitly, show the true
+  // total, and give staff the controls to walk it.
   const listQ = useQuery({
-    queryKey: ["reservations", { status, q, dateFrom, dateTo, floor, roomId }],
+    queryKey: ["reservations", { status, q, dateFrom, dateTo, floor, roomId, page }],
     queryFn: () =>
-      api.get<Reservation[]>("/reservations", {
+      getList<Reservation>("/reservations", {
         status: status || undefined,
         q: q || undefined,
         date_from: dateFrom || undefined,
@@ -131,12 +147,16 @@ export default function Reservations() {
         // zod's z.coerce handle the conversion.
         floor: floor || undefined,
         room_id: roomId || undefined,
+        page,
+        per_page: PER_PAGE,
       }),
   });
   // Only trust the list once the request actually succeeded — on failure the
   // count in the header and the empty state below would both read as "no
   // arrivals today", which is the opposite of what happened.
-  const data = listQ.isSuccess ? listQ.data : [];
+  const data = listQ.isSuccess ? listQ.data.data : [];
+  const total = listQ.isSuccess ? listQ.data.meta.total : 0;
+  const totalPages = Math.max(1, Math.ceil(total / PER_PAGE));
 
   // Hotel-policy times. We fall back to these when a reservation hasn't been
   // checked in yet (so we can't show the real timestamp).
@@ -160,7 +180,9 @@ export default function Reservations() {
               ? "Couldn't load reservations"
               : listQ.isLoading
                 ? "Loading reservations…"
-                : `${data.length} reservation${data.length === 1 ? "" : "s"}`}
+                : `${total} reservation${total === 1 ? "" : "s"}${
+                    totalPages > 1 ? ` · page ${page} of ${totalPages}` : ""
+                  }`}
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -351,6 +373,32 @@ export default function Reservations() {
               />
             ))}
           </ul>
+        </div>
+      )}
+
+      {totalPages > 1 && !listQ.isError && (
+        <div className="flex items-center justify-between gap-3 flex-wrap">
+          <div className="text-xs text-textSecondary">
+            Showing {(page - 1) * PER_PAGE + 1}–{Math.min(page * PER_PAGE, total)} of {total}
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              className="btn-secondary !h-9"
+              onClick={() => setPage((p) => Math.max(1, p - 1))}
+              disabled={page <= 1 || listQ.isFetching}
+            >
+              Previous
+            </button>
+            <button
+              type="button"
+              className="btn-secondary !h-9"
+              onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+              disabled={page >= totalPages || listQ.isFetching}
+            >
+              Next
+            </button>
+          </div>
         </div>
       )}
     </div>

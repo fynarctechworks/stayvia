@@ -13,8 +13,8 @@ import {
 } from "@/lib/micons";
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { useAuth, usePermission } from "@/auth/AuthContext";
-import { ListSkeleton, QueryError } from "@/components/kit";
+import { usePermission } from "@/auth/AuthContext";
+import { ListSkeleton, QueryError, StaleDataNotice } from "@/components/kit";
 import { NewIssueModal } from "@/components/NewIssueModal";
 import { useRoomTypes, labelForRoomType } from "@/hooks/useRoomTypes";
 import { api } from "@/lib/api";
@@ -73,10 +73,16 @@ const COLUMNS: {
 export default function Housekeeping() {
   const qc = useQueryClient();
   const navigate = useNavigate();
-  const { profile } = useAuth();
   // Housekeeping staff can't open the Rooms page (no view_rooms), so the
   // empty state only offers that shortcut to roles that have it.
   const canViewRooms = usePermission("view_rooms");
+  // POST /housekeeping/:roomId/resolve is guarded by resolve_maintenance,
+  // which frontdesk, housekeeping and manager all hold. Gating the button on
+  // the LEGACY profiles.role === "admin" column instead meant the seeded
+  // housekeeping role — whose only route into the app is this board — had no
+  // way at all to return a room to service, contradicting the RBAC model that
+  // rbac.ts calls the source of truth (profiles.role is display-only there).
+  const canResolveMaintenance = usePermission("resolve_maintenance");
   const [floor, setFloor] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [err, setErr] = useState<string | null>(null);
@@ -98,8 +104,17 @@ export default function Housekeeping() {
     queryFn: () => api.get<Room[]>("/housekeeping"),
     refetchInterval: 15_000,
   });
-  const { isLoading, isError } = roomsQ;
+  const { isLoading } = roomsQ;
   const rooms = roomsQ.data ?? [];
+  // `isError` means "the last fetch failed", NOT "we have no rooms": this
+  // query polls every 15s and TanStack keeps the previous payload through a
+  // failed refetch. Treating the two as the same threw a correct, fully
+  // rendered board away — and hid the whole filter strip — because of one
+  // dropped poll, then did it again 15 seconds later. Split them: `boardBlind`
+  // is the genuine "nothing to show" case, `staleBoard` keeps the rooms on
+  // screen with a warning that they may have moved.
+  const boardBlind = roomsQ.isError && !roomsQ.data;
+  const staleBoard = roomsQ.isError && !!roomsQ.data;
 
   // includeArchived so rooms still pointing at a deactivated type keep a
   // human label instead of falling back to the raw slug.
@@ -169,7 +184,7 @@ export default function Housekeeping() {
           {/* "0 total" off a failed board is the claim housekeeping acts on,
               so the count is stated only once the request has succeeded. */}
           <p className="text-sm text-textSecondary mt-1.5">
-            {isError
+            {boardBlind
               ? "The room list didn't load, so this board is incomplete."
               : isLoading
                 ? "All rooms at a glance."
@@ -197,7 +212,7 @@ export default function Housekeeping() {
 
       {/* Every chip badge counts `rooms`, so the whole filter strip is
           withheld when that list failed rather than reading a row of zeros. */}
-      <div className={`flex flex-wrap items-center gap-2 ${isError ? "hidden" : ""}`}>
+      <div className={`flex flex-wrap items-center gap-2 ${boardBlind ? "hidden" : ""}`}>
         {STATUS_FILTERS.map((s) => {
           const count = s === "all" ? floorScoped.length : counts[s] ?? 0;
           const active = statusFilter === s;
@@ -226,9 +241,17 @@ export default function Housekeeping() {
 
       {err && <div className="card !bg-dangerBg !border-dangerBorder text-dangerFg text-sm">{err}</div>}
 
+      {staleBoard && (
+        <StaleDataNotice
+          message="This board is the last update that came through — a room cleaned or flagged since then may not be shown."
+          onRetry={() => void roomsQ.refetch()}
+          isRetrying={roomsQ.isFetching}
+        />
+      )}
+
       {/* Error before loading: an empty board tells housekeeping there is no
           work, and tells an admin to re-create rooms that already exist. */}
-      {isError ? (
+      {boardBlind ? (
         <QueryError
           error={roomsQ.error}
           onRetry={() => roomsQ.refetch()}
@@ -405,7 +428,7 @@ export default function Housekeeping() {
                               <AlertTriangle className="w-4 h-4" /> Flag Issue
                             </button>
                           )}
-                          {r.status === "maintenance" && profile?.role === "admin" && (
+                          {r.status === "maintenance" && canResolveMaintenance && (
                             <button
                               className="w-full inline-flex items-center justify-center gap-1.5 h-11 md:h-9 rounded-[10px] bg-success text-white text-[13px] font-semibold hover:opacity-90 transition-opacity"
                               onClick={() => resolveMaint.mutate(r.id)}

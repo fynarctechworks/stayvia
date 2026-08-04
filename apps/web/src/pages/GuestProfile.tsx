@@ -360,7 +360,16 @@ function EditGuestModal({ guest, onClose }: { guest: Guest; onClose: () => void 
         notes: form.notes || null,
       }),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["guest", guest.id] });
+      // Invalidate the whole ["guest", …] family, not ["guest", guest.id].
+      // This page caches under the URL param, and every entry point navigates
+      // by PHONE (the redirect effect above even rewrites a UUID URL to the
+      // phone form), so the UUID key matched nothing: TanStack compares keys
+      // element-by-element, the page stayed mounted, refetchOnWindowFocus is
+      // globally off — and the profile kept rendering the pre-edit values
+      // indefinitely, as if the save had failed. A prefix invalidate is
+      // identifier-agnostic, so it can't drift again. (["guest-notes"] /
+      // ["guest-followups"] have different first elements and are untouched.)
+      qc.invalidateQueries({ queryKey: ["guest"] });
       qc.invalidateQueries({ queryKey: ["guests"] });
       onClose();
     },
@@ -873,7 +882,9 @@ function KycSection({ guestId, idProofType }: { guestId: string; idProofType: st
       api.del(`/guests/${guestId}/kyc/${field}`),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["kyc", guestId] });
-      qc.invalidateQueries({ queryKey: ["guest", guestId] });
+      // Prefix invalidate — the profile query is keyed by the URL param
+      // (a phone), not by guestId. See EditGuestModal.save.onSuccess.
+      qc.invalidateQueries({ queryKey: ["guest"] });
       toast("Document removed", "success");
     },
     onError: (e) => toast(queryErrorMessage(e), "error"),
@@ -986,7 +997,7 @@ function KycSection({ guestId, idProofType }: { guestId: string; idProofType: st
           onClose={() => setShowUpload(false)}
           onUploaded={() => {
             qc.invalidateQueries({ queryKey: ["kyc", guestId] });
-            qc.invalidateQueries({ queryKey: ["guest", guestId] });
+            qc.invalidateQueries({ queryKey: ["guest"] });
           }}
         />
       )}

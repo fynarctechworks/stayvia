@@ -52,7 +52,8 @@ import {
   uploadKycPhoto,
   validateKycFile,
 } from "../lib/storage.js";
-import { calcGstBreakdown, getGstRate } from "../lib/gst.js";
+import { getGstRate } from "../lib/gst.js";
+import { headlineGstRate, sumRoomTax } from "../lib/roomTax.js";
 import { logger } from "../lib/logger.js";
 import { dispatchNotification, notifyGuestSms } from "../lib/notify.js";
 import { nextDocNumber, reservationNumber } from "../lib/numbers.js";
@@ -617,19 +618,33 @@ router.post(
       return fail(res, 409, "ROOM_TAKEN", "One of those rooms was just taken. Pick again.");
     }
 
-    // Money mirrors the staff walk-in path: slab from the average nightly
-    // rate, then the property's GST mode.
+    // Money mirrors the staff walk-in path: the GST slab is decided PER ROOM
+    // from that room's own nightly tariff — the unit Indian hotel GST is
+    // slabbed on — not from the average across the selection. Averaging a
+    // ₹900 room with a ₹9,000 suite landed both in one middle band, taxing the
+    // suite at 5% instead of 18% and the cheap room at 5% when it is below the
+    // exemption threshold.
     const perNight = chosen.reduce((a, r) => a + Number(r.baseRate), 0);
-    const gross = +(perNight * body.nights).toFixed(2);
-    const avgRate = perNight / chosen.length;
-    const gstRate = getGstRate(avgRate, {
+    const slabs = {
       exemptBelow: Number(s.gstSlabExemptBelow),
       lowRate: Number(s.gstSlabLowRate),
       lowMax: Number(s.gstSlabLowMax),
       highRate: Number(s.gstSlabHighRate),
-    });
+    };
     const gstMode = s.gstMode ?? "exclusive";
-    const money = calcGstBreakdown(gross, gstRate, gstMode);
+    const chosenGstRates = chosen.map((r) => getGstRate(Number(r.baseRate), slabs));
+    const money = sumRoomTax(
+      chosen.map((r, i) => ({
+        ratePerNight: Number(r.baseRate),
+        gstRate: chosenGstRates[i]!,
+      })),
+      { checkInDate: checkIn, checkOutDate: checkOut },
+      gstMode,
+      0,
+    );
+    // Headline/fallback rate stored on the reservation; the authoritative
+    // per-line rates live on reservation_rooms.
+    const gstRate = headlineGstRate(chosenGstRates);
 
     const result = await db.transaction(async (tx) => {
       // Find-or-create the guest within this hotel. Guests are unique per
@@ -698,12 +713,12 @@ router.post(
           numAdults: body.numAdults,
           numChildren: body.numChildren ?? 0,
           ratePerNight: String(perNight),
-          subtotal: String(money.subtotal),
+          subtotal: String(money.net),
           gstRate: String(gstRate),
-          gstAmount: String(money.gstAmount),
+          gstAmount: String(money.gst),
           gstMode,
-          grandTotal: String(money.grandTotal),
-          balanceDue: String(money.grandTotal),
+          grandTotal: String(money.gross),
+          balanceDue: String(money.gross),
           status: "hold",
           bookingSource: "qr",
           specialRequests: body.specialRequests ?? null,
@@ -714,10 +729,12 @@ router.post(
       const reservationId = insertedRes[0]!.id;
 
       await tx.insert(reservationRooms).values(
-        chosen.map((r) => ({
+        chosen.map((r, i) => ({
           reservationId,
           roomId: r.id,
           ratePerNight: String(Number(r.baseRate)),
+          // 0016 — this room's own slab.
+          gstRate: String(chosenGstRates[i]!),
           guestId,
           status: "confirmed" as const,
         })),
@@ -742,7 +759,7 @@ router.post(
 
     return ok(res, {
       reservationNumber: result.resNumber,
-      grandTotal: money.grandTotal,
+      grandTotal: money.gross,
       holdExpiresAt: result.holdExpiresAt.toISOString(),
       // Lets the guest attach ID photos right after booking (see /kyc
       // below). Dies with the hold. Omitted when this booking resolved to

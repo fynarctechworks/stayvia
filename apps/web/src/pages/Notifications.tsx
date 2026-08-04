@@ -16,7 +16,7 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Loader } from "@/components/Loader";
 import { StickyBar } from "@/components/StickyBar";
-import { QueryError, queryErrorMessage } from "@/components/kit";
+import { QueryError, StaleDataNotice, queryErrorMessage } from "@/components/kit";
 import { useToast } from "@/components/Toast";
 import { api } from "@/lib/api";
 
@@ -95,10 +95,17 @@ export default function Notifications() {
       toast(queryErrorMessage(e, "Couldn't mark everything as read."), "error"),
   });
 
-  // Error before loading. On a failed fetch `q.data` is undefined, so the
-  // fallbacks below would render "All caught up", a 0 badge and "Nothing yet."
-  // — a confident inbox-is-empty claim for a request that never landed.
-  if (q.isError)
+  // Error before loading. On a failed FIRST fetch `q.data` is undefined, so
+  // the fallbacks below would render "All caught up", a 0 badge and "Nothing
+  // yet." — a confident inbox-is-empty claim for a request that never landed.
+  //
+  // Only when there is nothing cached, though: this polls every 30s, and the
+  // early return also took the title and the All/Unread tabs with it, so a
+  // failure while Unread was selected left no control to switch back to All —
+  // only a Retry against the filter that was failing. With data in hand the
+  // inbox stays rendered under a staleness strip.
+  const inboxBlind = q.isError && !q.data;
+  if (inboxBlind)
     return (
       <QueryError
         error={q.error}
@@ -182,6 +189,14 @@ export default function Notifications() {
         ))}
       </div>
       </StickyBar>
+
+      {q.isError && (
+        <StaleDataNotice
+          message="This inbox is the last update that came through — newer notifications may be missing."
+          onRetry={() => void q.refetch()}
+          isRetrying={q.isFetching}
+        />
+      )}
 
       {items.length === 0 && (
         <div className="card flex flex-col items-center justify-center py-16 text-center text-textSecondary">

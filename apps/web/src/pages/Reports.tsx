@@ -48,11 +48,12 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
+import { useAuth } from "@/auth/AuthContext";
 import { useDialog } from "@/components/Dialog";
-import { QueryError, queryErrorMessage } from "@/components/kit";
+import { QueryError, StaleDataNotice, queryErrorMessage } from "@/components/kit";
 import { Loader } from "@/components/Loader";
 import { useToast } from "@/components/Toast";
-import { api, getList } from "@/lib/api";
+import { ApiError, api, getList } from "@/lib/api";
 import { inr } from "@/lib/utils";
 
 type Tab =
@@ -273,6 +274,13 @@ export default function Reports() {
   const gateEnabled = settingsPublic.data
     ? !!settingsPublic.data.complimentaryGateEnabled
     : true;
+  // …but failing closed must not mean failing SILENTLY. With no settings in
+  // hand we don't know whether a code exists, and on a property that never
+  // configured one POST /settings/verify-access-code answers 401 INVALID_CODE
+  // to everything — so opening the code prompt hands staff a box they cannot
+  // possibly satisfy, captioned "Incorrect code", with nothing pointing at the
+  // real fault. Say what actually happened instead, and keep the report locked.
+  const [gateCheckFailed, setGateCheckFailed] = useState(false);
   // Hiding off = complimentary bookings are public in every normal view, so
   // the dedicated Complimentary report is redundant — drop the More toggle
   // and its tabs entirely. Defaults to the hidden-mode layout until the
@@ -344,6 +352,14 @@ export default function Reports() {
         onChange={setTab}
         secondaryVisible={secondaryUnlocked}
         onAttemptShow={() => {
+          // Don't know yet whether a code is configured — a code prompt here
+          // would be unanswerable. Report it (and retry the settings fetch)
+          // rather than opening a dead-end dialog.
+          if (settingsPublic.isPending || settingsPublic.isError) {
+            setGateCheckFailed(true);
+            void settingsPublic.refetch();
+            return;
+          }
           // No gate configured? Just reveal the row without prompting
           // — same behaviour as the previous show/hide toggle. This
           // path is the default for fresh installs and any property
@@ -364,6 +380,16 @@ export default function Reports() {
           }
         }}
       />
+
+      {gateCheckFailed && !settingsPublic.data && (
+        <QueryError
+          error={settingsPublic.error}
+          title="Can't unlock this yet"
+          message="We couldn't check whether these reports need an unlock code, so they stay locked. This is a settings-fetch failure, not a wrong code."
+          onRetry={() => void settingsPublic.refetch()}
+          isRetrying={settingsPublic.isFetching}
+        />
+      )}
 
       {/* Generic authorisation prompt — see AccessCodePrompt for why
           the wording deliberately avoids naming Complimentary. */}
@@ -1204,7 +1230,9 @@ function InvoicesTab({ from, to }: { from: string; to: string }) {
   // page). Page-only sums lied — billed/collected/outstanding now match
   // every invoice the filters match. Voided invoices are excluded from
   // every money column so the identity holds:
-  //   gross = paid + walletCredit + owing
+  //   gross = paid + owing
+  // (`walletCredit` is a breakdown of `paid`, not a separate addend — see
+  // the Settled tile below.)
   const summaryQ = useQuery({
     queryKey: ["rpt-invoices-summary", from, to, status, scope, q],
     queryFn: () =>
@@ -1236,10 +1264,12 @@ function InvoicesTab({ from, to }: { from: string; to: string }) {
     walletCredit: Number(summaryQ.data?.walletCredit ?? 0),
     owing: Number(summaryQ.data?.owing ?? 0),
   };
-  // "Settled" = everything that's cleared the bill (cash payments +
-  // wallet credit redeemed). This is what staff want when they ask
-  // "how much have we collected?" and it can never exceed gross.
-  const settled = sums.paid + sums.walletCredit;
+  // "Settled" = everything that's cleared the bill. invoices.total_paid
+  // (which `paid` sums) is already Σpayments + wallet_credit_applied on every
+  // write path, so adding walletCredit again double-counted redeemed credit
+  // and pushed Settled above Gross billed. Wallet credit stays available as a
+  // breakdown of this figure, never as an addend.
+  const settled = sums.paid;
 
   // Full export across the entire filtered result set (every page), with
   // every invoice field a CA might ask for: reservation + guest + rooms
@@ -1283,22 +1313,31 @@ function InvoicesTab({ from, to }: { from: string; to: string }) {
 
   return (
     <div className="space-y-4">
-      {/* The aggregate is a separate endpoint from the list, so it can fail
-          on its own and print ₹0 tiles above a table full of real invoices.
-          Never show a money figure derived from a request that failed. */}
-      {summaryQ.isError || listQ.isError ? (
-        <QueryError
-          error={summaryQ.isError ? summaryQ.error : listQ.error}
-          onRetry={() => {
-            if (listQ.isError) listQ.refetch();
-            if (summaryQ.isError) summaryQ.refetch();
-          }}
-          isRetrying={summaryQ.isFetching || listQ.isFetching}
-          message="The invoice totals didn't load, so no figures are shown here. These are not zeros - don't read or report ₹0 off this screen."
-        />
+      {/* The aggregate is a separate endpoint (and query key) from the list,
+          so each fails on its own. Only the money tiles come from the
+          aggregate: when just the LIST fails they are correct, fetched
+          figures and must stay on screen — hiding them behind "the invoice
+          totals didn't load" claimed a failure that didn't happen and
+          stacked a second error panel above the table's own. The count tile
+          is the only one fed by the list, so it reports that failure itself.
+          Same split as the standalone Invoices page. */}
+      {summaryQ.isError ? (
+        listQ.isError ? null : (
+          <QueryError
+            error={summaryQ.error}
+            onRetry={() => summaryQ.refetch()}
+            isRetrying={summaryQ.isFetching}
+            message="The invoice totals didn't load, so no figures are shown here. These are not zeros - don't read or report ₹0 off this screen."
+          />
+        )
       ) : (
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-          <Kpi label="Invoices" value={total} Icon={Receipt} />
+          <Kpi
+            label="Invoices"
+            value={listQ.isError ? "Unavailable" : total}
+            Icon={Receipt}
+            hint={listQ.isError ? "the list didn't load" : undefined}
+          />
           <Kpi label="Gross billed" value={inr(sums.gross)} Icon={TrendingUp} />
           <Kpi label="Settled" value={inr(settled)} Icon={Wallet} tone="success" />
           <Kpi
@@ -1901,17 +1940,29 @@ function OutstandingTab() {
   const qc = useQueryClient();
   const dialog = useDialog();
   const { toast } = useToast();
+  const { can } = useAuth();
   // This is the ONE report that needs view_revenue (the tab strip and the
   // route only require view_reports), so a custom role can reach it and get
-  // a permanent 403. Stop the 30s poll once the query has failed — it would
-  // otherwise re-fire the same rejection forever behind the same UI; the
-  // error surface below carries an explicit Retry instead.
+  // a permanent 403. Stop the 30s poll for THAT — a permission denial will
+  // never resolve itself, so re-firing it forever is pure noise and the error
+  // surface below carries an explicit Retry. Any other failure (a 500, a
+  // dropped link) is transient and must keep polling: stopping on those left
+  // the tab parked on an error card until a human clicked Try again, when the
+  // next poll 30 seconds later would have repaired it silently.
   const q = useQuery({
     queryKey: ["rpt-out"],
     queryFn: () => api.get<OutstandingResp>("/reports/outstanding"),
-    refetchInterval: (query) => (query.state.status === "error" ? false : 30_000),
+    refetchInterval: (query) => {
+      const err = query.state.error;
+      const forbidden = err instanceof ApiError && (err.status === 403 || err.status === 401);
+      return forbidden ? false : 30_000;
+    },
   });
   const data = q.data;
+  // Mirrors the API guard on POST /payments/:id/mark-received. Without it the
+  // owner/accountant roles (view_revenue, no record_payments) got a button
+  // that always 403s and surfaced the raw server message as a toast.
+  const canRecordPayments = can("record_payments");
 
   const markReceived = useMutation({
     mutationFn: ({ id, method }: { id: string; method: string }) =>
@@ -1943,12 +1994,22 @@ function OutstandingTab() {
     if (chosen) markReceived.mutate({ id: p.paymentId, method: chosen });
   }
 
-  if (q.isError) return <ReportError q={q} />;
+  // Only replace the tab when there is nothing to show. With data in cache a
+  // failed background poll leaves every figure below valid-as-of-last-refresh,
+  // so it gets a strip, not a wipe.
+  if (q.isError && !data) return <ReportError q={q} />;
   if (!data) return <Loader />;
   const { invoices, pendingPayments, byGuest, totalOutstanding } = data;
 
   return (
     <div className="space-y-5">
+      {q.isError && (
+        <StaleDataNotice
+          message="These outstanding figures are the last update that came through — newer collections may be missing."
+          onRetry={() => q.refetch()}
+          isRetrying={q.isFetching}
+        />
+      )}
       <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
         <Kpi
           label="Total outstanding"
@@ -2086,14 +2147,16 @@ function OutstandingTab() {
                         {inr(p.amount)}
                       </td>
                       <td className="text-right">
-                        <button
-                          className="!h-7 !px-2 text-xs font-semibold rounded-sm bg-success text-white border border-success hover:opacity-90 inline-flex items-center gap-1"
-                          onClick={() => promptMarkReceived(p)}
-                          disabled={markReceived.isPending}
-                        >
-                          <CheckCircle2 className="w-3 h-3" />
-                          Received
-                        </button>
+                        {canRecordPayments && (
+                          <button
+                            className="!h-7 !px-2 text-xs font-semibold rounded-sm bg-success text-white border border-success hover:opacity-90 inline-flex items-center gap-1"
+                            onClick={() => promptMarkReceived(p)}
+                            disabled={markReceived.isPending}
+                          >
+                            <CheckCircle2 className="w-3 h-3" />
+                            Received
+                          </button>
+                        )}
                       </td>
                     </tr>
                   ))}
@@ -2126,6 +2189,7 @@ function OutstandingTab() {
                   {p.notes && (
                     <div className="text-xs text-textSecondary mt-1 break-words">{p.notes}</div>
                   )}
+                  {canRecordPayments && (
                   <button
                     className="w-full mt-2 h-11 text-xs font-semibold rounded-sm bg-success text-white border border-success inline-flex items-center justify-center gap-1 disabled:opacity-40"
                     onClick={() => promptMarkReceived(p)}
@@ -2134,6 +2198,7 @@ function OutstandingTab() {
                     <CheckCircle2 className="w-3.5 h-3.5" />
                     Received
                   </button>
+                  )}
                 </li>
               ))}
             </ul>
@@ -2996,27 +3061,38 @@ function GuestsTab({ from, to }: { from: string; to: string }) {
   const q = useQuery({
     queryKey: ["rpt-guests", from, to],
     queryFn: () =>
-      api.get<
-        {
+      api.get<{
+        rows: {
           guestId: string;
           fullName: string;
           phone: string;
           stays: number;
           revenue: string;
-        }[]
-      >("/reports/guests", { date_from: from, date_to: to }),
+        }[];
+        // Distinct guests who stayed in the range. The table is capped
+        // server-side, so this — not rows.length — is the honest KPI.
+        total: number;
+        limit: number;
+      }>("/reports/guests", { date_from: from, date_to: to }),
   });
 
   const navigate = useNavigate();
   if (q.isError) return <ReportError q={q} />;
-  const data = q.data ?? [];
+  const data = q.data?.rows ?? [];
+  const guestCount = q.data?.total ?? 0;
+  const capped = guestCount > data.length;
   const top = data[0];
   const totalRevenue = data.reduce((s, g) => s + Number(g.revenue), 0);
 
   return (
     <div className="space-y-4">
       <div className="grid grid-cols-1 sm:grid-cols-3 md:grid-cols-2 lg:grid-cols-3 gap-3">
-        <Kpi label="Guests" value={data.length} Icon={Users} />
+        <Kpi
+          label="Guests"
+          value={guestCount}
+          Icon={Users}
+          hint={capped ? `top ${data.length} listed below` : undefined}
+        />
         <Kpi
           label="Top guest"
           value={top?.fullName ?? "-"}
@@ -3030,7 +3106,11 @@ function GuestsTab({ from, to }: { from: string; to: string }) {
       <div>
         <SectionHeader
           title="Top guests"
-          subtitle="Most stays in the selected range. Click a row for the full profile."
+          subtitle={
+            capped
+              ? `Most stays in the selected range - top ${data.length} of ${guestCount}. Click a row for the full profile.`
+              : "Most stays in the selected range. Click a row for the full profile."
+          }
           right={
             <ExportBtn
               onClick={() => exportCsv(`top-guests-${from}-${to}.csv`, data)}

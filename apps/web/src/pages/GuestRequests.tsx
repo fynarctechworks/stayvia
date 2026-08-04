@@ -47,7 +47,7 @@ import {
 } from "@/lib/micons";
 import { useAuth } from "@/auth/AuthContext";
 import { useDialog } from "@/components/Dialog";
-import { EmptyState, FilterChip, ListSkeleton, PageHeader, QueryError } from "@/components/kit";
+import { EmptyState, FilterChip, ListSkeleton, PageHeader, QueryError, StaleDataNotice } from "@/components/kit";
 import { useToast } from "@/components/Toast";
 import { ApiError, api, getList } from "@/lib/api";
 
@@ -209,6 +209,13 @@ export default function GuestRequests() {
   );
   const total = q.data?.meta.total ?? 0;
   const openCount = items.filter((r) => r.status === "open").length;
+  // A guest is physically waiting in their room, so this is the last queue
+  // that may vanish. It polls every 10s and TanStack keeps the previous page
+  // through a failed refetch, so `isError` alone would blank a correctly
+  // rendered queue on one dropped poll. Only claim ignorance when there is
+  // genuinely nothing cached.
+  const queueBlind = q.isError && !q.data;
+  const queueStale = q.isError && !!q.data;
 
   const detail = detailId ? items.find((r) => r.id === detailId) ?? null : null;
 
@@ -257,7 +264,7 @@ export default function GuestRequests() {
 
   // A failed fetch leaves `total` at 0, so the counted subtitles below would
   // read as a calm, empty queue. Say the queue is unknown instead.
-  const subtitle = q.isError
+  const subtitle = queueBlind
     ? "The queue didn't load - requests may be waiting."
     : filter === "active"
       ? total === 0
@@ -280,16 +287,24 @@ export default function GuestRequests() {
               key={f.key}
               label={f.label}
               active={filter === f.key}
-              count={filter === f.key && !q.isError ? total : undefined}
+              count={filter === f.key && !queueBlind ? total : undefined}
               onClick={() => setFilter(f.key)}
             />
           ))}
         </div>
       </div>
 
+      {queueStale && (
+        <StaleDataNotice
+          message="This queue is the last update that came through — a request raised since then may not be listed yet."
+          onRetry={() => void q.refetch()}
+          isRetrying={q.isFetching}
+        />
+      )}
+
       {/* Error before loading, and before the empty state: "nothing waiting"
           is only true when the fetch came back with nothing. */}
-      {q.isError ? (
+      {queueBlind ? (
         <div className="card">
           <QueryError
             error={q.error}

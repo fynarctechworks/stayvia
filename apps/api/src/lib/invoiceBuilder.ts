@@ -13,6 +13,7 @@
 
 import { combinedRoomTypeLabel, type RoomTypeLabelMap } from "./roomTypeLabel.js";
 import { calcGstBreakdown } from "./gst.js";
+import { roomRowGstRate } from "./roomTax.js";
 import { roomBillableNights } from "./nights.js";
 import type { AdditionalCharge } from "../db/schema/invoices.js";
 import type { ReservationRoom } from "../db/schema/reservations.js";
@@ -129,6 +130,11 @@ export function buildInvoice(args: BuilderArgs): BuiltInvoice {
   // flat short-stay price for the chosen duration; 'quantity' becomes
   // the hour count for display only.
   const nights = Math.max(1, Number(reservation.numNights));
+  // Headline rate for the invoice document (cgst_rate / sgst_rate columns and
+  // the fallback for legacy rows). Each ROOM LINE is taxed at its own slab —
+  // see roomRowGstRate — because Indian hotel GST is slabbed per room-night,
+  // so a booking mixing a ₹900 room with a ₹9,000 suite has two correct rates
+  // and one blended number is wrong on both lines.
   const roomGstRate = Number(reservation.gstRate);
   const gstMode = reservation.gstMode;
 
@@ -163,6 +169,32 @@ export function buildInvoice(args: BuilderArgs): BuiltInvoice {
     (a, d) => a + d.extraNights,
     0,
   );
+
+  // Which rows may absorb the extension nights.
+  //
+  // POST /:id/extend prices the delta charge off the LIVE legs only and
+  // widens only the row that ran to the old checkout, so the extra nights
+  // exist on the final leg alone. Merging them into a CLOSED swap leg as
+  // well (its window ends mid-stay, but it still has more nights than the
+  // extension) re-billed the extension once per leg: a swapped-then-extended
+  // one-room stay invoiced (orig + ext) twice while the reservation's own
+  // grand total counted it once. A closed leg is any row whose window ends
+  // before the reservation's check-out; the final leg ends exactly at it
+  // (NULL bounds = whole stay) — same predicate /extend filters on.
+  function isFinalLeg(rr: (typeof rooms)[number]): boolean {
+    return !rr.effectiveTo || rr.effectiveTo >= reservation.checkOutDate;
+  }
+  function rowCanMergeExtension(
+    rr: (typeof rooms)[number],
+    rowNights: number,
+  ): boolean {
+    return (
+      !isShort &&
+      extensionDeltas.length > 0 &&
+      rowNights > totalExtraNights &&
+      isFinalLeg(rr)
+    );
+  }
 
   // Swap chain index. Rows that share a swap_id are sibling segments
   // of one swap event. Sort them by effective_from so the line
@@ -215,9 +247,11 @@ export function buildInvoice(args: BuilderArgs): BuiltInvoice {
     const beds = Number(rr.extraBeds ?? 0);
     const bedRate = Number(rr.extraBedRate ?? 0);
     if (beds <= 0 || bedRate <= 0 || units <= 0) return;
+    // Extra-bed money is part of the room tariff, so it rides the ROOM's slab.
+    const rowGstRate = roomRowGstRate(rr, roomGstRate);
     const bedQty = beds * units;
     const bedGross = bedRate * bedQty;
-    const bedBreak = calcGstBreakdown(bedGross, roomGstRate, gstMode);
+    const bedBreak = calcGstBreakdown(bedGross, rowGstRate, gstMode);
     subtotal += bedBreak.subtotal;
     totalGst += bedBreak.gstAmount;
     const unitWord = isShort ? "day" : "night";
@@ -227,7 +261,7 @@ export function buildInvoice(args: BuilderArgs): BuiltInvoice {
       quantity: bedQty,
       rate: String(+(bedBreak.subtotal / bedQty).toFixed(2)),
       amount: String(+bedBreak.subtotal.toFixed(2)),
-      gstRate: String(roomGstRate),
+      gstRate: String(rowGstRate),
       gstAmount: String(+bedBreak.gstAmount.toFixed(2)),
       itemType: "room_charge",
     });
@@ -235,6 +269,9 @@ export function buildInvoice(args: BuilderArgs): BuiltInvoice {
 
   for (const rr of rooms) {
     const storedRate = Number(rr.ratePerNight);
+    // This room's own GST slab (0016), falling back to the reservation's
+    // snapshot for rows written before per-room rates existed.
+    const rowGstRate = roomRowGstRate(rr, roomGstRate);
     const displayType = combinedRoomTypeLabel(
       rr.room.roomType,
       rr.soldAsType ?? null,
@@ -256,15 +293,15 @@ export function buildInvoice(args: BuilderArgs): BuiltInvoice {
     //   - overnight
     //   - at least one extension delta merges into this room
     //   - the room actually has enough nights to absorb the extra nights
-    const canMergeExtension =
-      !isShort && extensionDeltas.length > 0 && rowNights > totalExtraNights;
+    //   - the row is the leg that actually gained those nights
+    const canMergeExtension = rowCanMergeExtension(rr, rowNights);
     const isSegmented = !!(rr.effectiveFrom || rr.effectiveTo);
 
     if (canMergeExtension) {
       const originalNights = rowNights - totalExtraNights;
       // Original-rate segment.
       const origAmount = storedRate * originalNights;
-      const origBreak = calcGstBreakdown(origAmount, roomGstRate, gstMode);
+      const origBreak = calcGstBreakdown(origAmount, rowGstRate, gstMode);
       subtotal += origBreak.subtotal;
       totalGst += origBreak.gstAmount;
       lineItems.push({
@@ -273,7 +310,7 @@ export function buildInvoice(args: BuilderArgs): BuiltInvoice {
         quantity: originalNights,
         rate: String(+(origBreak.subtotal / originalNights).toFixed(2)),
         amount: String(+origBreak.subtotal.toFixed(2)),
-        gstRate: String(roomGstRate),
+        gstRate: String(rowGstRate),
         gstAmount: String(+origBreak.gstAmount.toFixed(2)),
         itemType: "room_charge",
       });
@@ -281,7 +318,7 @@ export function buildInvoice(args: BuilderArgs): BuiltInvoice {
       // (e.g. extended twice at different rates).
       for (const d of extensionDeltas) {
         const extAmount = d.newRate * d.extraNights;
-        const extBreak = calcGstBreakdown(extAmount, roomGstRate, gstMode);
+        const extBreak = calcGstBreakdown(extAmount, rowGstRate, gstMode);
         subtotal += extBreak.subtotal;
         totalGst += extBreak.gstAmount;
         lineItems.push({
@@ -290,7 +327,7 @@ export function buildInvoice(args: BuilderArgs): BuiltInvoice {
           quantity: d.extraNights,
           rate: String(+(extBreak.subtotal / d.extraNights).toFixed(2)),
           amount: String(+extBreak.subtotal.toFixed(2)),
-          gstRate: String(roomGstRate),
+          gstRate: String(rowGstRate),
           gstAmount: String(+extBreak.gstAmount.toFixed(2)),
           itemType: "room_charge",
         });
@@ -304,7 +341,7 @@ export function buildInvoice(args: BuilderArgs): BuiltInvoice {
     const userAmount = isShort ? storedRate : storedRate * rowNights;
     const { subtotal: netRoomSubtotal, gstAmount: roomGst } = calcGstBreakdown(
       userAmount,
-      roomGstRate,
+      rowGstRate,
       gstMode,
     );
     const netRate = isShort ? netRoomSubtotal : netRoomSubtotal / rowNights;
@@ -361,7 +398,7 @@ export function buildInvoice(args: BuilderArgs): BuiltInvoice {
       quantity: roomUnits,
       rate: String(+netRate.toFixed(2)),
       amount: String(+netRoomSubtotal.toFixed(2)),
-      gstRate: String(roomGstRate),
+      gstRate: String(rowGstRate),
       gstAmount: String(+roomGst.toFixed(2)),
       itemType: "room_charge",
     });
@@ -381,10 +418,9 @@ export function buildInvoice(args: BuilderArgs): BuiltInvoice {
   // above. Otherwise (e.g. a single 1-night reservation where the room
   // can't absorb the extra night, or mixed rates) they stay as
   // pass-through charges so the invoice math still adds up.
-  const anyRoomCouldMerge = rooms.some((rr) => {
-    const rowNights = roomBillableNights(rr, reservation);
-    return !isShort && extensionDeltas.length > 0 && rowNights > totalExtraNights;
-  });
+  const anyRoomCouldMerge = rooms.some((rr) =>
+    rowCanMergeExtension(rr, roomBillableNights(rr, reservation)),
+  );
   const chargesToPrint = anyRoomCouldMerge
     ? passThroughCharges
     : [...passThroughCharges, ...extensionDeltas.map((d) => charges.find((c) => c.id === d.chargeId)!).filter(Boolean)];

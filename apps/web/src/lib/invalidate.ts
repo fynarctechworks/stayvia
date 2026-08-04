@@ -34,12 +34,18 @@ export function invalidateReservationData(qc: QueryClient, opts: InvalidateOpts 
   }
   qc.invalidateQueries({ queryKey: ["reservations"] });
 
-  // Guest-specific keys
+  // Guest-specific keys.
+  //
+  // ["guest"] is invalidated as a PREFIX, never as ["guest", guestId]: the
+  // guest profile page caches under its URL param, and every link into it
+  // navigates by PHONE (the page even rewrites a UUID URL to the phone form),
+  // so a UUID-scoped invalidate matched no cache entry at all and the profile
+  // kept rendering pre-mutation values. The extra refetch is one request for
+  // whichever profile is actually mounted.
+  qc.invalidateQueries({ queryKey: ["guest"] });
   if (opts.guestId) {
-    qc.invalidateQueries({ queryKey: ["guest", opts.guestId] });
     qc.invalidateQueries({ queryKey: ["ledger", opts.guestId] });
   } else {
-    qc.invalidateQueries({ queryKey: ["guest"] });
     qc.invalidateQueries({ queryKey: ["ledger"] });
   }
   qc.invalidateQueries({ queryKey: ["guests"] });
@@ -100,13 +106,17 @@ export function invalidateRoomData(qc: QueryClient, opts: { roomId?: string } = 
 // For mutations that change a guest's profile fields (name/phone/tags) but
 // don't touch money. Skips dashboard + reports.
 export function invalidateGuestProfile(qc: QueryClient, guestId?: string) {
+  // See invalidateReservationData: the profile query is keyed by the URL
+  // param (a phone), so ["guest"] must be invalidated as a prefix.
+  qc.invalidateQueries({ queryKey: ["guest"] });
   if (guestId) {
-    qc.invalidateQueries({ queryKey: ["guest", guestId] });
     qc.invalidateQueries({ queryKey: ["kyc", guestId] });
     qc.invalidateQueries({ queryKey: ["guest-notes", guestId] });
     qc.invalidateQueries({ queryKey: ["guest-followups", guestId] });
   } else {
-    qc.invalidateQueries({ queryKey: ["guest"] });
+    qc.invalidateQueries({ queryKey: ["kyc"] });
+    qc.invalidateQueries({ queryKey: ["guest-notes"] });
+    qc.invalidateQueries({ queryKey: ["guest-followups"] });
   }
   qc.invalidateQueries({ queryKey: ["guests"] });
 }

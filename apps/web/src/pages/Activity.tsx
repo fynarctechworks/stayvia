@@ -1,12 +1,15 @@
 import { useQuery } from "@tanstack/react-query";
 import { format, formatDistanceToNow, isToday, isYesterday, startOfMonth, startOfWeek, startOfYear } from "date-fns";
 import { Activity as ActivityIcon, Calendar } from "@/lib/micons";
-import { useMemo, useState } from "react";
-import { QueryError } from "@/components/kit";
+import { useEffect, useMemo, useState } from "react";
+import { QueryError, StaleDataNotice } from "@/components/kit";
 import { Loader } from "@/components/Loader";
 import { StickyBar } from "@/components/StickyBar";
 import { TimePicker12h } from "@/components/TimePicker12h";
-import { api } from "@/lib/api";
+import { getList } from "@/lib/api";
+
+// One screen of audit history. The server accepts up to 500.
+const PER_PAGE = 100;
 
 interface ActivityRow {
   id: string;
@@ -54,6 +57,13 @@ export default function Activity() {
   // Optional intra-day window. Empty strings = no time filter.
   const [timeFrom, setTimeFrom] = useState("");
   const [timeTo, setTimeTo] = useState("");
+  const [page, setPage] = useState(1);
+
+  // Changing the range (or the time-of-day filter, which is applied to the
+  // fetched page) re-slices the log, so page 4 of the old range is meaningless.
+  useEffect(() => {
+    setPage(1);
+  }, [range, customFrom, customTo]);
 
   const { from, to } = useMemo(
     () => rangeForKey(range, customFrom, customTo),
@@ -66,16 +76,28 @@ export default function Activity() {
   // query until both dates are filled in.
   const customIncomplete = range === "custom" && (!customFrom || !customTo);
 
+  // /activity is paginated (it was silently capped before). Reading only the
+  // first page and printing its length as "N entries" told staff a year of
+  // history was 200 rows and stopped the day-groups wherever the cap fell,
+  // with nothing saying the list had been cut. Page explicitly and report the
+  // server's real total.
   const activityQ = useQuery({
-    queryKey: ["activity", { from, to }],
+    queryKey: ["activity", { from, to, page }],
     queryFn: () =>
-      api.get<ActivityRow[]>("/activity", { date_from: from, date_to: to }),
+      getList<ActivityRow>("/activity", {
+        date_from: from,
+        date_to: to,
+        page,
+        per_page: PER_PAGE,
+      }),
     refetchInterval: 30_000,
     enabled: !customIncomplete,
   });
   const { isLoading } = activityQ;
-  const rows = activityQ.data;
+  const rows = activityQ.data?.data;
   const data = useMemo(() => rows ?? [], [rows]);
+  const total = activityQ.data?.meta.total ?? 0;
+  const totalPages = Math.max(1, Math.ceil(total / PER_PAGE));
 
   // Apply the time-of-day filter client-side. Server already scoped by date,
   // so we just need to check each row's local HH:mm against the window. If
@@ -118,13 +140,17 @@ export default function Activity() {
         <div className="text-xs text-inkMuted">
           {/* A failed fetch must never be counted as zero entries — this is the
               page staff read to answer "did anyone touch that invoice?". */}
-          {activityQ.isError
+          {activityQ.isError && !activityQ.data
             ? "Couldn't load activity"
             : isLoading
               ? "Loading…"
-              : timeFiltered.length === data.length
-                ? `${data.length} entr${data.length === 1 ? "y" : "ies"}`
-                : `${timeFiltered.length} of ${data.length} entries`}
+              : `${total} entr${total === 1 ? "y" : "ies"}${
+                  totalPages > 1 ? ` · page ${page} of ${totalPages}` : ""
+                }${
+                  timeFiltered.length === data.length
+                    ? ""
+                    : ` · ${timeFiltered.length} of ${data.length} shown on this page`
+                }`}
         </div>
       </div>
 
@@ -226,7 +252,15 @@ export default function Activity() {
       </div>
       </StickyBar>
 
-      {activityQ.isError ? (
+      {activityQ.isError && !!activityQ.data && (
+        <StaleDataNotice
+          message="This log is the last update that came through — entries recorded since then may be missing."
+          onRetry={() => void activityQ.refetch()}
+          isRetrying={activityQ.isFetching}
+        />
+      )}
+
+      {activityQ.isError && !activityQ.data ? (
         <div className="card">
           <QueryError
             error={activityQ.error}
@@ -293,6 +327,32 @@ export default function Activity() {
               </section>
             );
           })}
+        </div>
+      )}
+
+      {totalPages > 1 && !(activityQ.isError && !activityQ.data) && (
+        <div className="flex items-center justify-between gap-3 flex-wrap">
+          <div className="text-xs text-textSecondary">
+            Showing {(page - 1) * PER_PAGE + 1}–{Math.min(page * PER_PAGE, total)} of {total}
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              className="btn-secondary !h-9"
+              onClick={() => setPage((p) => Math.max(1, p - 1))}
+              disabled={page <= 1 || activityQ.isFetching}
+            >
+              Newer
+            </button>
+            <button
+              type="button"
+              className="btn-secondary !h-9"
+              onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+              disabled={page >= totalPages || activityQ.isFetching}
+            >
+              Older
+            </button>
+          </div>
         </div>
       )}
     </div>

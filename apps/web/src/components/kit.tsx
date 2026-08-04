@@ -355,6 +355,56 @@ export function QueryError({
   );
 }
 
+// Non-destructive "the refresh failed" strip.
+//
+// TanStack Query keeps the last successful `data` when a refetch fails — it
+// only flips `status` to 'error'. On the polling pages (dashboard, board,
+// queues, 10-60s intervals) treating `isError` as "we have no data" therefore
+// throws away a correct, fully rendered screen because one background poll hit
+// a flaky link, and does it again every interval. Those pages keep rendering
+// their content and put this strip above it instead, so staff can see BOTH the
+// rows and the fact that the rows may be stale. `QueryError` / `PageError`
+// remain the right surface when there is genuinely nothing to show
+// (`isError && !data`).
+export function StaleDataNotice({
+  title = "This didn't refresh",
+  message,
+  onRetry,
+  isRetrying = false,
+  className = "",
+}: {
+  title?: string;
+  message: ReactNode;
+  onRetry?: () => void;
+  isRetrying?: boolean;
+  className?: string;
+}) {
+  return (
+    <div
+      role="status"
+      className={`rounded-md border border-warnBorder bg-warnBg text-warnFg px-3 py-2 flex flex-wrap items-center gap-x-3 gap-y-1.5 ${className}`}
+    >
+      <AlertTriangle className="w-4 h-4 shrink-0" />
+      <span className="font-bold text-[11px] uppercase tracking-[0.08em] leading-tight">
+        {title}
+      </span>
+      <span className="text-[11px] text-inkBody">{message}</span>
+      {onRetry && (
+        <button
+          type="button"
+          onClick={onRetry}
+          disabled={isRetrying}
+          aria-busy={isRetrying || undefined}
+          className="ml-auto inline-flex items-center gap-1.5 px-3 h-8 text-[11px] font-bold rounded-sm bg-surface border border-warnBorder text-warnFg hover:bg-surfaceAlt disabled:opacity-60 transition-colors focus-visible:ring-2 focus-visible:ring-brand outline-none"
+        >
+          <RefreshCw className={`w-3.5 h-3.5 ${isRetrying ? "animate-spin" : ""}`} />
+          {isRetrying ? "Retrying…" : "Try again"}
+        </button>
+      )}
+    </div>
+  );
+}
+
 // Full-page failure, for routes that early-return before rendering their own
 // header (RoomDetail, MaintenanceDetail, …). Always carries a way out: those
 // pages' own back button hasn't rendered yet, so without one the user is stuck.

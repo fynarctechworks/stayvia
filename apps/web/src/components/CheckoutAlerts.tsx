@@ -148,6 +148,13 @@ export function CheckoutAlerts() {
   // entitled to is not.
   const canSeeAlerts = can("view_dashboard");
 
+  // The Dashboard page shares this exact query key and reports the same
+  // failure in context (with its own retry), so announcing it again from the
+  // app-wide strip put two error surfaces on screen for one dead request.
+  // The page owns the message there; everywhere else this strip is the only
+  // thing that would tell staff the alert feed is blind.
+  const onDashboard = location.pathname === "/" || location.pathname.startsWith("/dashboard");
+
   const alertsQ = useQuery({
     queryKey: ["dashboard"],
     queryFn: () => api.get<DashboardData>("/dashboard"),
@@ -161,7 +168,7 @@ export function CheckoutAlerts() {
   // The cache key is shared with the Dashboard page and ArrivalAlerts, so a
   // disabled observer here can still read their error — only claim a failure
   // for a user this component actually polls for.
-  const alertsFailed = canSeeAlerts && alertsQ.isError;
+  const alertsFailed = canSeeAlerts && alertsQ.isError && !onDashboard;
 
   // Clock tick so minutesLeft labels stay accurate without a server roundtrip.
   const [now, setNow] = useState(() => Date.now());

@@ -139,6 +139,13 @@ export const reservationRooms = pgTable("reservation_rooms", {
     .notNull()
     .references(() => rooms.id),
   ratePerNight: numeric("rate_per_night", { precision: 10, scale: 2 }).notNull(),
+  // Migration 0016 — the GST slab for THIS room, derived from its own
+  // rate_per_night. India slabs hotel GST on the per-night room tariff, so a
+  // booking mixing a ₹900 room and a ₹9,000 suite has two different correct
+  // rates; deriving one slab from the average taxed both wrongly. NULL means
+  // "legacy row" and falls back to reservations.gstRate — see lib/roomTax.ts,
+  // which is the only place that resolution should happen.
+  gstRate: numeric("gst_rate", { precision: 5, scale: 2 }),
   soldAsType: text("sold_as_type"),
   // Migration 0043 — extra beds (additional persons) on this room.
   // extraBeds is the count over the room's base max_occupancy; extraBedRate

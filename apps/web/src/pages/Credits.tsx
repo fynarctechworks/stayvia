@@ -5,7 +5,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/auth/AuthContext";
 import { useDialog } from "@/components/Dialog";
-import { ListSkeleton, QueryError } from "@/components/kit";
+import { ListSkeleton, QueryError, StaleDataNotice } from "@/components/kit";
 import { StickyBar } from "@/components/StickyBar";
 import { useToast } from "@/components/Toast";
 import { ApiError, api, getList, newIdempotencyKey } from "@/lib/api";
@@ -45,6 +45,11 @@ export default function Credits() {
     refetchInterval: 60_000,
   });
   const data = creditsQ.data;
+  // 60s poll + TanStack keeping the last payload through a failed refetch:
+  // `isError` alone would replace a correct credit list with an error card on
+  // one dropped poll. Split "we have nothing" from "this may be stale".
+  const creditsBlind = creditsQ.isError && !data;
+  const creditsStale = creditsQ.isError && !!data;
 
   const filtered = useMemo(() => {
     const list = data?.guests ?? [];
@@ -91,7 +96,7 @@ export default function Credits() {
             Wallet Credits
           </h1>
           <div className="text-sm text-textSecondary mt-1">
-            {creditsQ.isError
+            {creditsBlind
               ? "Credit totals unavailable - the list didn't load"
               : data
                 ? `${data.guestCount} guest${data.guestCount === 1 ? "" : "s"} with positive balance · ${inr(data.totalCredit)} total outstanding`
@@ -131,9 +136,17 @@ export default function Credits() {
       </div>
       </StickyBar>
 
+      {creditsStale && (
+        <StaleDataNotice
+          message="These balances are the last update that came through — a credit issued or spent since then may be missing."
+          onRetry={() => void creditsQ.refetch()}
+          isRetrying={creditsQ.isFetching}
+        />
+      )}
+
       {/* A failed lookup must never read as "nobody holds credit" — staff act
           on that by collecting cash a guest has already paid. */}
-      {creditsQ.isError ? (
+      {creditsBlind ? (
         <QueryError
           error={creditsQ.error}
           onRetry={() => void creditsQ.refetch()}

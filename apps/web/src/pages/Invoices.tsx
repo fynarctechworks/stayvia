@@ -139,12 +139,19 @@ export default function Invoices() {
     walletCredit: Number(summaryQ.data?.walletCredit ?? 0),
     balance: Number(summaryQ.data?.owing ?? 0),
   };
-  // Settled = cash/UPI/card payments + wallet credit applied. Both are
-  // money that's cleared the bill, so this is what "Collected" means
-  // operationally. Defining it this way also enforces the identity
-  //   gross = settled + outstanding
-  // which is what makes the tiles add up at a glance.
-  const settled = totals.paid + totals.walletCredit;
+  // Settled = everything that has cleared the bill.
+  //
+  // `paid` is SUM(invoices.total_paid), and total_paid ALREADY INCLUDES the
+  // wallet credit on every write path (recomputeInvoiceTotals sets it to
+  // Σpayments + wallet; both checkout branches and the manual-issue path do
+  // the same on the insert). Adding walletCredit on top double-counted every
+  // rupee of credit redeemed, so a ₹5,000 bill settled with ₹2,000 credit +
+  // ₹3,000 cash rendered "Settled ₹7,000" against "Total billed ₹5,000".
+  // The identity the tiles rest on is gross = total_paid + balance_due.
+  const settled = totals.paid;
+  // The cash/UPI/card slice, for the sub-caption: what's left of total_paid
+  // once the credit portion is taken out.
+  const settledCash = +(totals.paid - totals.walletCredit).toFixed(2);
 
   // Full-detail CSV export hitting the server-side /invoices/export
   // endpoint. Pulls every invoice matching the current filters across
@@ -254,7 +261,7 @@ export default function Invoices() {
           <div className="label">Settled</div>
           <Money value={settled} className="block text-2xl font-bold text-success font-mono mt-1.5" />
           <div className="text-[11px] text-inkMuted mt-1">
-            cash {inr(totals.paid)}
+            cash {inr(settledCash)}
             {totals.walletCredit > 0.009 ? ` + credit ${inr(totals.walletCredit)}` : ""}
           </div>
         </div>

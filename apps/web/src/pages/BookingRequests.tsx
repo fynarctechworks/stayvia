@@ -10,7 +10,7 @@ import { useNavigate } from "react-router-dom";
 import { BedDouble, CheckCircle2, ChevronRight, Clock, Loader2, QrCode, Users, X } from "@/lib/micons";
 import { useDialog } from "@/components/Dialog";
 import { KycModal } from "@/components/KycModal";
-import { EmptyState, ListSkeleton, PageHeader, QueryError, Skeleton } from "@/components/kit";
+import { EmptyState, ListSkeleton, PageHeader, QueryError, Skeleton, StaleDataNotice } from "@/components/kit";
 import { useToast } from "@/components/Toast";
 import { ApiError, api, getList } from "@/lib/api";
 import { inr } from "@/lib/utils";
@@ -68,6 +68,13 @@ export default function BookingRequests() {
     const m = minutesLeft(r.holdExpiresAt, now);
     return m === null || m > 0;
   });
+  // Holds expire 30 minutes after booking, so this is the one queue that must
+  // never disappear. It polls every 10s and TanStack keeps the last payload
+  // through a failed refetch, so `isError` on its own discarded live, still-
+  // expiring hold cards that were sitting in cache. Only the no-data case is
+  // genuinely blind; otherwise keep the cards and flag them as possibly stale.
+  const queueBlind = q.isError && !q.data;
+  const queueStale = q.isError && !!q.data;
 
   const confirm = useMutation({
     // Carry the row through the mutation instead of looking it up in
@@ -129,7 +136,7 @@ export default function BookingRequests() {
           // A failed fetch leaves `items` empty; the calm "land here" line
           // would then read as "nothing came through", which is the one
           // thing the desk must not tell a guest on a failure.
-          q.isError
+          queueBlind
             ? "The queue didn't load - requests may be waiting."
             : items.length === 0
               ? "QR self-bookings land here for the desk to confirm."
@@ -145,10 +152,18 @@ export default function BookingRequests() {
         }
       />
 
+      {queueStale && (
+        <StaleDataNotice
+          message="These cards are the last update that came through — a newer request may be waiting, and the countdowns keep running regardless."
+          onRetry={() => void q.refetch()}
+          isRetrying={q.isFetching}
+        />
+      )}
+
       {/* Error branch first: a hold the desk never sees expires in 30
           minutes, so "no requests right now" is only sayable when the
           fetch actually came back empty. */}
-      {q.isError ? (
+      {queueBlind ? (
         <div className="card">
           <QueryError
             error={q.error}

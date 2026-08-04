@@ -12,7 +12,7 @@ import { CheckCircle2, ChevronLeft, Send } from "@/lib/micons";
 import { useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { Loader } from "@/components/Loader";
-import { PageError, queryErrorMessage } from "@/components/kit";
+import { PageError, StaleDataNotice, queryErrorMessage } from "@/components/kit";
 import { useToast } from "@/components/Toast";
 import { api } from "@/lib/api";
 import { inr } from "@/lib/utils";
@@ -111,7 +111,14 @@ export default function MaintenanceDetail() {
   // Error before loading: a deleted issue, an id from another hotel (the route
   // scopes by property and 404s) or a 500 must never sit behind a spinner —
   // the back button lives after this return, so a stuck page has no way out.
-  if (issueQ.isError)
+  //
+  // `!issue` matters: this polls every 30s and TanStack keeps the last payload
+  // through a failed refetch, so without it a background blip replaced the
+  // whole page — issue, history and the half-typed comment box — for someone
+  // who was mid-sentence. (No backTo: there is no maintenance LIST route —
+  // issues are opened from the housekeeping board and room detail — so
+  // PageError's history-aware fallback is the correct way out.)
+  if (issueQ.isError && !issue)
     return (
       <PageError
         error={issueQ.error}
@@ -126,6 +133,13 @@ export default function MaintenanceDetail() {
 
   return (
     <div className="space-y-4 w-full">
+      {issueQ.isError && (
+        <StaleDataNotice
+          message="This issue is the last update that came through — a comment or status change made since then may be missing."
+          onRetry={() => void issueQ.refetch()}
+          isRetrying={issueQ.isFetching}
+        />
+      )}
       <div className="flex items-center gap-3 flex-wrap">
         <button
           onClick={() => navigate(-1)}

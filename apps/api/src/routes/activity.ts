@@ -7,7 +7,7 @@ import { profiles } from "../db/schema/profiles.js";
 import { reservationRooms, reservations } from "../db/schema/reservations.js";
 import { rooms } from "../db/schema/rooms.js";
 import { propertyDayEnd, propertyDayStart } from "../lib/propertyTime.js";
-import { ok } from "../lib/response.js";
+import { list } from "../lib/response.js";
 import { getSettings } from "../lib/settings.js";
 import { requireAuth } from "../middleware/auth.js";
 import { validate } from "../middleware/validate.js";
@@ -18,10 +18,20 @@ const router = Router();
 // local timezone; we treat it as that calendar day, not UTC.
 const dateStr = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
 
+// Paginated, not capped.
+//
+// This used to take a bare `limit` (default 200) and answer with ok(), which
+// carries no meta — so the client had no way to tell a 200-row property from a
+// 6,000-row one that had been silently truncated, and the page printed the cap
+// as the entry count. page/per_page + list()'s meta.total makes the truncation
+// visible and gives the UI something to page with. `limit` is still accepted
+// (and mapped onto per_page) so an existing caller doesn't break.
 const listSchema = z.object({
   date_from: dateStr.optional(),
   date_to: dateStr.optional(),
-  limit: z.coerce.number().int().min(1).max(500).default(200),
+  limit: z.coerce.number().int().min(1).max(500).optional(),
+  page: z.coerce.number().int().min(1).default(1),
+  per_page: z.coerce.number().int().min(1).max(500).default(100),
 });
 
 router.get(
@@ -29,7 +39,11 @@ router.get(
   requireAuth,
   validate(listSchema, "query"),
   async (req, res) => {
-    const { date_from, date_to, limit } = req.query as unknown as z.infer<typeof listSchema>;
+    const { date_from, date_to, limit, page, per_page } = req.query as unknown as z.infer<
+      typeof listSchema
+    >;
+    const pageSize = limit ?? per_page;
+    const offset = (page - 1) * pageSize;
 
     // Inclusive day-range in the property's timezone. The previous
     // ::date casts compared against DB-timezone (UTC) midnights, so
@@ -76,9 +90,16 @@ router.get(
       .innerJoin(profiles, eq(profiles.id, activityLog.performedBy))
       .where(conds.length ? and(...conds) : undefined)
       .orderBy(desc(activityLog.createdAt))
-      .limit(limit);
+      .limit(pageSize)
+      .offset(offset);
 
-    return ok(
+    const [countRow] = await db
+      .select({ n: sql<number>`count(*)::int` })
+      .from(activityLog)
+      .innerJoin(profiles, eq(profiles.id, activityLog.performedBy))
+      .where(conds.length ? and(...conds) : undefined);
+
+    return list(
       res,
       rows.map((r) => ({
         id: r.id,
@@ -87,6 +108,7 @@ router.get(
         createdAt: r.createdAt,
         description: r.roomNumbers ? `${r.description} (Room ${r.roomNumbers})` : r.description,
       })),
+      { total: countRow?.n ?? 0, page, per_page: pageSize },
     );
   },
 );

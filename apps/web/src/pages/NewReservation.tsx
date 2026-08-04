@@ -13,6 +13,7 @@ import { ArrowKeyGroup } from "@/components/ArrowKeyGroup";
 import { Combobox } from "@/components/Combobox";
 import { EmailInput } from "@/components/EmailInput";
 import { useDialog } from "@/components/Dialog";
+import { useToday } from "@/hooks/useToday";
 import { ApiError, api, newIdempotencyKey } from "@/lib/api";
 import { citiesForState } from "@/lib/indianCities";
 import { INDIAN_STATES, INDIAN_UNION_TERRITORIES } from "@/lib/indianStates";
@@ -147,11 +148,12 @@ interface AvailableRoom {
   } | null;
 }
 
-const todayStr = format(new Date(), "yyyy-MM-dd");
-const tomorrowStr = format(addDays(new Date(), 1), "yyyy-MM-dd");
-// One day back is allowed so the front desk can log a booking they forgot
-// to enter earlier in the day (end-of-day catch-up). Anything older is not.
-const yesterdayStr = format(addDays(new Date(), -1), "yyyy-MM-dd");
+// today / tomorrow / yesterday come from useToday() inside the component —
+// see hooks/useToday.ts. They used to be module constants, which froze the
+// calendar at first page load: a desk that left the tab open past midnight
+// then seeded walk-ins with a date already in the past, snapped any correction
+// back to it, and clamped the date input's max so the real current date could
+// not be picked at all.
 
 // Combine yyyy-MM-dd + HH:mm into an ISO timestamp with the IST
 // offset baked in. The server stores these in plannedCheckInAt /
@@ -197,6 +199,17 @@ export default function NewReservation() {
   // otherwise — derived from the dates below. The backend models same-day as
   // stayType "short_stay" (flat rate, checkout == checkin) and multi-day as
   // "overnight" (rate × nights, checkout > checkin).
+  const todayStr = useToday();
+  const tomorrowStr = useMemo(
+    () => format(addDays(new Date(todayStr), 1), "yyyy-MM-dd"),
+    [todayStr],
+  );
+  // One day back is allowed so the front desk can log a booking they forgot
+  // to enter earlier in the day (end-of-day catch-up). Anything older is not.
+  const yesterdayStr = useMemo(
+    () => format(addDays(new Date(todayStr), -1), "yyyy-MM-dd"),
+    [todayStr],
+  );
   const [checkInDate, setCheckInDate] = useState(todayStr);
   const [checkOutDate, setCheckOutDate] = useState(tomorrowStr);
   // Same-day booking => hourly/day-use pricing (flat rate). Derived, not a
@@ -340,10 +353,13 @@ export default function NewReservation() {
     // Walk-in check-in is today by default, but the desk may backdate by one
     // day to log a forgotten booking. Only snap back to today if the date is
     // in the future or older than yesterday (out of the allowed range).
+    // todayStr/yesterdayStr are in the deps because they now CHANGE at
+    // midnight (useToday) — a tab left open across the date roll must
+    // re-evaluate this, which is the whole point of the hook.
     if (mode === "walkin" && (checkInDate > todayStr || checkInDate < yesterdayStr)) {
       setCheckInDate(todayStr);
     }
-  }, [mode, checkInDate]);
+  }, [mode, checkInDate, todayStr, yesterdayStr]);
 
   // Short-stay is by definition same-day: keep check-out pinned to
   // check-in. For overnight we DON'T silently snap an invalid check-out
@@ -616,8 +632,8 @@ export default function NewReservation() {
     highRate: Number(publicSettings.data?.gstSlabHighRate ?? 18),
   };
   // For overnight: average nightly rate (roomAmount ÷ (rooms × nights)).
-  // For short_stay: average per-room flat rate (roomAmount ÷ rooms). The GST
-  // slab is keyed off this so room-type-aware tax still applies to day-use.
+  // For short_stay: average per-room flat rate (roomAmount ÷ rooms). Shown to
+  // staff as context only — the slab is decided PER ROOM below.
   const avgRatePerNight =
     isShortStay
       ? selectedRooms.length > 0
@@ -626,32 +642,50 @@ export default function NewReservation() {
       : selectedRooms.length > 0 && nights > 0
         ? roomBaseAmount / (nights * selectedRooms.length)
         : 0;
-  const gstRate =
-    avgRatePerNight === 0
+  // Slab per ROOM, from that room's own per-unit tariff — the unit Indian
+  // hotel GST is slabbed on, and what the server now stores per
+  // reservation_room. Keying it off the AVERAGE (as both sides used to)
+  // taxed a ₹900 + ₹9,000 booking at one middle band: the suite under-taxed,
+  // the cheap room taxed despite being under the exemption threshold.
+  const slabFor = (rate: number) =>
+    rate === 0
       ? 0
-      : avgRatePerNight < gstSlabs.exemptBelow
+      : rate < gstSlabs.exemptBelow
         ? 0
-        : avgRatePerNight <= gstSlabs.lowMax
+        : rate <= gstSlabs.lowMax
           ? gstSlabs.lowRate
           : gstSlabs.highRate;
-  // Mode-aware breakdown — must mirror apps/api/src/lib/gst.ts exactly.
+  const roomSlabs = selectedRooms.map((rm) => slabFor(rm.ratePerNight));
+  // Headline rate for the CGST/SGST caption. Uniform bookings (the norm) have
+  // exactly one; a mixed booking shows the highest and says it's mixed.
+  const gstRate = roomSlabs.length > 0 ? Math.max(...roomSlabs) : 0;
+  const mixedSlabs = new Set(roomSlabs).size > 1;
+  // Mode-aware breakdown — must mirror apps/api/src/lib/gst.ts exactly, room
+  // by room, so this quote equals what the server will store.
   //   Inclusive: GST is a flat percentage of the gross amount the guest
   //     pays. ₹1000 @ 5% → GST ₹50, net ₹950 (NOT the inverse-extraction
   //     formula). The owner prefers this because the numbers stay round.
   //   Exclusive: GST is added on top of the net.
-  const r = gstRate / 100;
-  const gstAmount =
-    gstMode === "inclusive"
-      ? +(roomAmount * r).toFixed(2)
-      : +(roomAmount * r).toFixed(2);
-  const subtotal =
-    gstMode === "inclusive"
-      ? +(roomAmount - gstAmount).toFixed(2)
-      : +roomAmount.toFixed(2);
+  const roomMoney = selectedRooms.reduce(
+    (acc, rm, i) => {
+      const amount = +(
+        rm.ratePerNight * billingUnits +
+        rm.extraBeds * rm.extraBedRate * billingUnits
+      ).toFixed(2);
+      if (amount === 0) return acc;
+      const rr = (roomSlabs[i] ?? 0) / 100;
+      const gst =
+        gstMode === "inclusive" ? +(amount * rr).toFixed(2) : +(amount * rr).toFixed(2);
+      const net = gstMode === "inclusive" ? +(amount - gst).toFixed(2) : amount;
+      return { net: acc.net + net, gst: acc.gst + gst };
+    },
+    { net: 0, gst: 0 },
+  );
+  const gstAmount = +roomMoney.gst.toFixed(2);
+  const subtotal = +roomMoney.net.toFixed(2);
   const cgst = +(gstAmount / 2).toFixed(2);
   const sgst = +(gstAmount - cgst).toFixed(2);
-  const grandTotal =
-    gstMode === "inclusive" ? +roomAmount.toFixed(2) : +(subtotal + gstAmount).toFixed(2);
+  const grandTotal = +(subtotal + gstAmount).toFixed(2);
   // Cap wallet apply at min(wallet balance, grand total). If the user typed
   // 1000 but only 600 is available, we treat it as 600.
   const maxWalletApply = +Math.min(walletBalance, grandTotal).toFixed(2);
@@ -2788,17 +2822,18 @@ export default function NewReservation() {
           so the running total and the commit button are always in reach. */}
       <div className="w-full lg:flex-[1_1_300px] lg:w-auto min-w-0 space-y-4 lg:sticky lg:top-[80px]">
 
-      {/* The balance is only ₹0 when the lookup SUCCEEDED and said so. On a
-          failure the whole panel would vanish and the guest would be told
-          they have no credit, so the failure takes the panel's place. */}
+      {/* The balance is only ₹0 when the lookup SUCCEEDED and said so, so the
+          failure has to be visible next to the total too — but it is the SAME
+          walletQ failure the KYC card above already reports in full. Two
+          panels with two retry buttons for one dead request read as two
+          separate faults, so this is a one-line pointer at the alert that
+          carries the retry. */}
       {!isCreditBooking && selectedGuest && walletQ.isError && grandTotal > 0 && (
-        <QueryError
-          error={walletQ.error}
-          onRetry={() => walletQ.refetch()}
-          isRetrying={walletQ.isFetching}
-          title="Couldn't check wallet credit"
-          message="This guest's wallet balance didn't load, so no credit can be applied to this booking yet. Retry before telling them they have none."
-        />
+        <div className="text-xs text-warnFg bg-warnBg border border-warnBorder rounded-md px-3 py-2">
+          Wallet credit couldn't be checked, so none can be applied yet — see
+          "Couldn't check this guest's record" above to retry. Don't tell the
+          guest they have no credit.
+        </div>
       )}
 
       {/* Wallet credit — only shown when an existing guest is selected and
@@ -2937,11 +2972,17 @@ export default function NewReservation() {
         {subtotal > 0 && (
           <>
             <div className="flex justify-between gap-3 text-[13.5px] py-1.5 text-inkBody">
-              <span>CGST @ {(gstRate / 2).toFixed(gstRate % 2 === 0 ? 0 : 1)}%</span>
+              <span>
+                CGST @ {(gstRate / 2).toFixed(gstRate % 2 === 0 ? 0 : 1)}%
+                {mixedSlabs ? " (max)" : ""}
+              </span>
               <span className="font-mono">{inr(cgst)}</span>
             </div>
             <div className="flex justify-between gap-3 text-[13.5px] py-1.5 text-inkBody">
-              <span>SGST @ {(gstRate / 2).toFixed(gstRate % 2 === 0 ? 0 : 1)}%</span>
+              <span>
+                SGST @ {(gstRate / 2).toFixed(gstRate % 2 === 0 ? 0 : 1)}%
+                {mixedSlabs ? " (max)" : ""}
+              </span>
               <span className="font-mono">{inr(sgst)}</span>
             </div>
             <div className="flex justify-between gap-3 text-[15px] font-bold text-ink mt-1.5 pt-2.5 border-t border-divider">
@@ -2969,10 +3010,21 @@ export default function NewReservation() {
               </div>
             )}
             <div className="text-[11px] text-inkMuted mt-2 leading-snug">
-              GST {gstRate}% applied via slab (avg rate ₹{avgRatePerNight.toFixed(2)}
-              {isShortStay ? `/${hrsLabel}` : "/night"}
-              {gstMode === "inclusive" ? ", GST-inclusive" : ", GST extra"}). Final tax
-              recomputed at check-out if charges change.
+              {mixedSlabs ? (
+                <>
+                  GST applied per room by slab — these rooms fall in different
+                  bands ({[...new Set(roomSlabs)].sort((a, b) => a - b).join("%, ")}%),
+                  so each room line is taxed at its own rate
+                  {gstMode === "inclusive" ? ", GST-inclusive" : ", GST extra"}.
+                </>
+              ) : (
+                <>
+                  GST {gstRate}% applied via slab (rate ₹{avgRatePerNight.toFixed(2)}
+                  {isShortStay ? `/${hrsLabel}` : "/night"}
+                  {gstMode === "inclusive" ? ", GST-inclusive" : ", GST extra"}).
+                </>
+              )}{" "}
+              Final tax recomputed at check-out if charges change.
             </div>
           </>
         )}

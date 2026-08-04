@@ -24,8 +24,9 @@ import { format } from "date-fns";
 import { CheckCircle2, FileText, Receipt, User, Wallet } from "@/lib/micons";
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { useAuth } from "@/auth/AuthContext";
 import { useDialog } from "@/components/Dialog";
-import { PageError } from "@/components/kit";
+import { PageError, StaleDataNotice } from "@/components/kit";
 import { Loader } from "@/components/Loader";
 import { StickyBar } from "@/components/StickyBar";
 import { Money, useMaskedInr } from "@/components/Money";
@@ -110,7 +111,13 @@ export default function Collections() {
   const { toast } = useToast();
   const dialog = useDialog();
   const maskedInr = useMaskedInr();
+  const { can } = useAuth();
   const [search, setSearch] = useState("");
+  // The API guards POST /payments/:id/mark-received with record_payments,
+  // which view-only roles (owner, accountant) don't hold even though they can
+  // reach this page via view_revenue. Rendering the button for them produced a
+  // guaranteed 403 and a raw "Requires permission: record_payments" toast.
+  const canRecordPayments = can("record_payments");
 
   const outstandingQ = useQuery({
     queryKey: ["collections"],
@@ -200,7 +207,14 @@ export default function Collections() {
   // endpoint needs view_revenue) or a 500, and the old `if (!data)` spinner
   // rendered that dead request as "still loading" forever — staff could not
   // tell whether the property was owed ₹0 or ₹2,00,000.
-  if (outstandingQ.isError)
+  //
+  // Only when there is NOTHING to show, though. This query polls every 30s and
+  // TanStack keeps the last good `data` through a failed refetch, so keying the
+  // full-viewport takeover off `isError` alone meant one dropped background
+  // poll replaced a working page — cached figures, search box, KPI row — with
+  // an error card. With data in hand the failure is a staleness warning
+  // (rendered below the header), not a wipe.
+  if (outstandingQ.isError && !data)
     return (
       <PageError
         error={outstandingQ.error}
@@ -259,6 +273,14 @@ export default function Collections() {
         />
       </div>
       </StickyBar>
+
+      {outstandingQ.isError && (
+        <StaleDataNotice
+          message="These balances are the last update that came through — a payment recorded since then may be missing."
+          onRetry={() => void outstandingQ.refetch()}
+          isRetrying={outstandingQ.isFetching}
+        />
+      )}
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         <div className="card !rounded-[14px]">
@@ -671,14 +693,16 @@ export default function Collections() {
                           <Money value={p.amount} />
                         </div>
                         <div className="text-right">
-                          <button
-                            className="!h-7 !px-2.5 text-xs font-semibold rounded-sm bg-success text-white border border-success hover:opacity-90 disabled:opacity-50 inline-flex items-center gap-1"
-                            onClick={() => askAndMarkReceived(p)}
-                            disabled={markReceived.isPending}
-                          >
-                            <CheckCircle2 className="w-3.5 h-3.5" />
-                            Mark Received
-                          </button>
+                          {canRecordPayments && (
+                            <button
+                              className="!h-7 !px-2.5 text-xs font-semibold rounded-sm bg-success text-white border border-success hover:opacity-90 disabled:opacity-50 inline-flex items-center gap-1"
+                              onClick={() => askAndMarkReceived(p)}
+                              disabled={markReceived.isPending}
+                            >
+                              <CheckCircle2 className="w-3.5 h-3.5" />
+                              Mark Received
+                            </button>
+                          )}
                         </div>
                       </div>
 
@@ -714,14 +738,16 @@ export default function Collections() {
                             <Money value={p.amount} />
                           </div>
                         </div>
-                        <button
-                          className="mt-2.5 w-full min-h-[44px] text-xs font-semibold rounded-sm bg-success text-white border border-success hover:opacity-90 disabled:opacity-50 inline-flex items-center justify-center gap-1.5"
-                          onClick={() => askAndMarkReceived(p)}
-                          disabled={markReceived.isPending}
-                        >
-                          <CheckCircle2 className="w-4 h-4" />
-                          Mark Received
-                        </button>
+                        {canRecordPayments && (
+                          <button
+                            className="mt-2.5 w-full min-h-[44px] text-xs font-semibold rounded-sm bg-success text-white border border-success hover:opacity-90 disabled:opacity-50 inline-flex items-center justify-center gap-1.5"
+                            onClick={() => askAndMarkReceived(p)}
+                            disabled={markReceived.isPending}
+                          >
+                            <CheckCircle2 className="w-4 h-4" />
+                            Mark Received
+                          </button>
+                        )}
                       </div>
                     </li>
                   ))}

@@ -117,6 +117,26 @@ export async function recomputeInvoiceTotals(
     .from(invoices)
     .where(eq(invoices.reservationId, reservationId));
 
+  // Originals that a credit note reverses are settled history: the reissue
+  // detached their payments and moved them to the successor invoices, so
+  // recomputing them from payment rows would resurrect their whole grand
+  // total as an outstanding balance and flip a 'paid' document back to
+  // 'partial'. attachOrphanPaymentsAndRecompute already excludes them from
+  // allocation for the same reason — this keeps the recompute in step.
+  const reversedRows = await tx
+    .select({ id: invoices.creditNoteFor })
+    .from(invoices)
+    .where(
+      and(
+        eq(invoices.reservationId, reservationId),
+        eq(invoices.documentType, "credit_note"),
+        sql`${invoices.creditNoteFor} IS NOT NULL`,
+      ),
+    );
+  const reversedOriginalIds = new Set(
+    reversedRows.map((r) => r.id).filter((x): x is string => !!x),
+  );
+
   for (const inv of invs) {
     if (inv.status === "voided") continue;
     // Credit notes carry fixed negative totals (they mirror the invoice
@@ -124,6 +144,7 @@ export async function recomputeInvoiceTotals(
     // balance from payment rows would wrongly flip them to a positive
     // balance. Leave them exactly as issued.
     if (inv.documentType === "credit_note") continue;
+    if (reversedOriginalIds.has(inv.id)) continue;
     const [paid] = await tx
       .select({
         total: sql<string>`COALESCE(SUM(${payments.amount}), 0)::text`,

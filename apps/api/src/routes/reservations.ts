@@ -50,9 +50,11 @@ import {
   recomputeReservationBalance,
 } from "../lib/reservationBalance.js";
 import { calcGstBreakdown, getGstRate } from "../lib/gst.js";
+import { headlineGstRate, roomRowGstRate, sumRoomTax } from "../lib/roomTax.js";
 import { loadGuestExtra } from "../lib/guestExtra.js";
 import { buildInvoice, selectChargesForScope } from "../lib/invoiceBuilder.js";
-import { roomBillableNights, sumExtraBedAmount, sumRoomAmount } from "../lib/nights.js";
+import { roomBillableNights, sumRoomAmount } from "../lib/nights.js";
+import { releaseRoomsFromReservation } from "../lib/roomStatus.js";
 import { PAYMENT_METHODS } from "../db/schema/enums.js";
 import { creditNoteNumber, invoiceNumber, nextDocNumber, reservationNumber } from "../lib/numbers.js";
 import { hashOtp } from "../lib/otp.js";
@@ -716,38 +718,56 @@ router.post(
     // The user-typed rate is the grand-total amount per room when the
     // property is in 'inclusive' mode (GST already baked in) and the net
     // amount per room when in 'exclusive' mode (GST added on top).
-    // We compute a single `roomAmount` that represents the user's input,
-    // then derive both the stored subtotal (net) and the grand total
-    // through calcGstBreakdown which handles both modes.
+    // sumRoomTax runs each room's amount through calcGstBreakdown, which
+    // handles both modes, and returns the stored subtotal (net) + grand total.
     //
     // Extra beds (additional persons over a room's capacity) carry a
-    // per-night, per-person fee. We keep the BASE room amount separate so
-    // the GST slab is decided purely from the room rate (extra-bed money
-    // must not push a room into a higher slab), then add the extra-bed
-    // amount into the taxable roomAmount at that same slab — extra-bed
-    // revenue is part of the room tariff.
+    // per-night, per-person fee. The GST slab is decided purely from the room
+    // rate (extra-bed money must not push a room into a higher slab), then the
+    // extra-bed amount is taxed at that same slab — extra-bed revenue is part
+    // of the room tariff. `roomBaseAmount`/`avgRate` survive only as the
+    // reservation's display rate_per_night, not as a tax input.
     const billingUnits = isShortStay ? 1 : nights;
     const roomBaseAmount = +input.rooms
       .reduce((a, r) => a + r.ratePerNight * billingUnits, 0)
       .toFixed(2);
-    const extraBedAmount = +input.rooms
-      .reduce(
-        (a, r) => a + (r.extraBeds ?? 0) * (r.extraBedRate ?? 0) * billingUnits,
-        0,
-      )
-      .toFixed(2);
-    const roomAmount = +(roomBaseAmount + extraBedAmount).toFixed(2);
     const avgRate = isShortStay
       ? roomBaseAmount / input.rooms.length
       : roomBaseAmount / (nights * input.rooms.length);
-    const gstRate = getGstRate(avgRate, {
+    const slabs = {
       exemptBelow: Number(settings.gstSlabExemptBelow),
       lowRate: Number(settings.gstSlabLowRate),
       lowMax: Number(settings.gstSlabLowMax),
       highRate: Number(settings.gstSlabHighRate),
-    });
+    };
+    // The slab is decided PER ROOM from that room's own per-night tariff — the
+    // unit Indian hotel GST is actually slabbed on. Deriving one rate from the
+    // average across rooms taxed a ₹900 + ₹9,000 booking at a single middle
+    // band, under-collecting on the suite and over-collecting on the room
+    // below the exemption threshold. Extra-bed money is excluded from the
+    // decision (it must not push a room up a band) but is taxed at whatever
+    // band the room lands in.
+    const perRoomGstRate = input.rooms.map((r) => getGstRate(r.ratePerNight, slabs));
     const gstMode = settings.gstMode ?? "exclusive";
-    const { subtotal, gstAmount, grandTotal } = calcGstBreakdown(roomAmount, gstRate, gstMode);
+    const roomRowsForTax = input.rooms.map((r, i) => ({
+      ratePerNight: r.ratePerNight,
+      gstRate: perRoomGstRate[i]!,
+      extraBeds: r.extraBeds ?? 0,
+      extraBedRate: r.extraBedRate ?? 0,
+    }));
+    const stayWindow = {
+      checkInDate: input.checkInDate,
+      checkOutDate: input.checkOutDate,
+      stayType,
+    };
+    const roomTax = sumRoomTax(roomRowsForTax, stayWindow, gstMode, 0);
+    // Headline/fallback rate on the reservation row. Uniform bookings keep
+    // their one true rate; a mixed booking stores the highest slab in play and
+    // the real per-line rates live on reservation_rooms.
+    const gstRate = headlineGstRate(perRoomGstRate);
+    const subtotal = roomTax.net;
+    const gstAmount = roomTax.gst;
+    const grandTotal = roomTax.gross;
 
     // Hard guard: advance can never exceed the bill. Over-collecting at
     // booking would create a negative balance_due and silently turn the
@@ -899,10 +919,13 @@ router.post(
         }
 
         await tx.insert(reservationRooms).values(
-          input.rooms.map((rm) => ({
+          input.rooms.map((rm, i) => ({
             reservationId: r!.id,
             roomId: rm.roomId,
             ratePerNight: String(rm.ratePerNight),
+            // 0016 — this room's own slab, so a mixed-rate booking bills each
+            // room the tax its tariff actually attracts.
+            gstRate: String(perRoomGstRate[i]!),
             soldAsType: rm.soldAsType ?? null,
             extraBeds: rm.extraBeds ?? 0,
             extraBedRate: String(rm.extraBedRate ?? 0),
@@ -1110,6 +1133,22 @@ router.post(
   },
 );
 
+// Early check-in shifts check_in_date to today and re-prices the stay per
+// NIGHT. A day-use (short_stay) booking has check_in_date == check_out_date
+// and a flat price for a duration in hours, so that operation is meaningless
+// for it and actively corrupting: sumRoomAmount (called without stayType)
+// would bill the flat rate once per calendar day between today and the
+// booked date, the row would end up with check_in_date < check_out_date while
+// stay_type stayed 'short_stay' (the CHECK constraint only requires >=), and
+// availability's short_stay branch — which matches on check_in_date alone —
+// would stop covering the nights in between, leaving an occupied room
+// sellable. Every other date-mutating endpoint already refuses short stays
+// (/extend, /continue-stay, /late-checkout, PATCH /:id/dates); this is the
+// one that was missed. Moving a day-use booking to a different day is
+// PATCH /:id/dates.
+const SHORT_STAY_EARLY_MSG =
+  "Day-use (short-stay) bookings can't be early-checked-in. Change the booking date instead, then check in.";
+
 // Returns the projected impact of shifting this reservation's check-in date to
 // today, WITHOUT mutating anything. The client uses this for a confirm-impact
 // step before actually committing.
@@ -1136,6 +1175,9 @@ router.get(
     }
 
     const today = propertyToday();
+    if (current.stayType === "short_stay") {
+      return fail(res, 400, "SHORT_STAY_NO_EARLY_CHECK_IN", SHORT_STAY_EARLY_MSG);
+    }
     if (current.checkInDate <= today) {
       return fail(res, 400, "NOT_EARLY", "Reservation is not in the future.");
     }
@@ -1144,7 +1186,13 @@ router.get(
     }
 
     const assigned = await db
-      .select({ roomId: reservationRooms.roomId, ratePerNight: reservationRooms.ratePerNight })
+      .select({
+        roomId: reservationRooms.roomId,
+        ratePerNight: reservationRooms.ratePerNight,
+        gstRate: reservationRooms.gstRate,
+        extraBeds: reservationRooms.extraBeds,
+        extraBedRate: reservationRooms.extraBedRate,
+      })
       .from(reservationRooms)
       .where(eq(reservationRooms.reservationId, id));
 
@@ -1164,28 +1212,23 @@ router.get(
     );
     const extraNights = newNights - oldNights;
 
-    // Honour inclusive vs exclusive mode (see lib/gst.ts). The amount
-    // assembled from rate × nights is treated as a gross total when the
-    // property is on inclusive pricing. Billed from `today` to checkout —
-    // rooms are unsegmented at check-in (no swap can precede it), so the
-    // shared helper yields the same per-room night count for all of them.
-    const newRoomAmount = sumRoomAmount(assigned, {
-      checkInDate: today,
-      checkOutDate: current.checkOutDate,
-    });
-
-    // Inherit the reservation's snapshotted GST rate + mode — DO NOT
-    // re-derive from the slab. Adding nights to an existing booking
-    // must keep the same tax treatment, otherwise crossing a slab
-    // boundary by adding cheap/expensive nights would silently change
-    // the tax on rooms that were already priced.
+    // Inherit the snapshotted GST rates + mode — DO NOT re-derive from the
+    // slab. Adding nights to an existing booking must keep the same tax
+    // treatment, otherwise crossing a slab boundary by adding cheap/expensive
+    // nights would silently change the tax on rooms that were already priced.
+    // Each room is taxed at its OWN slab (0016), so a mixed-rate booking's
+    // preview matches the invoice it will produce.
     const newGstRate = Number(current.gstRate);
     const reservationGstMode = current.gstMode ?? "exclusive";
-    const {
-      subtotal: newSubtotal,
-      gstAmount: newGstAmount,
-      grandTotal: newGrandTotal,
-    } = calcGstBreakdown(newRoomAmount, newGstRate, reservationGstMode);
+    const newTax = sumRoomTax(
+      assigned,
+      { checkInDate: today, checkOutDate: current.checkOutDate },
+      reservationGstMode,
+      newGstRate,
+    );
+    const newSubtotal = newTax.net;
+    const newGstAmount = newTax.gst;
+    const newGrandTotal = newTax.gross;
     const advancePaid = Number(current.advancePaid);
     const newBalanceDue = +(newGrandTotal - advancePaid).toFixed(2);
 
@@ -1251,6 +1294,9 @@ router.post(
     }
 
     const today = propertyToday();
+    if (current.stayType === "short_stay") {
+      return fail(res, 400, "SHORT_STAY_NO_EARLY_CHECK_IN", SHORT_STAY_EARLY_MSG);
+    }
     if (current.checkInDate <= today) {
       return fail(
         res,
@@ -1307,7 +1353,12 @@ router.post(
           new Date(today),
         );
         const roomRates = await tx
-          .select({ ratePerNight: reservationRooms.ratePerNight })
+          .select({
+            ratePerNight: reservationRooms.ratePerNight,
+            gstRate: reservationRooms.gstRate,
+            extraBeds: reservationRooms.extraBeds,
+            extraBedRate: reservationRooms.extraBedRate,
+          })
           .from(reservationRooms)
           .where(eq(reservationRooms.reservationId, id));
 
@@ -1318,17 +1369,22 @@ router.post(
           checkOutDate: current.checkOutDate,
         });
 
-        // Inherit reservation's snapshot — see /early-check-in/preview.
+        // Inherit the snapshots — see /early-check-in/preview. Per-room slabs
+        // (0016) keep a mixed-rate booking correct on every line.
         const gstRate = Number(current.gstRate);
         const reservationGstMode = current.gstMode ?? "exclusive";
         const avgRate = roomRates.length
           ? newRoomAmount / (newNights * roomRates.length)
           : 0;
-        const { subtotal: newSubtotal, gstAmount, grandTotal } = calcGstBreakdown(
-          newRoomAmount,
-          gstRate,
+        const newTax = sumRoomTax(
+          roomRates,
+          { checkInDate: today, checkOutDate: current.checkOutDate },
           reservationGstMode,
+          gstRate,
         );
+        const newSubtotal = newTax.net;
+        const gstAmount = newTax.gst;
+        const grandTotal = newTax.gross;
             // balanceDue intentionally omitted — recomputeReservationBalance
         // after this update will set it from facts (grandTotal − Σpayments
         // − walletCredit). Keeps the formula consistent across the app.
@@ -2329,8 +2385,12 @@ router.post(
       // that as the line item's `rate` and `amount` (×qty). The
       // breakdown's grand_total == stored gross == what the guest pays.
       const storedRate = Number(rr.rr.ratePerNight);
+      // This room's own slab (0016), falling back to the reservation's
+      // snapshot on legacy rows. A booking that mixes a ₹900 room with a
+      // ₹9,000 suite has two correct rates; one blended rate is wrong on both.
+      const rowGstRate = roomRowGstRate(rr.rr, roomGstRate);
       const lineGross = +(storedRate * roomUnits).toFixed(2);
-      const lineBreakdown = calcGstBreakdown(lineGross, roomGstRate, reservationGstMode);
+      const lineBreakdown = calcGstBreakdown(lineGross, rowGstRate, reservationGstMode);
       const netRate =
         reservationGstMode === "inclusive" && roomUnits > 0
           ? +(lineBreakdown.subtotal / roomUnits).toFixed(2)
@@ -2358,7 +2418,7 @@ router.post(
         quantity: roomUnits,
         rate: String(netRate),
         amount: String(amount),
-        gstRate: String(roomGstRate),
+        gstRate: String(rowGstRate),
         gstAmount: String(gstAmount),
         itemType: "room_charge",
       });
@@ -2371,7 +2431,7 @@ router.post(
       if (beds > 0 && bedRate > 0) {
         const bedQty = beds * roomUnits;
         const bedGross = +(bedRate * bedQty).toFixed(2);
-        const bedBreakdown = calcGstBreakdown(bedGross, roomGstRate, reservationGstMode);
+        const bedBreakdown = calcGstBreakdown(bedGross, rowGstRate, reservationGstMode);
         const bedNetRate =
           reservationGstMode === "inclusive" && bedQty > 0
             ? +(bedBreakdown.subtotal / bedQty).toFixed(2)
@@ -2383,7 +2443,7 @@ router.post(
           quantity: bedQty,
           rate: String(bedNetRate),
           amount: String(bedBreakdown.subtotal),
-          gstRate: String(roomGstRate),
+          gstRate: String(rowGstRate),
           gstAmount: String(bedBreakdown.gstAmount),
           itemType: "room_charge",
         });
@@ -3197,13 +3257,14 @@ async function cancelHandler(
         })
         .where(eq(reservations.id, id));
 
-      // 4. Free / dirty the rooms.
-      if (roomIds.length) {
-        await tx
-          .update(rooms)
-          .set({ status: targetRoomStatus, updatedAt: new Date() })
-          .where(inArray(rooms.id, roomIds));
-      }
+      // 4. Free / dirty the rooms — but only the ones this booking was
+      //    actually holding. See releaseRoomsFromReservation.
+      await releaseRoomsFromReservation(tx, {
+        propertyId: r[0]!.propertyId,
+        reservationId: id,
+        roomIds,
+        target: targetRoomStatus,
+      });
 
       // Per-room (0017): mirror the cancellation onto every
       // reservation_room row so per-room queries are accurate.
@@ -3354,13 +3415,16 @@ router.post(
         .where(eq(reservations.id, id));
 
       // Free the rooms. Guest never arrived → status goes straight to
-      // 'available' (no dirty/cleaning step).
-      if (roomIds.length) {
-        await tx
-          .update(rooms)
-          .set({ status: "available", updatedAt: new Date() })
-          .where(inArray(rooms.id, roomIds));
-      }
+      // 'available' (no dirty/cleaning step) — but only for rooms no other
+      // live booking is still holding. See releaseRoomsFromReservation: the
+      // unguarded write here could free a room another guest was checked
+      // into and still occupying.
+      await releaseRoomsFromReservation(tx, {
+        propertyId: r[0]!.propertyId,
+        reservationId: id,
+        roomIds,
+        target: "available",
+      });
 
       // Mirror onto per-room rows so per-room queries see no_show.
       // We reuse 'cancelled' on the row enum because reservation_rooms
@@ -3568,6 +3632,9 @@ router.post(
 
     const swapId = randomUUID();
     const now = new Date();
+    // Set when the swap renegotiated the rate; drives the post-commit
+    // recalcReservation below.
+    let needsRecalc = false;
     const isShortStay = reservation.stayType === "short_stay";
     // In-place swap (no segmentation):
     //   - day-use bookings (one calendar day, nothing to split)
@@ -3612,6 +3679,7 @@ router.post(
       if (hasRateChange) {
         swapRateNote = ` · rate ₹${oldRate.toFixed(2)} -> ₹${newRate.toFixed(2)}/night`;
         swapRateMeta = { oldRate, newRate };
+        needsRecalc = true;
       }
 
       await db.transaction(async (tx) => {
@@ -3668,49 +3736,14 @@ router.post(
           });
         }
 
-        if (hasRateChange) {
-          // Recompute reservation totals from the new per-row rate.
-          // For in-place swaps the swap covers the full segment, so
-          // the delta in subtotal is (newRate - oldRate) * segNights.
-          const segNights = isShortStay
-            ? 1
-            : Math.max(
-                1,
-                Math.round(
-                  (new Date(reservation.checkOutDate).getTime() -
-                    new Date(reservation.checkInDate).getTime()) /
-                    (24 * 60 * 60 * 1000),
-                ),
-              );
-          const delta = +((newRate - oldRate) * segNights).toFixed(2);
-          const gstMode = reservation.gstMode ?? "exclusive";
-          const gstRate = Number(reservation.gstRate);
-          // In exclusive mode the stored subtotal is net (pre-GST);
-          // shift it by the delta, then recompute GST + grand total
-          // through the same helper so rounding matches every other
-          // path. In inclusive mode the delta arrives gross; bump
-          // grand total instead and let the breakdown extract net.
-          const combinedAmount =
-            gstMode === "inclusive"
-              ? +(Number(reservation.grandTotal) + delta).toFixed(2)
-              : +(Number(reservation.subtotal) + delta).toFixed(2);
-          const { subtotal, gstAmount, grandTotal } = calcGstBreakdown(
-            combinedAmount,
-            gstRate,
-            gstMode,
-          );
-          await tx
-            .update(reservations)
-            .set({
-              subtotal: String(subtotal),
-              gstAmount: String(gstAmount),
-              grandTotal: String(grandTotal),
-              updatedAt: now,
-            })
-            .where(eq(reservations.id, id));
-          // balanceDue follows grandTotal — recompute from facts.
-          await recomputeReservationBalance(tx, id);
-        }
+        // Totals are rebuilt from the stored rows AFTER this transaction
+        // commits (see needsRecalc below). The old inline arithmetic applied
+        // ONE rate to `subtotal + delta` — a figure that also contains the
+        // additional charges' net — so it re-taxed those charges at the room
+        // rate, and with per-room slabs (0016) it would have re-taxed every
+        // room at the reservation's headline rate. recalcReservation sums each
+        // row at its own slab and each charge at its own, which is the same
+        // arithmetic the invoice builder uses.
       });
     } else {
       // Overnight + caller provided effectiveDate → segment the row.
@@ -3755,6 +3788,7 @@ router.post(
       if (hasRateChange) {
         swapRateNote = ` · rate ₹${oldRate.toFixed(2)} -> ₹${newSegRate.toFixed(2)}/night`;
         swapRateMeta = { oldRate, newRate: newSegRate };
+        needsRecalc = true;
       }
 
       await db.transaction(async (tx) => {
@@ -3787,20 +3821,50 @@ router.post(
           swapReason: input.reason,
         });
 
-        // 3. Vacated room → markOldRoomStatus (defaults to maintenance).
-        await tx
-          .update(rooms)
-          .set({ status: input.markOldRoomStatus, updatedAt: now })
-          .where(eq(rooms.id, seg.roomId));
+        // 3./4. Physical room statuses.
+        //
+        // A segmented swap can be scheduled for a FUTURE night: the guest
+        // stays in the old room until `effectiveDate`, then moves. The
+        // reservation_rooms split above already encodes that correctly, but
+        // writing the room statuses NOW described a move that hasn't
+        // happened: the target room read 'occupied' with nobody in it, so
+        // findAvailableRooms dropped it from every walk-in probe whose window
+        // includes today and the hotel could not sell a genuinely empty room
+        // for the nights before the swap; meanwhile the old room showed
+        // dirty (or out of service) on the board while the guest was still
+        // sleeping in it. Only apply the statuses once the swap is actually
+        // in effect. Until then the rooms keep their real state and the
+        // date-overlap check in findRoomConflicts is what protects the
+        // target room's booked window; check-out marks both legs dirty.
+        const swapInEffect = effectiveDate <= propertyToday();
+        if (swapInEffect) {
+          // Vacated room → markOldRoomStatus (defaults to maintenance).
+          await tx
+            .update(rooms)
+            .set({ status: input.markOldRoomStatus, updatedAt: now })
+            .where(eq(rooms.id, seg.roomId));
 
-        // 4. New room → occupied.
-        await tx
-          .update(rooms)
-          .set({ status: "occupied", updatedAt: now })
-          .where(eq(rooms.id, input.toRoomId));
+          // New room → occupied.
+          await tx
+            .update(rooms)
+            .set({ status: "occupied", updatedAt: now })
+            .where(eq(rooms.id, input.toRoomId));
+        } else {
+          // Future-dated: mark the target as spoken-for without taking it out
+          // of tonight's inventory ('reserved' is exactly what a forward
+          // booking does to a room), and leave the occupied room occupied.
+          await tx
+            .update(rooms)
+            .set({ status: "reserved", updatedAt: now })
+            .where(and(eq(rooms.id, input.toRoomId), eq(rooms.status, "available")));
+        }
 
         // 5. File a maintenance issue for the vacated room. Same
         // behaviour as the in-place branch — keeps both paths in sync.
+        // The issue is recorded even for a future-dated swap: the guest is
+        // still in that room until the swap date, so it can't be taken out
+        // of service yet, but the open issue puts it on the Maintenance
+        // board for whoever picks it up once the room frees up.
         if (input.markOldRoomStatus === "maintenance" && input.maintenanceIssue) {
           const mi = input.maintenanceIssue;
           await tx.insert(maintenanceIssues).values({
@@ -3816,43 +3880,17 @@ router.post(
           });
         }
 
-        if (hasRateChange) {
-          // Segmented path: the rate applies only to the remainder of
-          // the stay (effectiveDate -> segTo), not the whole segment.
-          const remainingNights = Math.max(
-            1,
-            Math.round(
-              (new Date(segTo).getTime() - new Date(effectiveDate).getTime()) /
-                (24 * 60 * 60 * 1000),
-            ),
-          );
-          const delta = +(
-            (newSegRate - oldRate) * remainingNights
-          ).toFixed(2);
-          const gstMode = reservation.gstMode ?? "exclusive";
-          const gstRate = Number(reservation.gstRate);
-          const combinedAmount =
-            gstMode === "inclusive"
-              ? +(Number(reservation.grandTotal) + delta).toFixed(2)
-              : +(Number(reservation.subtotal) + delta).toFixed(2);
-          const { subtotal, gstAmount, grandTotal } = calcGstBreakdown(
-            combinedAmount,
-            gstRate,
-            gstMode,
-          );
-          await tx
-            .update(reservations)
-            .set({
-              subtotal: String(subtotal),
-              gstAmount: String(gstAmount),
-              grandTotal: String(grandTotal),
-              updatedAt: now,
-            })
-            .where(eq(reservations.id, id));
-          await recomputeReservationBalance(tx, id);
-        }
+        // Segmented path: the new rate applies only to the remainder of the
+        // stay, which the segment rows above already encode. Totals are
+        // rebuilt from those rows after the transaction commits — see the
+        // in-place branch for why the inline arithmetic was wrong.
       });
     }
+
+    // Rebuild totals from the (now committed) rows whenever a rate changed.
+    // recalcReservation reads through the pooled client, so it MUST run after
+    // the transaction commits or it would sum the pre-swap rates.
+    if (needsRecalc) await recalcReservation(id);
 
     await logActivity({
       propertyId: req.propertyId,
@@ -5026,32 +5064,36 @@ router.post(
       : differenceInCalendarDays(new Date(endDate), new Date(startDate));
     const addedRoomAmount = +(input.ratePerNight * addedNights).toFixed(2);
 
-    // Inherit the reservation's snapshotted GST rate + mode. Adding a
-    // room must NOT re-derive from the slab — that bumped the entire
-    // reservation's tax rate whenever the new room crossed a slab
-    // boundary, silently re-taxing rooms already on the bill.
+    // The ADDED room gets its own slab from its own tariff (0016) — that is
+    // the unit hotel GST is slabbed on, and it is why adding a ₹9,000 suite to
+    // a ₹900 booking must not be taxed at the booking's rate. Rooms already on
+    // the bill keep the slab they were priced at: their tax is never
+    // re-derived, which is what used to bump the whole reservation's rate
+    // whenever a newly added room crossed a boundary.
     const gstMode = current.gstMode ?? "exclusive";
-    const effectiveGstRate = Number(current.gstRate);
-    // Combine the existing booking with the added room. In exclusive
-    // mode we sum the stored net subtotals (input.ratePerNight is net).
-    // In inclusive mode we sum gross amounts (input.ratePerNight is gross,
-    // current.grandTotal is gross) and let the breakdown helper extract
-    // the new net subtotal.
-    const combinedAmount =
-      gstMode === "inclusive"
-        ? +(Number(current.grandTotal) + addedRoomAmount).toFixed(2)
-        : +(Number(current.subtotal) + addedRoomAmount).toFixed(2);
-    const {
-      subtotal: newSubtotal,
-      gstAmount,
-      grandTotal,
-    } = calcGstBreakdown(combinedAmount, effectiveGstRate, gstMode);
+    const addSettings = await getSettings(req.propertyId);
+    const addedGstRate = getGstRate(input.ratePerNight, {
+      exemptBelow: Number(addSettings.gstSlabExemptBelow),
+      lowRate: Number(addSettings.gstSlabLowRate),
+      lowMax: Number(addSettings.gstSlabLowMax),
+      highRate: Number(addSettings.gstSlabHighRate),
+    });
+    // Headline rate on the reservation row must not understate what any line
+    // is billed at.
+    const effectiveGstRate = headlineGstRate([Number(current.gstRate), addedGstRate]);
+    // Add the new room's own money on top of the existing totals rather than
+    // re-taxing the whole reservation at one rate.
+    const addedBreakdown = calcGstBreakdown(addedRoomAmount, addedGstRate, gstMode);
+    const newSubtotal = +(Number(current.subtotal) + addedBreakdown.subtotal).toFixed(2);
+    const gstAmount = +(Number(current.gstAmount) + addedBreakdown.gstAmount).toFixed(2);
+    const grandTotal = +(newSubtotal + gstAmount).toFixed(2);
 
     await db.transaction(async (tx) => {
       await tx.insert(reservationRooms).values({
         reservationId: id,
         roomId: input.roomId,
         ratePerNight: String(input.ratePerNight),
+        gstRate: String(addedGstRate),
         soldAsType: input.soldAsType ?? null,
         // Mid-stay add-room: occupant defaults to the booker, status
         // mirrors the parent reservation so a checked-in reservation's
@@ -5129,6 +5171,9 @@ async function recalcReservation(id: string) {
   const assigned = await db
     .select({
       ratePerNight: reservationRooms.ratePerNight,
+      // 0016 — this room's own GST slab. NULL on legacy rows, which then
+      // inherit the reservation's snapshot (exactly what they were billed at).
+      gstRate: reservationRooms.gstRate,
       effectiveFrom: reservationRooms.effectiveFrom,
       effectiveTo: reservationRooms.effectiveTo,
       // Extra-person (extra bed) money is part of the room tariff and MUST be
@@ -5158,17 +5203,16 @@ async function recalcReservation(id: string) {
   // total goes through, so recalc, checkout, preview and the invoice builder
   // can never disagree about how many nights a room is billed for. Extra-bed
   // money rides the same nights + GST mode as the room tariff.
-  const roomAmount = +(sumRoomAmount(assigned, current) + sumExtraBedAmount(assigned, current)).toFixed(2);
-
-  // ALWAYS inherit the reservation's snapshotted GST rate. Re-deriving
-  // from the slab on every recalc made the rate drift whenever the
-  // average room rate crossed a slab boundary (e.g. after Add Room,
-  // Extend Stay, or Edit Rate). The snapshot is set once at create
-  // time and is the source of truth for the life of the booking.
+  // ALWAYS inherit the SNAPSHOTTED slabs — the reservation's for legacy rows,
+  // each room's own (0016) otherwise. Never re-derive from the current rate:
+  // that made the tax drift whenever a rate edit, Add Room or Extend Stay
+  // pushed the booking across a slab boundary. Summing per ROW is what keeps a
+  // mixed-rate booking (₹900 room + ₹9,000 suite) taxed correctly on both
+  // lines and makes this total agree with the invoice the builder produces.
   const roomGstRate = Number(current.gstRate);
-  const roomBreakdown = calcGstBreakdown(roomAmount, roomGstRate, reservationGstMode);
-  const roomNet = roomBreakdown.subtotal;
-  const roomGst = roomBreakdown.gstAmount;
+  const roomTax = sumRoomTax(assigned, current, reservationGstMode, roomGstRate);
+  const roomNet = roomTax.net;
+  const roomGst = roomTax.gst;
   const chargesSubtotal = charges.reduce((a, c) => a + Number(c.amount), 0);
   const chargesGst = charges.reduce(
     (a, c) => a + +(Number(c.amount) * (Number(c.gstRate) / 100)).toFixed(2),
@@ -5765,8 +5809,12 @@ router.get(
       const rowNights = roomBillableNights(rr.rr, r[0]!);
       const rowUnits = rowNights;
 
+      // Per-room slab (0016) with the reservation snapshot as the legacy
+      // fallback — same resolution the real invoice builder uses, so the
+      // preview can't quote a different tax from the bill it previews.
+      const rowGstRate = roomRowGstRate(rr.rr, roomGstRate);
       const lineGross = +(storedRate * rowUnits).toFixed(2);
-      const lineBreakdown = calcGstBreakdown(lineGross, roomGstRate, previewGstMode);
+      const lineBreakdown = calcGstBreakdown(lineGross, rowGstRate, previewGstMode);
       const netRate =
         previewGstMode === "inclusive" && rowUnits > 0
           ? +(lineBreakdown.subtotal / rowUnits).toFixed(2)
@@ -5840,7 +5888,7 @@ router.get(
         quantity: rowUnits,
         rate: String(netRate),
         amount: String(amount),
-        gstRate: String(roomGstRate),
+        gstRate: String(rowGstRate),
         gstAmount: String(gstAmount),
         itemType: "room_charge",
         createdAt: now,
@@ -5853,7 +5901,7 @@ router.get(
       if (beds > 0 && bedRate > 0) {
         const bedQty = beds * rowUnits;
         const bedGross = +(bedRate * bedQty).toFixed(2);
-        const bedBreakdown = calcGstBreakdown(bedGross, roomGstRate, previewGstMode);
+        const bedBreakdown = calcGstBreakdown(bedGross, rowGstRate, previewGstMode);
         const bedNetRate =
           previewGstMode === "inclusive" && bedQty > 0
             ? +(bedBreakdown.subtotal / bedQty).toFixed(2)
@@ -5867,7 +5915,7 @@ router.get(
           quantity: bedQty,
           rate: String(bedNetRate),
           amount: String(bedBreakdown.subtotal),
-          gstRate: String(roomGstRate),
+          gstRate: String(rowGstRate),
           gstAmount: String(bedBreakdown.gstAmount),
           itemType: "room_charge",
           createdAt: now,
@@ -7534,6 +7582,25 @@ router.post(
     // credit note (credit-note path).
     const replacedInvoiceNumbers = liveInvoices.map((i) => i.invoiceNumber);
 
+    // Wallet credit is money the guest already spent on this booking, but it
+    // is NOT a payments row — only reservations.wallet_credit_applied and a
+    // guest_ledger 'credit_used' entry record it. Step 4's orphan
+    // redistribution can therefore only move real payments, so if the new
+    // invoices are minted with wallet_credit_applied = 0 the wallet-paid
+    // slice of the bill silently reappears as an outstanding balance and the
+    // guest gets chased for money they already settled. Carry the
+    // reservation's applied credit onto the successors, greedily in issue
+    // order and capped by each invoice's own total (mirrors how per-room
+    // checkout lands it on the first invoice).
+    const walletCreditToCarry = Number(resv.walletCreditApplied ?? 0);
+    let walletCreditLeft = walletCreditToCarry;
+    const takeWalletCredit = (invoiceGrandTotal: number): number => {
+      if (walletCreditLeft <= 0.009) return 0;
+      const take = +Math.min(walletCreditLeft, invoiceGrandTotal).toFixed(2);
+      walletCreditLeft = +(walletCreditLeft - take).toFixed(2);
+      return take;
+    };
+
     await db.transaction(async (tx) => {
       // 1. Detach payments from the voided invoices so they're orphan
       //    and ready for redistribution against the new invoices.
@@ -7576,6 +7643,7 @@ router.post(
         });
         const cgstRate = +(built.roomGstRate / 2).toFixed(2);
         const sgstRate = +(built.roomGstRate / 2).toFixed(2);
+        const combinedWalletCredit = takeWalletCredit(built.grandTotal);
         const invoiceSeq = await nextDocNumber(tx, resv.propertyId, "invoice");
         const invNumber = invoiceNumber(settings.invoicePrefix, invoiceSeq);
         const [inv] = await tx
@@ -7597,9 +7665,11 @@ router.post(
             sgstRate: String(sgstRate),
             sgstAmount: String(built.sgst),
             grandTotal: String(built.grandTotal),
-            walletCreditApplied: "0.00",
-            totalPaid: "0.00",
-            balanceDue: String(built.grandTotal),
+            walletCreditApplied: String(combinedWalletCredit.toFixed(2)),
+            totalPaid: String(combinedWalletCredit.toFixed(2)),
+            balanceDue: String(
+              +Math.max(0, built.grandTotal - combinedWalletCredit).toFixed(2),
+            ),
             status: "issued",
             scope: "combined" as const,
             scopeRoomIds,
@@ -7651,6 +7721,7 @@ router.post(
           });
           const cgstRate = +(built.roomGstRate / 2).toFixed(2);
           const sgstRate = +(built.roomGstRate / 2).toFixed(2);
+          const roomWalletCredit = takeWalletCredit(built.grandTotal);
           const [occupant] = await tx
             .select()
             .from(guests)
@@ -7681,9 +7752,11 @@ router.post(
               sgstRate: String(sgstRate),
               sgstAmount: String(built.sgst),
               grandTotal: String(built.grandTotal),
-              walletCreditApplied: "0.00",
-              totalPaid: "0.00",
-              balanceDue: String(built.grandTotal),
+              walletCreditApplied: String(roomWalletCredit.toFixed(2)),
+              totalPaid: String(roomWalletCredit.toFixed(2)),
+              balanceDue: String(
+                +Math.max(0, built.grandTotal - roomWalletCredit).toFixed(2),
+              ),
               status: "issued",
               scope: "room" as const,
               scopeRoomIds: [x.room.id],
