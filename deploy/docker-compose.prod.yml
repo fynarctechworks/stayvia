@@ -23,6 +23,25 @@
 # Update after a git pull:
 #   docker compose -f deploy/docker-compose.prod.yml up -d --build
 #
+# MIGRATIONS DO NOT RUN AUTOMATICALLY. Nothing here or in apps/api/Dockerfile
+# invokes the migrator, so the rebuild above ships new code against the OLD
+# schema — any endpoint touching a new table returns 500, and a 401 from an
+# authed route proves nothing because requireAuth rejects before the query.
+# After every rebuild that includes a new file in apps/api/migrations/, run:
+#
+#   docker exec -w /app/apps/api -e ALLOW_REMOTE_DB=1 stayvia-api node scripts/migrate.mjs
+#
+#   -w              the image starts in /app, but scripts/ and migrations/ are
+#                   copied under /app/apps/api
+#   ALLOW_REMOTE_DB guard-db-target.mjs refuses non-local hosts by default and
+#                   production is Supabase; this is the deliberate opt-in
+#
+# It is ledger-tracked (schema_migrations) and each file runs in its own
+# transaction, so re-running is safe — already-applied files are skipped.
+# Verify a table actually landed rather than trusting the HTTP status:
+#
+#   docker exec stayvia-api node -e "const p=require('postgres');const s=p(process.env.DATABASE_URL);s\`select to_regclass('public.<table>') as t\`.then(r=>{console.log(r[0].t);process.exit(0)})"
+#
 # Logs:
 #   docker compose -f deploy/docker-compose.prod.yml logs -f api
 #

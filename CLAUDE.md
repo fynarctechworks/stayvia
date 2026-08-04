@@ -47,8 +47,16 @@ npx tsc -b apps/web    # Web type-check
   **Never `drizzle-kit push`** (broken in this repo, bypasses the guard). Destructive SQL
   needs explicit human approval once any real hotel is onboarded.
 - Never read/print/commit `.env*`. Never rotate `ENCRYPTION_KEY` once real KYC data exists.
-- No deploys (Vercel web, VPS Docker API are human-run). Deploy auto-applies pending
-  migrations — flag every new migration file.
+- No deploys (Vercel web, VPS Docker API are human-run). **Migrations do NOT
+  auto-apply** — nothing in `deploy/docker-compose.prod.yml` or `apps/api/Dockerfile`
+  runs the migrator, so a `git pull` + rebuild ships code against an unchanged
+  schema and the new endpoints 500 on a missing table. Flag every new migration
+  file AND tell the operator to run it explicitly after the rebuild:
+  `docker exec -w /app/apps/api -e ALLOW_REMOTE_DB=1 stayvia-api node scripts/migrate.mjs`
+  (`-w` because the image starts in `/app` but the scripts live under `apps/api`;
+  `ALLOW_REMOTE_DB=1` because `guard-db-target.mjs` blocks non-local hosts and
+  production is Supabase). The migrator is ledger-tracked via `schema_migrations`
+  and each file runs in its own transaction, so re-running it is safe.
 - No real Twilio/WhatsApp sends or Razorpay charges in dev — stub providers only.
 - After editing `packages/shared`: rebuild (`npx tsc -p packages/shared/tsconfig.json`).
 - API is ESM with `.js` extensions on relative imports. Restart API after schema/env edits.
