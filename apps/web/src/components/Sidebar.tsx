@@ -330,35 +330,27 @@ export function Sidebar({
             <div className="text-[10px] font-bold text-inkMuted tracking-[0.16em] mt-0.5">HOTEL OS</div>
           </div>
         )}
-        {/* Collapse lives beside the wordmark, on the edge it collapses
-            toward — chrome, not a destination, so it stays small and quiet
-            rather than sitting in the nav list. `ml-auto` pins it right while
-            expanded; when collapsed the header centres the logo and this is
-            hidden, so the rail is the logo alone and the toggle moves to the
-            header bar's own control. Desktop-only: the mobile drawer closes
-            by tapping outside. */}
-        {!mobile && !iconOnly && (
-          <button
-            onClick={onToggle}
-            title="Collapse"
-            aria-label="Collapse sidebar"
-            className="ml-auto shrink-0 grid place-items-center w-7 h-7 rounded-[8px] text-inkFaint hover:bg-parchment hover:text-inkBody transition-colors"
-          >
-            <ChevronLeft className="w-4 h-4" />
-          </button>
-        )}
       </div>
 
-      {/* Collapsed rail: the toggle drops below the logo, since the header
-          row has no space beside it at 74px. */}
-      {!mobile && iconOnly && (
+      {/* Collapse toggle, straddling the panel's right border at the height
+          of the brand header. Positioned against the <aside> rather than
+          placed in the header row, because the 74px rail has no space beside
+          the logo — an in-flow control there has to drop onto its own line,
+          which shunts the whole nav down every time you collapse. This holds
+          exactly one position in both states; only the chevron flips.
+          Desktop-only: the mobile drawer closes by tapping outside. */}
+      {!mobile && (
         <button
           onClick={onToggle}
-          title="Expand"
-          aria-label="Expand sidebar"
-          className="mx-auto mt-2 grid place-items-center w-7 h-7 rounded-[8px] text-inkFaint hover:bg-parchment hover:text-inkBody transition-colors"
+          title={collapsed ? "Expand" : "Collapse"}
+          aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+          className="absolute top-[22px] -right-3 z-10 grid place-items-center w-6 h-6 rounded-full border border-borderc bg-surface text-inkMuted shadow-card hover:text-brand-deep hover:border-brand-tint transition-colors"
         >
-          <ChevronRight className="w-4 h-4" />
+          {collapsed ? (
+            <ChevronRight className="w-3.5 h-3.5" />
+          ) : (
+            <ChevronLeft className="w-3.5 h-3.5" />
+          )}
         </button>
       )}
 
